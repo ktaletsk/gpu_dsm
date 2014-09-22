@@ -1,7 +1,6 @@
 #include <iostream>
 #include <fstream>
- #include "gpu_random.h"
-// #include "timer.h"
+#include "gpu_random.h"
 #include "cuda_call.h"
 #include "cudautil.h"
 #include "random.h"
@@ -13,24 +12,22 @@
 // #include <boost/iostreams/filtering_stream.hpp>
 #include "job_ID.h"
 
-#include "orientation_tensor.h"
-
     using namespace std;
 //     namespace io = boost::iostreams;
 
-// __device__ int temp;
     Ran eran(1);
     p_cd *pcd;
 
-//     int job_ID=1;
+    //synonyms:
+    //GPU - device
+    //CPU - host
  int main(int narg,char** arg)
 {
     char *savefile=NULL;
     char *loadfile=NULL;
     int device_ID=0;
+    cout<<'\n';
 
-
-//     if (narg>1) cout<<"command line parameters:\n";
     int k=1;
     while (k<narg){
       if (k==1){    //processing job_ID
@@ -55,14 +52,14 @@
       k++;
     }
     if (job_ID!=0){
-	cout<<"\njob_ID: "<<job_ID<<'\n';
+	cout<<"job_ID: "<<job_ID<<'\n';
 	cout<<"using "<<job_ID<< " as a seed for random number generator\n";
 	cout<<"\"_"<<job_ID<<"\" will be appended to filename for all files generated\n\n";
     }
     //First checking device
     checkCUDA(device_ID);
     //init random
-    eran.seed(job_ID);//TODO seed with job_ID*N_cha
+    eran.seed(job_ID*N_cha);
 
     //using boost filters to remove comments from input file
 //     io::filtering_istream in;
@@ -76,79 +73,80 @@
     in>>NK;
     in>>N_cha;
     
-    //since non shear flow not implemented dummy variables used
     in>>kxx>>kxy>>kxz>>kyx>>kyy>>kyz>>kzx>>kzy>>kzz;
-    gamma_dot=kxy;
     
-    in>>CD_flag;//TODO CD off not implemented
-    int int_t;
-    in>>int_t;//TODO SD off not implemented
-    in>>int_t;//TODO G not implemented
-    in>>int_t;//TODO R  not implemented
-    in>>int_t;//TODO f_d not implemented
-    in>>int_t;//TODO D not implemented
+//     in>>CD_flag;//TODO CD off not implemented
+//     int int_t;
+//     in>>int_t;//TODO SD off not implemented
+//     in>>int_t;//TODO G not implemented
+//     in>>int_t;//TODO R  not implemented
+//     in>>int_t;//TODO f_d not implemented
     float simulation_time=100000;
     float t_step_size=200;
     in>>t_step_size;
     in>>simulation_time;
-    float float_t;
-    in>>float_t;;//TODO saving not implemented
-    in>>float_t;;//TODO entanglement complexity not implemented
 
-    cout<<"NK Be N_cha gamma_dot"<<"\n";
-    cout<<NK<<'\t'<< Be<<'\t'<<N_cha<<'\t'<<gamma_dot<<"\n";
+    cout <<"\nsimulation parameters:\n";
+    cout<<"NK Be N_cha"<<"\n";
+    cout<<NK<<'\t'<< Be<<'\t'<<N_cha<<"\n";
+    cout<<"deformation tensor:"<<"\n";
+    cout<<" "<<kxx<<" "<<kxy<<" "<<kxz<<"\n"<<kyx<<" "<<kyy<<" "<<kyz<<"\n"<<kzx<<" "<<kzy<<" "<<kzz<<'\n';;
+    cout<<"simulation time, sync time"<<"\n";
+    cout<< simulation_time<<'\t'<< t_step_size<<'\n'<<'\n';
+
+//toy parameters    
 //     Be=1.0;
 //     NK=46;
 //     N_cha=4000;
-//     gamma_dot=8.16e-05;
+//     kxy=8.16e-05;
 
 
     CD_flag=1;
     pcd=new p_cd(Be,NK,&eran);
 
-    if (loadfile!=NULL){
+    if (loadfile!=NULL){//load chain conformations from file
       	cout<<"loading chain conformations from "<<loadfile<<"..";
 	load_from_file(loadfile);
 	cout<<"done.\n";
-    }else host_chains_init();
+    }else host_chains_init();// or generate equilibrium conformations
     
-    gpu_ran_init();
-    gpu_init(job_ID);
+    gpu_ran_init();//init gpu random module
+    gpu_init(job_ID);//prepare GPU to run DSM calculation
+
     ctimer timer;
     
     //tau file
     ofstream tau_file;
-//     cout<<filename_ID("tau")<<'\n';
     tau_file.open(filename_ID("tau"));
+    cout<<"output file: "<<filename_ID("tau")<<'\n';
     timer.start();
+    //main loop
+    cout<<"performing time evolution for the ensemble..\n";
+    cout<<"time\tstress tensor(xx yy zz xy yz xz)\t<Lpp>\t<Z>\n";
     for (float t_step=0;t_step<simulation_time;t_step+=t_step_size){
-  //      cout<<"time_step "<<t_step<<'\n';
-      gpu_time_step(t_step+t_step_size);
-  //     z_plot(chain_heads,Be, NK,N_cha);
-      
-      stress_plus stress=calc_stress();
-  //     cout<<"stress tensor "<<stress.x<<'\t'<<stress.y<<'\t'<<stress.z<<'\t'<<stress.w<<'\n';
-      cout<<t_step+t_step_size<<'\t'<<stress<<'\n';
-      tau_file<<t_step+t_step_size<<'\t'<<stress<<'\n';
-      tau_file.flush();
+	gpu_time_step(t_step+t_step_size);  
+	stress_plus stress=calc_stress();
+	cout<<t_step+t_step_size<<'\t'<<stress<<'\n';
+	tau_file<<t_step+t_step_size<<'\t'<<stress<<'\n';
+	tau_file.flush();
     }
-      timer.stop();
-      get_chains_from_device();
-      if (savefile!=NULL){
-	  cout<<"saving chain conformations to "<<savefile<<"..";
-	  save_to_file(savefile);
-	  cout<<"done.\n";
-      }
-      //TODO remove 
-      cout<<"orientation tensor\n";
-      calc_o_tensor(Be);
+    timer.stop();
+    cout<<"time evolution done.\n";
+
+    get_chains_from_device();
+//     z_plot(chain_heads,Be, NK,N_cha);
+
+    if (savefile!=NULL){
+	cout<<"saving chain conformations to "<<savefile<<"..";
+	save_to_file(savefile);
+	cout<<"done.\n";
+    }
 
     
-      gpu_clean();
-      tau_file.close();
-  //  test_random();
-	  cout<<" running time: "<<timer.elapsedTime()<<" milliseconds\n";
-  return 0;
+    gpu_clean();
+    tau_file.close();
+    cout<<"Calculation time: "<<timer.elapsedTime()<<" milliseconds\n";
+    return 0;
 }
 
 

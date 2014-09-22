@@ -6,13 +6,31 @@
 
     int z_dist(int tNk){
 	//entanglement distribution
-	return 1 + int(binomial_distr(1.0/(1.0+Be), tNk-1));//binomial_distr see random module
+// 	return 1 + int(binomial_distr(1.0/(1.0+Be), tNk-1));//binomial_distr see random module
+	double t=eran.flt()/(1.0 + Be)*pow(1.0 + 1.0/Be,tNk);
+	int z=1;
+	double sum=0.0,si=1.0/Be;
+	while(sum<t) {
+	  sum+=si;
+	  si=si/Be*(tNk-z)/z;
+	  z++;
+	}
+	return z-1;
     }
 	
     int z_dist_truncated(int tNk,int z_max){
-	int tz=1 + int(binomial_distr(1.0/(1.0+Be), tNk-1));
-	while (tz>z_max) tz=1 + int(binomial_distr(1.0/(1.0+Be), tNk-1));
+	int tz=z_dist(tNk);
+	while (tz>z_max) tz=z_dist(tNk);
 	return tz;
+    }
+    
+    
+     float ratio(int A,int n,int i){
+    // Calculates ratio of two binomial coefficients:
+    // ratio = (i-1)(A-N)!(A-i+1)!/((A-N-i+2)!A!)
+	float rat = float(i-1)/float(A-n+1);
+	if (n>1) for(int j=0;j<n-1;j++){rat*=(float(A-i+1-j)/float(A-j));}
+	return rat;
     }
 	
     void N_dist(int ztmp,int *&tN,int tNk){
@@ -24,7 +42,7 @@
 			float p = eran.flt();
 			int Ntmp = 0;
 			float sum = 0.0;
-			while ((p>=sum)&&((++Ntmp)!=A-i+2))sum+=ratio(A,Ntmp,i);//ratio of two binomial coefficients:math module
+			while ((p>=sum)&&((++Ntmp)!=A-i+2))sum+=ratio(A,Ntmp,i);//ratio of two binomial coefficients
 			tN[i-1] = Ntmp;
 			A = A - Ntmp;
 		}
@@ -166,25 +184,5 @@
       for(int j=0;j<chead->Z;j++) stream.read((char*)&(c.QN[j]),sizeof(float4));
       for(int j=0;j<chead->Z;j++) stream.read((char*)&(c.tau_CD[j]),sizeof(float));
     }   
-	ostream& operator<<(ostream& stream,const stress_plus s){
-	    return stream<<s.xx<<' '<<s.yy<<' '<<s.zz<<' '<<s.xy<<' '<<s.yz<<' '<<s.zx<<' '<<s.Lpp<<' '<<s.Ree;
-	}
-	stress_plus make_stress_plus(float xx,float yy,float zz,float xy,float yz,float zx,float Lpp,float Ree){
-	    stress_plus t;
-	    t.xx=xx;t.yy=yy;t.zz=zz;
-	    t.xy=xy;t.yz=yz;t.zx=zx;
-	    t.Lpp=Lpp;
-	    t.Ree=Ree;
-	    return t;
-	}
-	stress_plus operator+(const stress_plus  &s1, const stress_plus &s2){
-	    return make_stress_plus(s1.xx+s2.xx,s1.yy+s2.yy,s1.zz+s2.zz,s1.xy+s2.xy,s1.yz+s2.yz,s1.zx+s2.zx,s1.Lpp+s2.Lpp,s1.Ree+s2.Ree);
-	}
-	stress_plus operator/(const stress_plus  &s1, const double d){
-	    return make_stress_plus(s1.xx/d,s1.yy/d,s1.zz/d,s1.xy/d,s1.yz/d,s1.zx/d,s1.Lpp/d,s1.Ree/d);
-	}
-	stress_plus operator*(const stress_plus  &s1, const double m){
-	    return make_stress_plus(s1.xx*m,s1.yy*m,s1.zz*m,s1.xy*m,s1.yz*m,s1.zx*m,s1.Lpp*m,s1.Ree*m);
-	}
 
 

@@ -2,7 +2,7 @@
  * timer.h
  *
  *  Created on: Feb 2, 2012
- *      Author: marat
+ *      Author: Marat Andreev
  */
 
 #ifndef TIMER_H_

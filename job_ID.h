@@ -4,11 +4,11 @@
 #include <stdlib.h>
 
 
-//some subroutine which simplify running code on cluster
-//every job (indepentent process) recieves unique number
-// this number is applied to all filename for all files generated
-// number is to be put into job_ID variable
-// filename_ID handles filenames 
+//this function simplifies running parallel instances of the code in one folder
+//every job (indepentent process) receives unique number as a parameter
+// this number is added to all filenames for every file generated
+// job_ID is variable for the number
+// filename_ID generates filename
 // example: job_ID=10;
 //          filename("log_") returns "log_10.dat"
 

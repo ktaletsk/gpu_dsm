@@ -4,6 +4,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+//Wrapper to catch CUDA errors
+//just copy of "CUDA programming guide" code
+
 
 #define CUDA_SAFE_CALL_NOSYNC(err)	__cudaSafeCallNoSync(err, __FILE__, __LINE__)
 #define CUDA_SAFE_CALL(err)			__cudaSafeCall(err, __FILE__, __LINE__)

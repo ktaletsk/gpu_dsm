@@ -1,3 +1,4 @@
+#include <iostream>
 #if defined(_MSC_VER)
     #include <windows.h>
 #endif
@@ -8,8 +9,8 @@
 
     void checkCUDA(int dev)
     {
-    //check for presence of GPU
-    //select one of them to use
+    //checks for presence of GPU
+    //selects device number dev to use
     //just copy of "CUDA programming guide" code
 	int deviceCount;
 	CUDA_SAFE_CALL_NOSYNC(cudaGetDeviceCount(&deviceCount));

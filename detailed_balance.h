@@ -4,7 +4,8 @@
 #include <fstream>
 #include "chain.h"
 
-// void z_plot(chain_head * chead,float Be, int Nk,int N_cha);
+//simple bubble sort
+//it used for generating cumulative distribution plots
 void sort(float* A,int sz)
 {
   float t=0;
@@ -19,16 +20,19 @@ void sort(float* A,int sz)
   }
 }
 
-
+//Generates GNU plot for Z distribution from simualtion and analytic one
+// used to debug code
 void z_plot(chain_head * chead,float Be, int Nk,int N_cha){
   
 	float J = powf(1.0f+1.0f/Be,Nk-1);
 	ofstream out;
 	out.open("z_theor.dat");
 	float P = 1.0f/J;
+	float tp=1.0f/J;
 	for (int  i=1;i<=Nk;i++){
 	    out<<i<<' '<<P<<'\n';
-	    P = P + bico(Nk-1,i)/(J*(pow(Be,i)));
+	    tp=tp/Be*(Nk-i)/i;
+	    P = P + tp;
 	}
 	out.close();
 	float *Z=new float [N_cha];

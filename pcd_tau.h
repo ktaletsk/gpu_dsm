@@ -4,10 +4,9 @@
 #include <math.h>
 #include "random.h"
       
-//     double  ISET=0,GSET=0//variables for Gasdev
  using namespace std; 
-//  extern Ran ran;
-struct p_cd {
+struct p_cd {//Generates \tau_CD lifetimes 
+	      //uses analytical approximation to P_cd parameters
 	float At,Adt,Bdt,normdt;
 	float g, alpha ,tau_0,tau_max,tau_d;
 	Ran *ran;
@@ -17,12 +16,15 @@ struct p_cd {
 	    double z=(Nk+Be)/(Be+1.0);
 // 	    cout<<Be<<'\t'<<Nk<<'\n';
 	    g=0.667f;
-	    if (Be!=1.0f) {
+	    if (Be!=1.0f) {//analytical approximation to P_cd parameters for FSM
+			  //Unpublished Pilyugina E. (2012)
 		alpha=(0.053f*logf(Be)+0.31f)*powf(z,-0.012f*logf(Be)-0.024f);
 		tau_0=0.285f*powf(Be+2.0f,0.515f);
 		tau_max=0.025f*powf(Be+2.0f,2.6f)*powf(z,2.83f);
 		tau_d=0.036f*powf(Be+2.0f,3.07f)*powf(z-1.0f,3.02f);
-	    }else{
+	    }else{//analytical approximation to P_cd parameters CFSM
+		  //Andreev, M., Feng, H., Yang, L., and Schieber, J. D.,J. Rheol. 58, 723 (2014).
+
 		alpha=0.267096f-0.375571f*expf(-0.0838237f*Nk);
 		tau_0=0.460277f+0.298913f*expf(-0.0705314f*Nk);
 		tau_max=0.0156137f*powf(float(Nk),3.18849f);

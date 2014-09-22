@@ -1,23 +1,20 @@
-OBJS =  cudautil.o gpu_random.o chain.o ensemble.o binomial.o orientation_tensor.o
+OBJS =  cudautil.o gpu_random.o stress.o chain.o ensemble.o 
 CC = nvcc
-#GTX560
-# FLAGS =  -arch=sm_21 -O3 
-#GTX680
 FLAGS =  -arch=sm_35 -O3 
-DEBUGFLAGS =
-DEPS = gpu_random.h cudautil.h cuda_call.h chain.h ensemble.h ensemble_kernel.cu ensemble_call_block.cu textures_surfaces.h pcd_tau.h detailed_balance.h job_ID.h
+#by explicitly specifing compute achitecture you can generate smaller executable and gain around 5% performance 
+# FLAGS =  -gencode arch=compute_20,code=sm_20 -gencode arch=compute_30,code=sm_30 -gencode arch=compute_32,code=sm_32 -gencode arch=compute_35,code=sm_35 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=compute_50
+#no architecture 10 support, sorry
 
-#gpu_dynamic_linear_chain.o : gpu_dynamic_linear_chain.cu $(DEPS) gpu_abstract_chain.cugpu_Gauss_free_energy.cu 
-#	$(CC) -c $<  $(FLAGS) $(DEBUGFLAGS) -o $@
+DEBUGFLAGS =
+DEPS = gpu_random.h cudautil.h cuda_call.h stress.h chain.h ensemble.h ensemble_kernel.cu ensemble_call_block.cu textures_surfaces.h pcd_tau.h detailed_balance.h job_ID.h
+
 %.o: %.cpp $(DEPS)
 	$(CC) -c $<  $(FLAGS) $(DEBUGFLAGS) -o $@
 %.o: %.cu $(DEPS)
 	$(CC) -c $<  $(FLAGS) $(DEBUGFLAGS) -o $@
 	
-gpu_DSM: main_boost.o $(OBJS) 
-	$(CC) -o gpu_DSM  main_boost.o $(OBJS)  $(LIBS)
-gpu_DSM_noboost: main.o $(OBJS) 
-	$(CC) -o gpu_DSM_noboost  main.o $(OBJS)  $(LIBS)
+gpu_DSM:  main.o $(OBJS) 
+	$(CC) -o gpu_DSM  main.o $(OBJS)  $(LIBS)
 clean:
 	rm *.o *~
 
