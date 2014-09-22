@@ -300,15 +300,15 @@
 	cudaChannelFormatDesc channelDesc4 =cudaCreateChannelDesc(32, 32,32,32,cudaChannelFormatKindFloat);
 
 	cudaUnbindTexture(t_uniformrand);
-	cudaMemset(d_rand_used,0,sizeof(int)*n_cha);
 	gr_fill_surface_uniformrand(d_random_gens,n_cha,uniformrandom_count, d_uniformrand);
+	cudaMemset(d_rand_used,0,sizeof(int)*n_cha);
 	cudaBindTextureToArray(t_uniformrand, d_uniformrand, channelDesc);
 	cudaDeviceSynchronize();
 
 	//tau_cd gauss 3d vector
 	cudaUnbindTexture(t_taucd_gauss_rand);
-	cudaMemset(d_tau_CD_used,0,sizeof(int)*n_cha);
 	gr_refill_surface_taucd_gauss_rand(d_random_gens2,n_cha,d_tau_CD_used,d_taucd_gauss_rand);
+	cudaMemset(d_tau_CD_used,0,sizeof(int)*n_cha);
 	cudaBindTextureToArray(t_taucd_gauss_rand, d_taucd_gauss_rand, channelDesc4);
 	cudaDeviceSynchronize();
     }
