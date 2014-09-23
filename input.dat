@@ -2,6 +2,7 @@
 	46
 	5000
 	0.0	8.16e-05	0.0	0.0	0.0	0.0	0.0	0.0	0.0
+	0
 	200.0
 	10000.0
 	
@@ -12,5 +13,6 @@
 ! 2) N_c --- number of chain segments on the chain
 ! 3) number of chains --- ensemble size
 ! 4) Transpose of imposed velocity gradient, kappa. (1/(\tau_K))
+! 6) G(t) flag. Toggle G(t) calculation, works only if kappa=0
 ! 5) Syncronization time (\tau_K). How often stress is calculated. Cannot be less than one.
 ! 6) Total simulation time (\tau_K)
