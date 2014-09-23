@@ -1,4 +1,4 @@
-OBJS =  cudautil.o gpu_random.o stress.o chain.o ensemble.o 
+OBJS =  cudautil.o gpu_random.o stress.o chain.o ensemble.o correlator.o
 CC = nvcc
 # FLAGS =  -arch=sm_35 -O3 
 #by explicitly specifing compute achitecture you can generate smaller executable and gain around 5% performance 
@@ -6,7 +6,7 @@ FLAGS =  -gencode arch=compute_20,code=sm_20 -gencode arch=compute_30,code=sm_30
 #no architecture 10 support, sorry
 
 DEBUGFLAGS =
-DEPS = gpu_random.h cudautil.h cuda_call.h stress.h chain.h ensemble.h ensemble_kernel.cu ensemble_call_block.cu textures_surfaces.h pcd_tau.h detailed_balance.h job_ID.h
+DEPS = gpu_random.h cudautil.h cuda_call.h stress.h chain.h ensemble.h ensemble_kernel.cu ensemble_call_block.cu textures_surfaces.h pcd_tau.h detailed_balance.h job_ID.h correlator.h
 
 %.o: %.cpp $(DEPS)
 	$(CC) -c $<  $(FLAGS) $(DEBUGFLAGS) -o $@

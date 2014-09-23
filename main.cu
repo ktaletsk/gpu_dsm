@@ -78,7 +78,8 @@
 //     in>>CD_flag;//TODO CD off not implemented
 //     int int_t;
 //     in>>int_t;//TODO SD off not implemented
-//     in>>int_t;//TODO G not implemented
+    int G_flag=0;
+    in>>G_flag;
 //     in>>int_t;//TODO R  not implemented
 //     in>>int_t;//TODO f_d not implemented
     float simulation_time=100000;
@@ -90,17 +91,21 @@
     cout<<"NK Be N_cha"<<"\n";
     cout<<NK<<'\t'<< Be<<'\t'<<N_cha<<"\n";
     cout<<"deformation tensor:"<<"\n";
-    cout<<" "<<kxx<<" "<<kxy<<" "<<kxz<<"\n"<<kyx<<" "<<kyy<<" "<<kyz<<"\n"<<kzx<<" "<<kzy<<" "<<kzz<<'\n';;
+    cout<<" "<<kxx<<" "<<kxy<<" "<<kxz<<"\n"<<kyx<<" "<<kyy<<" "<<kyz<<"\n"<<kzx<<" "<<kzy<<" "<<kzz<<'\n';
+    if (G_flag) cout<<"G(t) calculation is on\n";
+     else cout<<"G(t) calculation is off\n";
     cout<<"simulation time, sync time"<<"\n";
     cout<< simulation_time<<'\t'<< t_step_size<<'\n'<<'\n';
 
+    
 //toy parameters    
 //     Be=1.0;
 //     NK=46;
 //     N_cha=4000;
 //     kxy=8.16e-05;
 
-
+    bool flow=(kxx!=0.0)||(kxy!=0.0)||(kxz!=0.0)||(kyx!=0.0)||(kyy!=0.0)||(kyz!=0.0)||(kzx!=0.0)||(kzy!=0.0)||(kzz!=0.0);
+    
     CD_flag=1;
     pcd=new p_cd(Be,NK,&eran);
 
@@ -114,24 +119,50 @@
     gpu_init(job_ID);//prepare GPU to run DSM calculation
 
     ctimer timer;
-    
-    //tau file
-    ofstream tau_file;
-    tau_file.open(filename_ID("tau"));
-    cout<<"output file: "<<filename_ID("tau")<<'\n';
-    timer.start();
-    //main loop
-    cout<<"performing time evolution for the ensemble..\n";
-    cout<<"time\tstress tensor(xx yy zz xy yz xz)\t<Lpp>\t<Z>\n";
-    for (float t_step=0;t_step<simulation_time;t_step+=t_step_size){
-	gpu_time_step(t_step+t_step_size);  
-	stress_plus stress=calc_stress();
-	cout<<t_step+t_step_size<<'\t'<<stress<<'\n';
-	tau_file<<t_step+t_step_size<<'\t'<<stress<<'\n';
-	tau_file.flush();
+    if (flow){
+	//tau file
+	ofstream tau_file;
+	tau_file.open(filename_ID("tau"));
+	cout<<"output file: "<<filename_ID("tau")<<'\n';
+	timer.start();
+	//main loop
+	cout<<"performing time evolution for the ensemble..\n";
+	cout<<"time\tstress tensor(xx yy zz xy yz xz)\t<Lpp>\t<Z>\n";
+	for (float t_step=0;t_step<simulation_time;t_step+=t_step_size){
+	    gpu_time_step(t_step+t_step_size);  
+	    stress_plus stress=calc_stress();
+	    cout<<t_step+t_step_size<<'\t'<<stress<<'\n';
+	    tau_file<<t_step+t_step_size<<'\t'<<stress<<'\n';
+	    tau_file.flush();
+	}
+	timer.stop();
+	tau_file.close();
+	cout<<"time evolution done.\n";
+    }else{
+	if (G_flag){
+	    cout<<"G(t) calc...";
+	    cout.flush();
+	    ofstream G_file;
+	//     cout<<filename_ID("tau")<<'\n';
+	    G_file.open(filename_ID("G"));
+	    float *t,*x;
+	    int np;
+	    
+	    timer.start();
+	    gpu_Gt_calc(t_step_size,simulation_time,t,x,np);
+	    cout<<"done\n";
+	    for (int j=0;j<np;j++){
+		cout<<t[j]<<'\t'<<x[j]<<'\n';
+		G_file<<t[j]<<'\t'<<x[j]<<'\n';
+	    }
+	    
+	    timer.stop();
+	    G_file.close();
+	}else{
+	    cout<<"There are no flow and no equilibrium quantity to calculate. Exiting... ";
+	}
     }
-    timer.stop();
-    cout<<"time evolution done.\n";
+
 
     get_chains_from_device();
 //     z_plot(chain_heads,Be, NK,N_cha);
@@ -144,7 +175,7 @@
 
     
     gpu_clean();
-    tau_file.close();
+
     cout<<"Calculation time: "<<timer.elapsedTime()<<" milliseconds\n";
     return 0;
 }

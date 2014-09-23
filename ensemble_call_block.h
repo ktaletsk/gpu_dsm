@@ -3,6 +3,8 @@
 #define ENSEMBLE_CALL_BLOCK_H_
 
 #include "chain.h"
+#include "correlator.h"
+
 
 
     typedef struct ensemble_call_block{
@@ -28,6 +30,11 @@
 	int *d_offset;//coded array shifting parameters
 	float4 *d_new_strent;//new strent which shoud be inserted in the middle of the chain//TODO two new_strents will allow do all the updates at once
 	float *d_new_tau_CD;//new life time
+
+	//G(t) calculations
+	c_correlator *corr;//correlator
+	int *d_correlator_time;//index of next cell to fill
+	
 	
     }ensemble_call_block;
 
@@ -35,8 +42,16 @@
     void init_call_block(ensemble_call_block *cb,int nc,sstrentp chains, chain_head* chain_heads);
     //copies chain conformations from host and prepare block variables
     
+    void init_block_correlator(ensemble_call_block *cb);
+    //prepares correlator if G(t) calculations needed
+    
     void time_step_call_block(float reach_time,ensemble_call_block *cb);
+    void EQ_time_step_call_block(float reach_time,ensemble_call_block *cb);
     //performs time evolution
+    
+    void get_chain_to_device_call_block(ensemble_call_block *cb);
+    //copies chain conformations to device from host
+
     void get_chain_from_device_call_block(ensemble_call_block *cb);
     //copies chain conformations from device to host
     stress_plus calc_stress_call_block(ensemble_call_block *cb,int *r_chain_count);

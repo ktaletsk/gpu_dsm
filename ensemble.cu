@@ -352,6 +352,243 @@
 	}
 
 	
+	
+    void gpu_Gt_calc(int res,float length,float *&t,float *&x,int &np)
+    {
+	if (length/res<correlator_size){//if one run is enough
+      
+	    int corr_temp=res;
+	    CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(corr_temp),sizeof(int)));
+	    
+	    for(int i=0; i<chain_blocks_number;i++){
+		init_block_correlator(&(chain_blocks[i]));
+		EQ_time_step_call_block(length,&(chain_blocks[i]));
+		chain_blocks[i].corr->counter=length/res;
+/*		time_step_call_block(res*correlator_size,&(chain_blocks[i]));
+		chain_blocks[i].corr->counter=correlator_size;*/
+	    } 
+	    
+	    int counter=length/res/2;
+	    //prepare log space time marks
+	    
+	    //trial run to find out how many ticks
+	    long t1=0;
+	    int n=1,inc=1,series=4;
+	    while(t1+inc<counter-1){
+		t1+=inc;
+		if (n%series==0){
+		    inc*=2;
+		}
+		n++;
+	//      cout<<"n t1 "<<n<<' '<<t1<<'\n';   
+	    }
+	//  cout<<" n"<<n<<'\n';
+	    np=n;
+	    //full run
+	    t=new float[n];
+	    int *tint=new int[n];
+	    x=new float[n];
+	    t1=0;
+	    n=1,inc=1,series=4;
+	    t[0]=0;
+	    tint[0]=0;
+	    while(t1+inc<counter-1){
+		t1+=inc;
+		if (n%series==0){
+		    inc*=2;
+		}
+		t[n]=res*float(t1);
+		tint[n]=t1;
+		n++;
+	    }
+	    float *x_buf= new float[np];
+	    for (int j=0;j<np;j++){
+		x[j]=0.0f;
+	    }
+	    for(int i=0; i<chain_blocks_number;i++){
+		chain_blocks[i].corr->calc(tint,x_buf,np);
+		for (int j=0;j<np;j++){
+		     x[j]+=x_buf[j]*chain_blocks[i].nc/N_cha;
+		}
+	    } 
+	    delete []x_buf;
+	    delete []tint;
+	}else{//multiple runs required
+	    int page_count=1;//calculating number of runs
+	    while(correlator_size*powf(correlator_base,page_count-1)<length/res){
+		page_count++;
+	    }
+	    cout<<"number of correlator pages: "<<page_count<<'\n'; 
+	    
+	    int last_page_counter=length/(res*powf(correlator_base,page_count-1));
+	    //equally spaced log scale tick marks template 
+
+	    //trial run to find out how many ticks
+ 	    int np_first_page=1,np_page=0,np_last_page=0;//counting number of points for all pages
+    	    int inc=1,series=4;
+	    int counter=correlator_size/2;
+	    long t1=0;
+	    inc=1,series=4;
+	    while(t1+inc<counter-1){
+		t1+=inc;
+		if (np_first_page%series==0){
+		    inc*=2;
+		}
+		np_first_page++;
+		if (t1>correlator_size/2/correlator_base){
+		    np_page++;
+		    if (t1<last_page_counter-1) {
+		      np_last_page++;
+// 		      		    cout<<"t1 inc"<<t1<<' '<<inc<<'\n';   
+		    }
+		}
+	    }
+	    np=np_first_page+(page_count-2)*np_page+np_last_page;
+// 	    cout<<"np"<<'\t'<<"n_first_page"<<'\t'<<"n_page"<<'\t'<<"n_last_page"<<'\n';
+// 	    cout<<np<<'\t'<<np_first_page<<'\t'<<np_page<<'\t'<<np_last_page<<'\n';
+// 	    return;
+	    
+	    
+	    int *tick_pointer_page=new int[page_count];
+	    int *tint=new int[np];
+	    t=new float[np];
+    	    x=new float[np];
+	    t[0]=0;
+	    tint[0]=0;
+	    
+	    //first page
+	    t1=0;
+	    int n=1;
+	    inc=1;series=4;
+	    tick_pointer_page[0]=0;
+	    while(t1+inc<counter-1){
+		t1+=inc;
+		if (n%series==0){
+		    inc*=2;
+		}
+		tint[tick_pointer_page[0]+n]=t1;
+		t[tick_pointer_page[0]+n]=res*float(t1);
+// 		cout<<"n t1 "<<n<<' '<<t1<<'\n';   
+		n++;
+	    }   
+	    tick_pointer_page[1]=np_first_page;
+	    
+	    for (int ip=2;ip<page_count;ip++){
+ 		int tres=res*powf(correlator_base,ip-1);
+		t1=0;n=1;inc=1;series=4;int k=0;
+		while(t1+inc<counter-1){
+		    t1+=inc;
+		    if (n%series==0){
+			inc*=2;
+		    }
+		    if (t1>correlator_size/2/correlator_base){
+			tint[tick_pointer_page[ip-1]+k]=t1;
+			t[tick_pointer_page[ip-1]+k]=tres*float(t1);
+			k++;
+// 			cout<<"k "<<k<<'\n';
+// 			cout<<"n t1 "<<n<<' '<<t1<<' '<<tres*float(t1)<<'\n';   
+		    }
+		    n++;
+		}   
+		tick_pointer_page[ip]=tick_pointer_page[ip-1]+np_page;
+// 		cout<<"tick_pointer_page[ip] "<<tick_pointer_page[ip]<<'\n';   
+
+
+	    }
+	    //last page
+
+	    int tres=res*powf(correlator_base,page_count-1);
+	    t1=0;n=1;inc=1;series=4;int k=0;
+	    while(t1+inc<counter-1){
+		t1+=inc;
+		if (n%series==0){
+		    inc*=2;
+		}
+		if ((t1>correlator_size/2/correlator_base)&&(t1<last_page_counter-1)){
+		    tint[tick_pointer_page[page_count-1]+k]=t1;
+		    t[tick_pointer_page[page_count-1]+k]=tres*float(t1);
+		    k++;
+// 		    cout<<"n t1 "<<n<<' '<<t1<<' '<<tres*float(t1)<<'\n';   
+		}
+		n++;
+
+	    }   
+
+    	    float *x_buf=new float[np];
+	    
+
+	    cout<<"running page 1...";
+	    cout.flush();
+	    int ip=1;
+	    tres=res*powf(correlator_base,ip-1);
+	    CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(tres),sizeof(int)));
+
+	    for(int i=0; i<chain_blocks_number;i++){
+		init_block_correlator(&(chain_blocks[i]));
+		get_chain_to_device_call_block(&(chain_blocks[i]));
+		cudaMemset(chain_blocks[i].d_correlator_time,0,sizeof(int)*chain_blocks[i].nc);
+		EQ_time_step_call_block(float(tres*correlator_size),&(chain_blocks[i]));
+		chain_blocks[i].corr->counter=correlator_size;
+	    }
+	    
+	    for(int i=0; i<chain_blocks_number;i++){
+		chain_blocks[i].corr->calc(tint,x_buf,np_first_page);
+		for (int j=0;j<np_first_page;j++){
+		    x[j]+=x_buf[j]*chain_blocks[i].nc/N_cha;
+		}
+	    } 
+	    cout<<"done\n";
+	    for (int ip=2;ip<page_count;ip++){
+		cout<<"running page "<<ip<<"...";
+		tres=res*powf(correlator_base,ip-1);
+		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(tres),sizeof(int)));
+
+		for(int i=0; i<chain_blocks_number;i++){
+		    get_chain_to_device_call_block(&(chain_blocks[i]));
+		    cudaMemset(chain_blocks[i].d_correlator_time,0,sizeof(int)*chain_blocks[i].nc);
+		    EQ_time_step_call_block(float(tres*correlator_size),&(chain_blocks[i]));
+		    chain_blocks[i].corr->counter=correlator_size;
+		}
+
+		for(int i=0; i<chain_blocks_number;i++){
+		    chain_blocks[i].corr->calc(&(tint[tick_pointer_page[ip-1]]),&(x_buf[tick_pointer_page[ip-1]]),np_page);
+		    for (int j=tick_pointer_page[ip-1];j<tick_pointer_page[ip-1]+np_page;j++){
+			x[j]+=x_buf[j]*chain_blocks[i].nc/N_cha;
+		    }
+		} 
+		cout<<"done\n";
+	    }
+	    
+	    ip=page_count;
+	    cout<<"running page "<<ip<<"...";
+	    cout<<"number of points "<<np_last_page<<"...";
+	    
+	    tres=res*powf(correlator_base,ip-1);
+	    CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(tres),sizeof(int)));
+
+	    for(int i=0; i<chain_blocks_number;i++){
+		get_chain_to_device_call_block(&(chain_blocks[i]));
+		cudaMemset(chain_blocks[i].d_correlator_time,0,sizeof(int)*chain_blocks[i].nc);
+		EQ_time_step_call_block(length,&(chain_blocks[i]));
+		chain_blocks[i].corr->counter=last_page_counter;
+	    }
+
+	    for(int i=0; i<chain_blocks_number;i++){
+		chain_blocks[i].corr->calc(&(tint[tick_pointer_page[ip-1]]),&(x_buf[tick_pointer_page[ip-1]]),np_last_page);
+		for (int j=tick_pointer_page[ip-1];j<tick_pointer_page[ip-1]+np_last_page;j++){
+		    x[j]+=x_buf[j]*chain_blocks[i].nc/N_cha;
+		}
+	    } 
+	    cout<<"done\n";
+	    
+	    
+// 	    for (int j=0;j<np;j++){
+// 		cout<<t[j]<<'\t'<<x[j]<<'\n';
+// 	    }
+	    delete []tint;
+	    delete []x_buf;	   
+	}
+    }
   
   
   
