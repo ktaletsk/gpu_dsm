@@ -1,5 +1,6 @@
-//EQ versions of kernels
-
+//Equilibrium versions of kernels
+//flow deformation turn off
+//EQ_chain_CD_kernel fills s_correlator with of diagonal stress component
 //      correlator constant
     __constant__ int d_correlator_res;
 
