@@ -1,5 +1,17 @@
 *.[oa]
 *~
+<<<<<<< HEAD
 tau*.dat
 tau1.dat
 gpu_DSM
+=======
+<<<<<<< HEAD
+gpu_DSM
+*.dat
+
+=======
+tau.dat
+tau1.dat
+gpu_dsm
+>>>>>>> 2c28489aa9010107a88da7d5e68ee528928700cf
+>>>>>>> 98e92b7fe28f50c577c3fe2657f4ceccddfc8b81

@@ -370,8 +370,20 @@
 
 	
 	
-    void gpu_Gt_calc(int res,float length,float *&t,float *&x,int &np)
+    void gpu_Gt_calc(int res,float length,float *&t,float *&x,int &np)    
     {
+        // how does it work
+        // There is limit on memory. We cannot store stress for every timestep for each chain in the ensemble.
+        // We separate G(t) into several parts(pages), and calculate each part in a separate run
+        // Each part have a different time resolution.
+        // In other words, first we perform time evolution of the ensemeble and
+        // calculate and store stress every sync_time for each chain.
+        // After time evolution we use saved values to calculate G_1(t).
+        // Next we perform time evolution of the ensemeble and save stres every 16 sync_time.
+        // We use these saved values to calculate G_2(t)
+        // and so on...
+        // In the end, we combine {G_i(t)} into final (G(t))
+        
 	if (length/res<correlator_size){//if one run is enough
       
 	    int corr_temp=res;
@@ -456,16 +468,12 @@
 		    np_page++;
 		    if (t1<last_page_counter-1) {
 		      np_last_page++;
-// 		      		    cout<<"t1 inc"<<t1<<' '<<inc<<'\n';   
 		    }
 		}
 	    }
 	    np=np_first_page+(page_count-2)*np_page+np_last_page;
-// 	    cout<<"np"<<'\t'<<"n_first_page"<<'\t'<<"n_page"<<'\t'<<"n_last_page"<<'\n';
-// 	    cout<<np<<'\t'<<np_first_page<<'\t'<<np_page<<'\t'<<np_last_page<<'\n';
-// 	    return;
 	    
-	    
+	    //preparing time marks for each page
 	    int *tick_pointer_page=new int[page_count];
 	    int *tint=new int[np];
 	    t=new float[np];
@@ -530,7 +538,9 @@
 		n++;
 
 	    }   
-
+	    
+	    
+	    //run loop
     	    float *x_buf=new float[np];
 	    
 
@@ -539,7 +549,8 @@
 	    int ip=1;
 	    tres=res*powf(correlator_base,ip-1);
 	    CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(tres),sizeof(int)));
-
+	    
+	    //time evolution
 	    for(int i=0; i<chain_blocks_number;i++){
 		init_block_correlator(&(chain_blocks[i]));
 		get_chain_to_device_call_block(&(chain_blocks[i]));
@@ -547,7 +558,7 @@
 		EQ_time_step_call_block(float(tres*correlator_size),&(chain_blocks[i]));
 		chain_blocks[i].corr->counter=correlator_size;
 	    }
-	    
+	    //G_i(t) calculation
 	    for(int i=0; i<chain_blocks_number;i++){
 		chain_blocks[i].corr->calc(tint,x_buf,np_first_page);
 		for (int j=0;j<np_first_page;j++){
@@ -557,6 +568,7 @@
 	    cout<<"done\n";
 	    for (int ip=2;ip<page_count;ip++){
 		cout<<"running page "<<ip<<"...";
+		cout.flush();
 		tres=res*powf(correlator_base,ip-1);
 		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(tres),sizeof(int)));
 
@@ -578,8 +590,7 @@
 	    
 	    ip=page_count;
 	    cout<<"running page "<<ip<<"...";
-	    cout<<"number of points "<<np_last_page<<"...";
-	    
+	    cout.flush();
 	    tres=res*powf(correlator_base,ip-1);
 	    CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(tres),sizeof(int)));
 
@@ -597,11 +608,7 @@
 		}
 	    } 
 	    cout<<"done\n";
-	    
-	    
-// 	    for (int j=0;j<np;j++){
-// 		cout<<t[j]<<'\t'<<x[j]<<'\n';
-// 	    }
+
 	    delete []tint;
 	    delete []x_buf;	   
 	}

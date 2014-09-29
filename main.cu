@@ -132,6 +132,7 @@ int main(int narg,char** arg)
 
     ctimer timer;
     if (flow){
+<<<<<<< HEAD
 		//tau file
 		ofstream tau_file;
 		tau_file.open(filename_ID("tau"));
@@ -174,6 +175,49 @@ int main(int narg,char** arg)
 		else{
 	    	cout<<"There are no flow and no equilibrium quantity to calculate. Exiting... ";
 		}
+=======
+	//tau file
+	ofstream tau_file;
+	tau_file.open(filename_ID("tau"));
+	cout<<"output file: "<<filename_ID("tau")<<'\n';
+	timer.start();
+	//main loop
+	cout<<"performing time evolution for the ensemble..\n";
+	cout<<"time\tstress tensor(xx yy zz xy yz xz)\t<Lpp>\t<Z>\n";
+	for (float t_step=0;t_step<simulation_time;t_step+=t_step_size){
+	    gpu_time_step(t_step+t_step_size);  
+	    stress_plus stress=calc_stress();
+	    cout<<t_step+t_step_size<<'\t'<<stress<<'\n';
+	    tau_file<<t_step+t_step_size<<'\t'<<stress<<'\n';
+	    tau_file.flush();
+	}
+	timer.stop();
+	tau_file.close();
+	cout<<"time evolution done.\n";
+    }else{
+	if (G_flag){
+	    cout<<"G(t) calc...\n";
+	    cout.flush();
+	    ofstream G_file;
+	//     cout<<filename_ID("tau")<<'\n';
+	    G_file.open(filename_ID("G"));
+	    float *t,*x;
+	    int np;
+	    
+	    timer.start();
+	    gpu_Gt_calc(t_step_size,simulation_time,t,x,np);
+	    cout<<"G(t) calc done\n";
+	    for (int j=0;j<np;j++){
+		cout<<t[j]<<'\t'<<x[j]<<'\n';
+		G_file<<t[j]<<'\t'<<x[j]<<'\n';
+	    }
+	    
+	    timer.stop();
+	    G_file.close();
+	}else{
+	    cout<<"There are no flow and no equilibrium quantity to calculate. Exiting... \n";
+	}
+>>>>>>> 98e92b7fe28f50c577c3fe2657f4ceccddfc8b81
     }
 
 

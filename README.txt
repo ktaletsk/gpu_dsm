@@ -3,7 +3,7 @@ gpu_DSM command line parameters:
 first parameter is seed/job_ID
 example: 
 ./gpu_DSM 1
-all the files generates in this run will have "_1" in the filename.
+all the files generated in this run will have "_1" in the filename.
 additionally 1 will be used as a seed number for pseudo random number generator
 
 -s filename 
