@@ -15,11 +15,11 @@
 // You should have received a copy of the GNU General Public License
 // along with gpu_dsm.  If not, see <http://www.gnu.org/licenses/>.
 
-// Short intro
-// Cuda devices posses enormous computation capabilities,
-// however memory access (especially writing) is relatively slow.
-// Unfortinately DSM flow simulation require to update significant part 
-// of chain conformations variables every time step, which normally bottlenecks the performance.
+//Short intro
+//Cuda devices posses enormous computation capabilities,
+//however memory access (especially writing) is relatively slow.
+//Unfortinately DSM flow simulation require to update significant part 
+//of chain conformations variables every time step, which normally bottlenecks the performance.
 // First time conformation updated when flow deformation of strand orientation vectors is applied, second time when jump process is applied.
 // If the jump process is SD shift, only two neigbouring N_i must be updated,
 // but in case entanglement creation/destruction major portion of chain conformation
@@ -29,6 +29,9 @@
 // It is done through "delayed dynamics". This means that jump process is not applied
 // immediately, but information about it stored  in temporary variables until deformation applied. 
 // Next time step shifting of arrays applied simultaneously together with flow deformation.
+
+
+
 
 
 #ifndef _ENSEMBLE_KERNEL_
