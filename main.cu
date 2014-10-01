@@ -58,7 +58,7 @@ int main(int narg,char** arg)
 			strcpy(loadfile,arg[k+1]);
 			k++;
 		}
-    	if((strcmp(arg[k],"-d")==0)&&(k+1<narg)){//Determine nvidia gpu device_ID
+		if((strcmp(arg[k],"-d")==0)&&(k+1<narg)){//Determine nvidia gpu device_ID
 			device_ID=atoi(arg[k+1]);
 			k++;
 		}
@@ -133,7 +133,7 @@ int main(int narg,char** arg)
     gpu_init(job_ID);//prepare GPU to run DSM calculation
 
     ctimer timer;
-    if (flow){
+    if (flow){//Flow calculations
 		//tau file
 		ofstream tau_file;
 		tau_file.open(filename_ID("tau"));
@@ -153,7 +153,7 @@ int main(int narg,char** arg)
 		tau_file.close();
 		cout<<"time evolution done.\n";
 	}
-	else{
+	else{//Equlibrium calculations
 		if (G_flag){
 	    	cout<<"G(t) calc...\n";
 	    	cout.flush();
