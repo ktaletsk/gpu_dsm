@@ -1,8 +1,3 @@
-<<<<<<< HEAD
-//Equilibrium versions of kernels
-//flow deformation turn off
-//EQ_chain_CD_kernel fills s_correlator with of diagonal stress component
-=======
 // Copyright 2014 Marat Andreev
 // 
 // This file is part of gpu_dsm.
@@ -20,9 +15,10 @@
 // You should have received a copy of the GNU General Public License
 // along with gpu_dsm.  If not, see <http://www.gnu.org/licenses/>.
 
-//EQ versions of kernels
+//Equilibrium versions of kernels
+//flow deformation turn off
+//EQ_chain_CD_kernel fills s_correlator with of diagonal stress component
 
->>>>>>> 2c28489aa9010107a88da7d5e68ee528928700cf
 //      correlator constant
     __constant__ int d_correlator_res;
 
