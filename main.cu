@@ -125,6 +125,7 @@ int main(int narg,char** arg)
 
     if (loadfile!=NULL){//load chain conformations from file
       	cout<<"loading chain conformations from "<<loadfile<<"..";
+	cout.flush();
 	load_from_file(loadfile);
 	cout<<"done.\n";
     }else host_chains_init();// or generate equilibrium conformations

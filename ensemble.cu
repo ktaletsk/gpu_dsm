@@ -360,7 +360,6 @@
 		}
 
 	   	for(int i=0;i<N_cha;i++){
-		    cout<<i;
 		    load_from_file(file,chain_index(i),&chain_heads[i]);
 		}
 
