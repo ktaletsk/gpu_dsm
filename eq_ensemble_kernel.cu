@@ -98,8 +98,8 @@ void EQ_chain_CD_kernel(chain_head* gpu_chain_heads,float *tdt,float *reach_flag
 	if ((gpu_chain_heads[i].time>=reach_time)||(gpu_chain_heads[i].stall_flag!=0)){reach_flag[i]=1;tdt[i]=0.0f;return;}
 	float4 new_strent=d_new_strent[i];
 	float new_tCD=d_new_tau_CD[i];
-	
-	//check for correlator
+// 	gpu_chain_heads[i].dummy=0.0f;
+// 	//check for correlator
 	if (gpu_chain_heads[i].time>d_correlator_time[i]*d_correlator_res){//TODO add d_correlator_time to gpu_chain_heads
 	float4 sum_stress=make_float4(0.0f,0.0f,0.0f,0.0f);
 	    for (int j=0;j<tz;j++){
@@ -273,7 +273,7 @@ void EQ_chain_CD_kernel(chain_head* gpu_chain_heads,float *tdt,float *reach_flag
 		tau_CD_used[i]++;
 		gpu_chain_heads[i].Z++;
 		d_new_tau_CD[i]=d_tau_CD_f_d_t(temp.w);//__fdividef(1.0f,d_tau_d);
-		float newn=floorf(__fdividef(pr*(QN1.w-1.0f),wcdc))+1.0f;
+		float newn=floorf(0.5f+__fdividef(pr*(QN1.w-2.0f),wcdc))+1.0f;
 		if (j==0){
 		    
 		    temp.w= QN1.w-newn;
@@ -319,7 +319,9 @@ void EQ_chain_CD_kernel(chain_head* gpu_chain_heads,float *tdt,float *reach_flag
 	    gpu_chain_heads[i].Z++;
 	    d_new_tau_CD[i]=d_tau_CD_f_d_t(temp.w);//__fdividef(1.0f,d_tau_d);
 
-	    float newn=floorf(__fdividef(pr*(QNtail.w-1.0f),W_CD_c_z))+1.0f;
+	    float newn=1.0f+floorf(0.5f+__fdividef(pr*(QNtail.w-2.0f),W_CD_c_z));
+	    //floorf(__fdividef(pr*(QNtail.w-1.0f),W_CD_c_z))+1.0f;
+// 	    gpu_chain_heads[i].dummy=1.0f+__fdiv_rn(pr*(QNtail.w-2.0f),W_CD_c_z);
 
 	    temp.w= newn;
 	    float sigma=(tz==1)? 0.0f:__fsqrt_rn(__fdividef(temp.w,3.0f));

@@ -371,7 +371,7 @@ void chain_CD_kernel(chain_head* gpu_chain_heads,float *tdt,float *reach_flag,fl
 		tau_CD_used[i]++;
 		gpu_chain_heads[i].Z++;
 		d_new_tau_CD[i]=d_tau_CD_f_d_t(temp.w);//__fdividef(1.0f,d_tau_d);
-		float newn=floorf(__fdividef(pr*(QN1.w-1.0f),wcdc))+1.0f;
+		float newn=floorf(0.5f+__fdividef(pr*(QN1.w-2.0f),wcdc))+1.0f;
 		if (j==0){
 		    
 		    temp.w= QN1.w-newn;
@@ -417,7 +417,7 @@ void chain_CD_kernel(chain_head* gpu_chain_heads,float *tdt,float *reach_flag,fl
 	    gpu_chain_heads[i].Z++;
 	    d_new_tau_CD[i]=d_tau_CD_f_d_t(temp.w);//__fdividef(1.0f,d_tau_d);
 
-	    float newn=floorf(__fdividef(pr*(QNtail.w-1.0f),W_CD_c_z))+1.0f;
+	    float newn=floorf(0.5f+__fdividef(pr*(QNtail.w-2.0f),W_CD_c_z))+1.0f;
 
 	    temp.w= newn;
 	    float sigma=(tz==1)? 0.0f:__fsqrt_rn(__fdividef(temp.w,3.0f));

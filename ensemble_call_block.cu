@@ -391,17 +391,22 @@
 	int chain_count=cb->nc;
 	for (int j=0;j<cb->nc;j++){
 	    if (tchain_heads[j].stall_flag==0){
-	    sum_stress.x+=stress_buf[j*2].x;
-	    sum_stress.y+=stress_buf[j*2].y;
-	    sum_stress.z+=stress_buf[j*2].z;
-	    sum_stress.w+=stress_buf[j*2].w;
-	    sum_stress2.x+=stress_buf[j*2+1].x;
-	    sum_stress2.y+=stress_buf[j*2+1].y;
-	    sum_stress2.z+=stress_buf[j*2+1].z;
-	    sum_stress2.w+=stress_buf[j*2+1].w;
+	      if (!isnan(stress_buf[j*2].x)){
+		sum_stress.x+=stress_buf[j*2].x;
+		sum_stress.y+=stress_buf[j*2].y;
+		sum_stress.z+=stress_buf[j*2].z;
+		sum_stress.w+=stress_buf[j*2].w;
+		sum_stress2.x+=stress_buf[j*2+1].x;
+		sum_stress2.y+=stress_buf[j*2+1].y;
+		sum_stress2.z+=stress_buf[j*2+1].z;
+		sum_stress2.w+=stress_buf[j*2+1].w;
 
 	    // 	     cout<<"stress chain "<<j<<'\t'<<sum_stress.x<<'\t'<<sum_stress.y<<'\t'<<sum_stress.z<<'\t'<<sum_stress.w<<'\n';
-
+	      }else
+	      { 
+		chain_count--;
+		cout<<"chain stall "<<j<<'\n';//TODO output gloval index
+	      }
 	    }
 	    else{ chain_count--;
 	     cout<<"chain stall "<<j<<'\n';//TODO output gloval index
