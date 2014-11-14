@@ -1,18 +1,19 @@
 	1.0
 	46
 	5000
-	0.0	8.16e-05	0.0	0.0	0.0	0.0	0.0	0.0	0.0
-	0
+	0.0	0.0 0.0	0.0	0.0	0.0	0.0	0.0	0.0
+	1
 	200.0
-	10000.0
+	1549
 	
 ! Input file for linear monodisperse chains
 !Line by line description of input:
 ! 1) + 2) theory parameters - for detailed description see Schieber et al., J. of Rheol. 47(1), 2003 an Khaliullin et al., Phys. Rew. Letters, 2008
 ! 1) Beta --- entanglement spacing
-! 2) N_c --- number of chain segments on the chain
-! 3) number of chains --- ensemble size
+! 2) NK --- number of chain segments on the chain
+! 3) N_cha --- number of chains (ensemble size)
 ! 4) Transpose of imposed velocity gradient, kappa. (1/(\tau_K))
+! 5) CD toggle
 ! 6) G(t) flag. Toggle G(t) calculation, works only if kappa=0
-! 5) Syncronization time (\tau_K). How often stress is calculated. Cannot be less than one.
-! 6) Total simulation time (\tau_K)
+! 7) Syncronization time (\tau_K). How often stress is calculated. Cannot be less than one.
+! 8) Total simulation time (\tau_K)
