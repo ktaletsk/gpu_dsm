@@ -166,7 +166,7 @@ int main(int narg, char** arg) {
 		timer.stop();
 		tau_file.close();
 		cout << "time evolution done.\n";
-	} else {		//Equlibrium calculations
+	} else {//Equlibrium calculations
 		if (G_flag) {
 			cout << "G(t) calc...\n";
 			cout.flush();
@@ -175,7 +175,6 @@ int main(int narg, char** arg) {
 			G_file.open(filename_ID("G"));
 			float *t, *x;
 			int np;
-
 			timer.start();
 			gpu_Gt_calc(t_step_size, simulation_time, t, x, np);
 			cout << "G(t) calc done\n";
@@ -183,12 +182,10 @@ int main(int narg, char** arg) {
 				cout << t[j] << '\t' << x[j] << '\n';
 				G_file << t[j] << '\t' << x[j] << '\n';
 			}
-
 			timer.stop();
 			G_file.close();
 		} else {
-			cout
-					<< "There are no flow and no equilibrium quantity to calculate. Exiting... \n";
+			cout<< "There are no flow and no equilibrium quantity to calculate. Exiting... \n";
 		}
 	}
 
@@ -208,9 +205,9 @@ int main(int narg, char** arg) {
 //			save_N_distribution_to_file("distr_N.dat", 1);
 //			save_Q_distribution_to_file("distr_Q.dat", 1);
 //		} else {
-			save_distribution_to_file("distr_Z_.dat", 1);
-			save_N_distribution_to_file("distr_N_.dat", 1);
-			save_Q_distribution_to_file("distr_Q_.dat", 1);
+		save_distribution_to_file("distr_Z_.dat", 1);
+		save_N_distribution_to_file("distr_N_.dat", 1);
+		save_Q_distribution_to_file("distr_Q_.dat", 1);
 //		}
 	}
 	gpu_clean();
