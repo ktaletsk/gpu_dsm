@@ -39,6 +39,9 @@ int main(int narg, char** arg) {
 	char *loadfile = NULL;
 	int device_ID = 0;
 	bool distr = 0;
+	int G_flag = 0;
+	float simulation_time;
+	float t_step_size;
 	cout << '\n';
 
 	//Processing command line parameters
@@ -88,25 +91,21 @@ int main(int narg, char** arg) {
 	in >> NK;
 	in >> N_cha;
 	in >> kxx >> kxy >> kxz >> kyx >> kyy >> kyz >> kzx >> kzy >> kzz;
-
-	//in>>CD_flag;//TODO CD off not implemented
+	in >> CD_flag;//CD_toggle
 	//int int_t;
 	//in>>int_t;//TODO SD off not implemented
-	int G_flag = 0;
 	in >> G_flag;
 	//in>>int_t;//TODO R  not implemented
 	//in>>int_t;//TODO f_d not implemented
-	float simulation_time = 100000;
-	float t_step_size = 200;
 	in >> t_step_size;
 	in >> simulation_time;
 
+	//Print simulation parameters
 	cout << "\nsimulation parameters:\n";
 	cout << "NK Be N_cha" << "\n";
 	cout << NK << '\t' << Be << '\t' << N_cha << "\n";
 	cout << "deformation tensor:" << "\n";
-	cout << " " << kxx << " " << kxy << " " << kxz << "\n" << kyx << " " << kyy
-			<< " " << kyz << "\n" << kzx << " " << kzy << " " << kzz << '\n';
+	cout <<'\t'<<kxx<<'\t'<<kxy<<'\t'<<kxz<<'\n'<<kyx<<'\t'<<kyy<<'\t'<<kyz<<'\t'<<kzx<<'\t'<<kzy<<'\t'<<kzz<<'\n';
 	if (G_flag)
 		cout << "G(t) calculation is on\n";
 	else
@@ -127,9 +126,6 @@ int main(int narg, char** arg) {
 
 	//Initialize random
 	eran.seed(job_ID * N_cha);
-
-	//Constrain dynamics toggle (always ON for now)
-	CD_flag = 1;
 
 	//
 	pcd = new p_cd(Be, NK, &eran);
@@ -155,8 +151,7 @@ int main(int narg, char** arg) {
 		//main loop
 		cout << "performing time evolution for the ensemble..\n";
 		cout << "time\tstress tensor(xx yy zz xy yz xz)\t<Lpp>\t<Z>\n";
-		for (float t_step = 0; t_step < simulation_time; t_step +=
-				t_step_size) {
+		for (float t_step = 0; t_step < simulation_time; t_step +=t_step_size) {
 			gpu_time_step(t_step + t_step_size);
 			stress_plus stress = calc_stress();
 			cout << t_step + t_step_size << '\t' << stress << '\n';
@@ -198,17 +193,17 @@ int main(int narg, char** arg) {
 		cout << "done.\n";
 	}
 
-	if (distr) {
-		cout << "Saving distribution to file...\n";
-//		if (CD_flag) {
-//			save_distribution_to_file("distr_Z.dat", 1);
-//			save_N_distribution_to_file("distr_N.dat", 1);
-//			save_Q_distribution_to_file("distr_Q.dat", 1);
-//		} else {
+	if (distr) {//Calculating distributions for Z,N,Q
+		cout << "Saving distribution to file...";
+		if (CD_flag) {
+			save_distribution_to_file("distr_Z.dat", 1);
+			save_N_distribution_to_file("distr_N.dat", 1);
+			save_Q_distribution_to_file("distr_Q.dat", 1);
+		} else {
 		save_distribution_to_file("distr_Z_.dat", 1);
 		save_N_distribution_to_file("distr_N_.dat", 1);
 		save_Q_distribution_to_file("distr_Q_.dat", 1);
-//		}
+		}
 	}
 	gpu_clean();
 

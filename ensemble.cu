@@ -117,8 +117,8 @@ void gpu_init(int seed) {
 
 	//copy pcd constant to device
 	float cdtemp = pcd->W_CD_destroy_aver() / Be;
-	CUDA_SAFE_CALL(
-			cudaMemcpyToSymbol(d_CD_create_prefact, &cdtemp, sizeof(float)));
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(dCD_flag, &CD_flag, sizeof(int)));
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_CD_create_prefact, &cdtemp, sizeof(float)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_g, &(pcd->g), sizeof(float)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_alpha, &(pcd->alpha), sizeof(float)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_0, &(pcd->tau_0), sizeof(float)));
@@ -741,8 +741,7 @@ void gpu_Gt_calc(int res, float length, float *&t, float *&x, int &np) {
 		cout << "running page " << ip << "...";
 		cout.flush();
 		tres = res * powf(correlator_base, ip - 1);
-		CUDA_SAFE_CALL(
-				cudaMemcpyToSymbol(d_correlator_res, &(tres), sizeof(int)));
+		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(tres), sizeof(int)));
 
 		for (int i = 0; i < chain_blocks_number; i++) {
 			get_chain_to_device_call_block(&(chain_blocks[i]));
