@@ -91,7 +91,7 @@ int main(int narg, char** arg) {
 	in >> NK;
 	in >> N_cha;
 	in >> kxx >> kxy >> kxz >> kyx >> kyy >> kyz >> kzx >> kzy >> kzz;
-	in>>CD_flag;//CD_toggle
+	in >> CD_flag;//CD_toggle
 	//int int_t;
 	//in>>int_t;//TODO SD off not implemented
 	in >> G_flag;
@@ -126,9 +126,6 @@ int main(int narg, char** arg) {
 
 	//Initialize random
 	eran.seed(job_ID * N_cha);
-
-	//Constrain dynamics toggle (always ON for now)
-	CD_flag = 1;
 
 	//
 	pcd = new p_cd(Be, NK, &eran);
@@ -197,7 +194,7 @@ int main(int narg, char** arg) {
 	}
 
 	if (distr) {//Calculating distributions for Z,N,Q
-		cout << "Saving distribution to file...\n";
+		cout << "Saving distribution to file...";
 		if (CD_flag) {
 			save_distribution_to_file("distr_Z.dat", 1);
 			save_N_distribution_to_file("distr_N.dat", 1);

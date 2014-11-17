@@ -19,5 +19,5 @@ gpu_DSM:  main.o $(OBJS)
 %.o: %.cu $(DEPS)
 	$(CC) -c $<  $(FLAGS) $(DEBUGFLAGS) -o $@
 clean:
-	rm *.o *~ *.cubin *.ptx *.ii *.i *module_id *.hash *fatbin* *cudafe* *.dat
+	rm *.o *~ *.cubin *.ptx *.ii *.i *module_id *.hash *fatbin* *cudafe*
 
