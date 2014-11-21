@@ -22,8 +22,8 @@
 #include "random.h"
       
  using namespace std; 
-struct p_cd {//Generates \tau_CD lifetimes 
-	      //uses analytical approximation to P_cd parameters
+struct p_cd {//Generates \tau_CD lifetimes
+	 	 	 //uses analytical approximation to P_cd parameters
 	float At,Adt,Bdt,normdt;
 	float g, alpha ,tau_0,tau_max,tau_d;
 	Ran *ran;

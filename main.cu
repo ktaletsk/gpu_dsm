@@ -91,7 +91,7 @@ int main(int narg, char** arg) {
 	in >> NK;
 	in >> N_cha;
 	in >> kxx >> kxy >> kxz >> kyx >> kyy >> kyz >> kzx >> kzy >> kzz;
-	in >> CD_flag;//CD_toggle
+	in >> CD_flag;	//CD_toggle
 	//int int_t;
 	//in>>int_t;//TODO SD off not implemented
 	in >> G_flag;
@@ -105,7 +105,7 @@ int main(int narg, char** arg) {
 	cout << "NK Be N_cha" << "\n";
 	cout << NK << '\t' << Be << '\t' << N_cha << "\n";
 	cout << "deformation tensor:" << "\n";
-	cout <<'\t'<<kxx<<'\t'<<kxy<<'\t'<<kxz<<'\n'<<kyx<<'\t'<<kyy<<'\t'<<kyz<<'\t'<<kzx<<'\t'<<kzy<<'\t'<<kzz<<'\n';
+	cout << kxx << '\t' << kxy << '\t' << kxz << '\n' << kyx << '\t' << kyy << '\t' << kyz << '\t' << kzx << '\t' << kzy << '\t' << kzz << '\n';
 	if (G_flag)
 		cout << "G(t) calculation is on\n";
 	else
@@ -151,7 +151,8 @@ int main(int narg, char** arg) {
 		//main loop
 		cout << "performing time evolution for the ensemble..\n";
 		cout << "time\tstress tensor(xx yy zz xy yz xz)\t<Lpp>\t<Z>\n";
-		for (float t_step = 0; t_step < simulation_time; t_step +=t_step_size) {
+		for (float t_step = 0; t_step < simulation_time; t_step +=
+				t_step_size) {
 			gpu_time_step(t_step + t_step_size);
 			stress_plus stress = calc_stress();
 			cout << t_step + t_step_size << '\t' << stress << '\n';
@@ -161,7 +162,7 @@ int main(int narg, char** arg) {
 		timer.stop();
 		tau_file.close();
 		cout << "time evolution done.\n";
-	} else {//Equlibrium calculations
+	} else {		//Equlibrium calculations
 		if (G_flag) {
 			cout << "G(t) calc...\n";
 			cout.flush();
@@ -180,7 +181,8 @@ int main(int narg, char** arg) {
 			timer.stop();
 			G_file.close();
 		} else {
-			cout<< "There are no flow and no equilibrium quantity to calculate. Exiting... \n";
+			cout
+					<< "There are no flow and no equilibrium quantity to calculate. Exiting... \n";
 		}
 	}
 
@@ -193,16 +195,16 @@ int main(int narg, char** arg) {
 		cout << "done.\n";
 	}
 
-	if (distr) {//Calculating distributions for Z,N,Q
+	if (distr) {		//Calculating distributions for Z,N,Q
 		cout << "Saving distribution to file...";
 		if (CD_flag) {
 			save_distribution_to_file("distr_Z.dat", 1);
 			save_N_distribution_to_file("distr_N.dat", 1);
 			save_Q_distribution_to_file("distr_Q.dat", 1);
 		} else {
-		save_distribution_to_file("distr_Z_.dat", 1);
-		save_N_distribution_to_file("distr_N_.dat", 1);
-		save_Q_distribution_to_file("distr_Q_.dat", 1);
+			save_distribution_to_file("distr_Z_.dat", 1);
+			save_N_distribution_to_file("distr_N_.dat", 1);
+			save_Q_distribution_to_file("distr_Q_.dat", 1);
 		}
 	}
 	gpu_clean();

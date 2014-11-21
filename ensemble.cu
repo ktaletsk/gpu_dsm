@@ -100,11 +100,10 @@ void host_chains_init() {
 void gpu_init(int seed) {
 	cout << "preparing GPU chain conformations..\n";
 
+	//Copy host constants from host to device
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(dBe, &Be, sizeof(float)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(dnk, &NK, sizeof(int)));
-
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_z_max, &z_max, sizeof(int)));
-
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_kappa_xx, &kxx, sizeof(float)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_kappa_xy, &kxy, sizeof(float)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_kappa_xz, &kxz, sizeof(float)));
@@ -115,25 +114,23 @@ void gpu_init(int seed) {
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_kappa_zy, &kzy, sizeof(float)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_kappa_zz, &kzz, sizeof(float)));
 
-	//copy pcd constant to device
 	float cdtemp = pcd->W_CD_destroy_aver() / Be;
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(dCD_flag, &CD_flag, sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_CD_create_prefact, &cdtemp, sizeof(float)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_g, &(pcd->g), sizeof(float)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_alpha, &(pcd->alpha), sizeof(float)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_0, &(pcd->tau_0), sizeof(float)));
-	CUDA_SAFE_CALL(
-			cudaMemcpyToSymbol(d_tau_max, &(pcd->tau_max), sizeof(float)));
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_max, &(pcd->tau_max), sizeof(float)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_d, &(pcd->tau_d), sizeof(float)));
 	cdtemp = 1.0f / pcd->tau_d;
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_d_inv, &(cdtemp), sizeof(float)));
 
 	cdtemp = 1.0f / pcd->At;
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_At, &(cdtemp), sizeof(float)));
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_At, &cdtemp, sizeof(float)));
 	cdtemp = powf(pcd->tau_0, pcd->alpha);
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Dt, &(cdtemp), sizeof(float)));
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Dt, &cdtemp, sizeof(float)));
 	cdtemp = -1.0f / pcd->alpha;
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Ct, &(cdtemp), sizeof(float)));
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Ct, &cdtemp, sizeof(float)));
 	cdtemp = pcd->normdt / pcd->Adt;
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Adt, &cdtemp, sizeof(float)));
 	cdtemp = pcd->Bdt / pcd->normdt;
@@ -148,25 +145,17 @@ void gpu_init(int seed) {
 	int rsz = chains_per_call;
 	if (N_cha < chains_per_call)
 		rsz = N_cha;
-	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32,
-			cudaChannelFormatKindFloat);
-	cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc(32, 0, 0, 0,
-			cudaChannelFormatKindFloat);
+	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
+	cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
 
-	cudaMallocArray(&d_a_QN, &channelDesc4, z_max, rsz,
-			cudaArraySurfaceLoadStore);
-	cudaMallocArray(&d_a_tCD, &channelDesc1, z_max, rsz,
-			cudaArraySurfaceLoadStore);
+	cudaMallocArray(&d_a_QN, &channelDesc4, z_max, rsz, cudaArraySurfaceLoadStore);
+	cudaMallocArray(&d_a_tCD, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
 
-	cudaMallocArray(&d_b_QN, &channelDesc4, z_max, rsz,
-			cudaArraySurfaceLoadStore);
-	cudaMallocArray(&d_b_tCD, &channelDesc1, z_max, rsz,
-			cudaArraySurfaceLoadStore);
+	cudaMallocArray(&d_b_QN, &channelDesc4, z_max, rsz, cudaArraySurfaceLoadStore);
+	cudaMallocArray(&d_b_tCD, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
 
-	cudaMallocArray(&d_sum_W, &channelDesc1, z_max, rsz,
-			cudaArraySurfaceLoadStore);
-	cudaMallocArray(&d_stress, &channelDesc4, rsz * 2, 0,
-			cudaArraySurfaceLoadStore);
+	cudaMallocArray(&d_sum_W, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
+	cudaMallocArray(&d_stress, &channelDesc4, rsz * 2, 0, cudaArraySurfaceLoadStore);
 	cudaBindSurfaceToArray(s_stress, d_stress);
 	cudaBindSurfaceToArray(s_sum_W, d_sum_W);
 
@@ -175,7 +164,7 @@ void gpu_init(int seed) {
 	cout << "  device random generators 1 seeding..";
 	cudaMalloc(&d_random_gens, sizeof(gpu_Ran) * rsz);
 
-	gr_array_seed(d_random_gens, rsz, seed * rsz);
+	gr_array_seed(d_random_gens, rsz, seed * rsz); //
 	cout << ".done\n";
 	cout << "  device random generators 2 seeding..";
 	cudaMalloc(&d_random_gens2, sizeof(gpu_Ran) * rsz);
@@ -188,15 +177,15 @@ void gpu_init(int seed) {
 	cout << " GPU random generator init done.\n";
 	cout << "\n";
 
+	//Calculate number of necessary blocks of chains
 	chain_blocks_number = (N_cha + chains_per_call - 1) / chains_per_call;
 	cout << " Number of ensemble blocks " << chain_blocks_number << '\n';
 
+	//chain_blocks - array of blocks
 	chain_blocks = new ensemble_call_block[chain_blocks_number];
 	for (int i = 0; i < chain_blocks_number - 1; i++) {
-		init_call_block(&(chain_blocks[i]), chains_per_call, chain_index(i, 0),
-				&(chain_heads[i * chains_per_call]));
-		cout << "  copying chains to device block " << i + 1
-				<< ". chains in the ensemble block " << chains_per_call << '\n';
+		init_call_block(&(chain_blocks[i]), chains_per_call, chain_index(i, 0), &(chain_heads[i * chains_per_call]));
+		cout << "  copying chains to device block " << i + 1 << ". chains in the ensemble block " << chains_per_call << '\n';
 	}
 	init_call_block(&(chain_blocks[chain_blocks_number - 1]),
 			(N_cha - 1) % chains_per_call + 1,
@@ -449,12 +438,9 @@ void save_Q_distribution_to_file(char* filename, bool cumulative) {
 		float Q[Nstr];
 		for (int i = 0; i < N_cha; i++) {
 			for (int j = 1; j < chain_heads[i].Z - 1; j++) {
-				Q[prev[i] + j - 1] = sqrt(
-						chain_index(i).QN[j].x * chain_index(i).QN[j].x
-								+ chain_index(i).QN[j].y
-										* chain_index(i).QN[j].y
-								+ chain_index(i).QN[j].z
-										* chain_index(i).QN[j].z);
+				Q[prev[i] + j - 1] = sqrt(chain_index(i).QN[j].x * chain_index(i).QN[j].x
+										+ chain_index(i).QN[j].y * chain_index(i).QN[j].y
+										+ chain_index(i).QN[j].z * chain_index(i).QN[j].z);
 				if (Q[prev[i] + j - 1] < 0)
 					cout << "NaN detected at strand " << prev[i] + j << "\n";
 			}
@@ -473,7 +459,7 @@ void save_Q_distribution_to_file(char* filename, bool cumulative) {
 			}
 			P[i] = (float) i / (float) Nstr;
 		}
-		int quant = 100;
+		int quant = 10;
 		for (int i = 0; i < Nstr / quant; i++) {
 			file << Q[i * quant] << "\t" << P[i * quant] << "\n";
 		}
@@ -515,14 +501,13 @@ void gpu_Gt_calc(int res, float length, float *&t, float *&x, int &np) {
 	// In the end, we combine {G_i(t)} into final (G(t))
 
 	if (length / res < correlator_size) {        //if one run is enough
+		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(res),sizeof(int))); //Copy timestep for calculation
 
-		int corr_temp = res;
-		CUDA_SAFE_CALL(
-				cudaMemcpyToSymbol(d_correlator_res, &(corr_temp),
-						sizeof(int)));
-
+		//There is restriction on the size of any array in CUDA
+		//We divide ensemble of chains into blocks if necessary
+		//And evaluate for each block
 		for (int i = 0; i < chain_blocks_number; i++) {
-			init_block_correlator(&(chain_blocks[i]));
+			init_block_correlator(&(chain_blocks[i]));//Initialize correlator structure in cb
 			EQ_time_step_call_block(length, &(chain_blocks[i]));
 			chain_blocks[i].corr->counter = length / res;
 			/*		time_step_call_block(res*correlator_size,&(chain_blocks[i]));
@@ -574,16 +559,15 @@ void gpu_Gt_calc(int res, float length, float *&t, float *&x, int &np) {
 		}
 		delete[] x_buf;
 		delete[] tint;
-	} else {        //multiple runs required
-		int page_count = 1;        //calculating number of runs
-		while (correlator_size * powf(correlator_base, page_count - 1)
-				< length / res) {
-			page_count++;
-		}
-		cout << "number of correlator pages: " << page_count << '\n';
+	} else { //multiple runs required
 
-		int last_page_counter = length
-				/ (res * powf(correlator_base, page_count - 1));
+		//calculating number of runs
+		int page_count = 1;
+		while (correlator_size * powf(correlator_base, page_count - 1) < length / res)
+			page_count++;
+		cout << "number of correlator pages: " << page_count << '\n';
+		int last_page_counter = length / (res * powf(correlator_base, page_count - 1));
+
 		//equally spaced log scale tick marks template
 
 		//trial run to find out how many ticks

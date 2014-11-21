@@ -29,19 +29,19 @@ typedef struct ensemble_call_block {
 
 	//cudaArray vars
 	cudaArray* d_QN; //device arrays for vector part of chain conformations
-	cudaArray* d_tCD; // these arrays used to store conformations
+	cudaArray* d_tCD; //these arrays used to store conformations
 
 	//regular device arrays
 	chain_head* gpu_chain_heads;
 
-	float *d_dt; // time step size from prevous time step. used for appling deformation
+	float *d_dt; // time step size from previous time step. used for applying deformation
 	float *reach_flag; // flag that chain evolution reached required time
 					   //copied to host each times step
 
 					   // delayed dynamics --- see ensemble_kernel
 
 	int *d_offset;                     //coded array shifting parameters
-	float4 *d_new_strent; //new strent which shoud be inserted in the middle of the chain//TODO two new_strents will allow do all the updates at once
+	float4 *d_new_strent; //new strent which should be inserted in the middle of the chain//TODO two new_strents will allow do all the updates at once
 	float *d_new_tau_CD;                     //new life time
 
 											 //G(t) calculations

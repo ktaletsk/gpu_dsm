@@ -18,7 +18,7 @@
 #ifndef TIMER_H_
 #define TIMER_H_
 #include <sys/time.h>
-//realisation is different for linux/windows
+//Realization is different for Linux/Windows
 	class ctimer{
 	private:
 		timeval ts, te;

@@ -24,9 +24,7 @@ __constant__ int d_correlator_res;
 
 //entanglement parallel part of the code
 //2D kernel: i- entanglement index j - chain index
-__global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent_kernel(
-		chain_head* gpu_chain_heads, int *d_offset, float4 *d_new_strent,
-		float *d_new_tau_CD) {
+__global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent_kernel(chain_head* gpu_chain_heads, int *d_offset, float4 *d_new_strent,float *d_new_tau_CD) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	int j = blockIdx.y * blockDim.y + threadIdx.y;
 	if ((j >= dn_cha_per_call) || (i >= d_z_max))
@@ -68,22 +66,18 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent
 			float sig1 = __fdividef(0.75f, QN.w * (QN.w + 1));
 			float sig2 = __fdividef(0.75f, QN2.w * (QN2.w - 1));
 			float prefact1 = (Q == 0.0f) ? 1.0f : __fdividef(QN.w, (QN.w + 1));
-			float prefact2 =
-					(Q2 == 0.0f) ? 1.0f : __fdividef(QN2.w, (QN2.w - 1));
+			float prefact2 = (Q2 == 0.0f) ? 1.0f : __fdividef(QN2.w, (QN2.w - 1));
 			float f1 = (Q == 0.0f) ? 2.0f * QN.w + 0.5f : QN.w;
 			float f2 = (Q2 == 0.0f) ? 2.0f * QN2.w - 0.5f : QN2.w;
 			float friction = __fdividef(2.0f, f1 + f2);
-			wsh.x = friction * __powf(prefact1 * prefact2, 0.75f)
-					* __expf(Q * sig1 - Q2 * sig2);
+			wsh.x = friction * __powf(prefact1 * prefact2, 0.75f)* __expf(Q * sig1 - Q2 * sig2);
 		}
 		if (QN.w > 1.0f) {//N=1 mean that shift is not possible, also ot will lead to dividing on zero error
 
 			float sig1 = __fdividef(0.75f, QN.w * (QN.w - 1.0f));
 			float sig2 = __fdividef(0.75f, QN2.w * (QN2.w + 1.0f));
-			float prefact1 =
-					(Q == 0.0f) ? 1.0f : __fdividef(QN.w, (QN.w - 1.0f));
-			float prefact2 =
-					(Q2 == 0.0f) ? 1.0f : __fdividef(QN2.w, (QN2.w + 1.0f));
+			float prefact1 = (Q == 0.0f) ? 1.0f : __fdividef(QN.w, (QN.w - 1.0f));
+			float prefact2 = (Q2 == 0.0f) ? 1.0f : __fdividef(QN2.w, (QN2.w + 1.0f));
 			float f1 = (Q == 0.0f) ? 2.0f * QN.w - 0.5f : QN.w;
 			float f2 = (Q2 == 0.0f) ? 2.0f * QN2.w + 0.5f : QN2.w;
 			float friction = __fdividef(2.0f, f1 + f2);

@@ -5,7 +5,7 @@ FLAGS =  -arch=sm_30 -O3
 #FLAGS =  -gencode arch=compute_20,code=sm_20 -gencode arch=compute_30,code=sm_30 -gencode arch=compute_32,code=sm_32 -gencode arch=compute_35,code=sm_35 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_52,code=compute_52
 #no architecture 10 support, sorry
 
-DEBUGFLAGS =
+DEBUGFLAGS = -g -G -keep
 #DEBUGFLAGS = -g -G -keep
 #For debug you need to generate CPU (-g) and GPU (-G) debug information
 #For ability to wartch state of variables you need to generate additional information (-keep)

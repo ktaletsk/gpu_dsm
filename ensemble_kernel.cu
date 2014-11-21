@@ -127,12 +127,10 @@ __device__ __forceinline__ float d_tau_CD_f_t(float p) {
 
 //The entanglement parallel part of the code
 //2D kernel: i- entanglement index j - chain index
-__global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void strent_kernel(
-		chain_head* gpu_chain_heads, float *tdt, int *d_offset,
-		float4 *d_new_strent, float *d_new_tau_CD) {    //TODO add reach flag
+__global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void strent_kernel(chain_head* gpu_chain_heads, float *tdt, int *d_offset, float4 *d_new_strent, float *d_new_tau_CD) {    //TODO add reach flag
 	int i = blockIdx.x * blockDim.x + threadIdx.x; //Entaglment index in chain
 	int j = blockIdx.y * blockDim.y + threadIdx.y; //Chain index in the set of chains
-	if ((j >= dn_cha_per_call) || (i >= d_z_max))
+	if ((j >= dn_cha_per_call) || (i >= d_z_max)) //For boundary blocks in grid index may exceed total number of chains/entaglements
 		return;
 	int tz = gpu_chain_heads[j].Z;
 	if (i >= tz)
