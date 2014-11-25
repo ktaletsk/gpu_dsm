@@ -25,43 +25,55 @@ __constant__ int d_correlator_res;
 //entanglement parallel part of the code
 //2D kernel: i- entanglement index j - chain index
 __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent_kernel(chain_head* gpu_chain_heads, int *d_offset, float4 *d_new_strent,float *d_new_tau_CD) {
+	//Calculate kernel index
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	int j = blockIdx.y * blockDim.y + threadIdx.y;
+
+	//Check if kernel index is outside boundaries
 	if ((j >= dn_cha_per_call) || (i >= d_z_max))
 		return;
-	int tz = gpu_chain_heads[j].Z;
-	if (i >= tz)
+
+	int tz = gpu_chain_heads[j].Z; //Current chain size
+	if (i >= tz) //Check if entaglement index is over chain size
 		return;
-	int oft = d_offset[j];
-//fetch
-	float4 QN = tex2D(t_a_QN, make_offset(i, oft), j); // all access to strents is done through two operations: first texture fetch
+
+	//When new entaglements are created we need to shift index +1(destruction, skip one strent), 0(nothing happens) or -1(new strent created before)
+	int oft = d_offset[j]; //Offset for current chain
+
+	//fetch
+	float4 QN;
 	if (fetch_new_strent(i, oft))
 		QN = d_new_strent[j]; //second check if strent created last time step should go here
+	else
+		QN = tex2D(t_a_QN, make_offset(i, oft), j); // all access to strents is done through two operations: first texture fetch
 	float tcd;
-	if (dCD_flag) {
-		tcd = tex2D(t_a_tCD, make_offset(i, oft), j); /////////////////////
+	if (dCD_flag) {//If constrain dynamics is enabled
 		if (fetch_new_strent(i, oft))
 			tcd = d_new_tau_CD[j];
+		else
+			tcd = tex2D(t_a_tCD, make_offset(i, oft), j);
 	} else
 		tcd = 0;
-	float2 wsh = make_float2(0.0f, 0.0f); //Variable for shifting probability
 
-//fetch next strent	
+	//write
+	surf2Dwrite(QN, s_b_QN, 16 * i, j);
+	surf2Dwrite(tcd, s_b_tCD, 4 * i, j);
+
+	//fetch next strent (if strent is not the last)
 	if (i < tz - 1) {
-		float4 QN2 = tex2D(t_a_QN, make_offset(i + 1, oft), j);
+		float2 wsh = make_float2(0.0f, 0.0f); //Variable for shifting probability
+		float4 QN2; //Q for next strent
 		if (fetch_new_strent(i + 1, oft))
 			QN2 = d_new_strent[j];
+		else
+			QN2 = tex2D(t_a_QN, make_offset(i + 1, oft), j);
 
 		//w_shift probability calc
-
-		float Q = QN.x * QN.x + QN.y * QN.y + QN.z * QN.z;
+		float Q  = QN.x  * QN.x  + QN.y  * QN.y  + QN.z  * QN.z;
 		float Q2 = QN2.x * QN2.x + QN2.y * QN2.y + QN2.z * QN2.z;
 
-// 	    wsh.x=Q;
-// 	    wsh.y=Q;
-		if (QN2.w > 1.0f) { //N=1 mean that shift is not possible, also ot will lead to dividing on zero error
+		if (QN2.w > 1.0f) { //N=1 mean that shift is not possible, also it will lead to dividing on zero error
 			//float prefact=__powf( __fdividef(QN.w*QN2.w,(QN.w+1)*(QN2.w-1)),0.75f);
-			//TODO replace powf with sqrt(x*x*x)
 
 			float sig1 = __fdividef(0.75f, QN.w * (QN.w + 1));
 			float sig2 = __fdividef(0.75f, QN2.w * (QN2.w - 1));
@@ -81,21 +93,12 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent
 			float f1 = (Q == 0.0f) ? 2.0f * QN.w - 0.5f : QN.w;
 			float f2 = (Q2 == 0.0f) ? 2.0f * QN2.w + 0.5f : QN2.w;
 			float friction = __fdividef(2.0f, f1 + f2);
-			wsh.y = friction * __powf(prefact1 * prefact2, 0.75f)
-					* __expf(-Q * sig1 + Q2 * sig2);
+			wsh.y = friction * __powf(prefact1 * prefact2, 0.75f)* __expf(-Q * sig1 + Q2 * sig2);
 		}
 // 	    surf2Dwrite(wsh.x,s_W_SD_pm,8*i,j);//TODO funny bug i have no idea but doesn't work other way
 // 	    surf2Dwrite(wsh.y,s_W_SD_pm,8*i+4,j);//seems to work with float4 below
-		surf2Dwrite(
-				wsh.x + wsh.y
-						+ dCD_flag
-								* (tcd + d_CD_create_prefact * (QN.w - 1.0f)),
-				s_sum_W, 4 * i, j);
+		surf2Dwrite(wsh.x + wsh.y + dCD_flag * (tcd + d_CD_create_prefact * (QN.w - 1.0f)), s_sum_W, 4 * i, j);
 	}
-//write	
-
-	surf2Dwrite(QN, s_b_QN, 16 * i, j);
-	surf2Dwrite(tcd, s_b_tCD, 4 * i, j);
 }
 
 __global__ __launch_bounds__(tpb_chain_kernel)
@@ -107,7 +110,8 @@ void EQ_chain_kernel(chain_head* gpu_chain_heads, float *tdt,
 
 	if (i >= dn_cha_per_call)
 		return;
-//setup local variables
+
+	//setup local variables
 	int tz = gpu_chain_heads[i].Z;
 	uint oft = d_offset[i];
 	d_offset[i] = offset_code(0xffff, +1);
