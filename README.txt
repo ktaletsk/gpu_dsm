@@ -59,3 +59,6 @@
 
     -d number
     selects GPU to use. Useful if multiple GPU are present in the system. Numberring starts from 0.
+    
+    -distr
+    saves final Z,N,Q distributions in .dat files
