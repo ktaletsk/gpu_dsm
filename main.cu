@@ -40,8 +40,8 @@ int main(int narg, char** arg) {
 	int device_ID = 0;
 	bool distr = 0;
 	int G_flag = 0;
-	float simulation_time;
-	float t_step_size;
+	double simulation_time;
+	double t_step_size;
 	cout << '\n';
 
 	//Processing command line parameters
@@ -151,7 +151,7 @@ int main(int narg, char** arg) {
 		//main loop
 		cout << "performing time evolution for the ensemble..\n";
 		cout << "time\tstress tensor(xx yy zz xy yz xz)\t<Lpp>\t<Z>\n";
-		for (float t_step = 0; t_step < simulation_time; t_step +=
+		for (double t_step = 0; t_step < simulation_time; t_step +=
 				t_step_size) {
 			gpu_time_step(t_step + t_step_size);
 			stress_plus stress = calc_stress();

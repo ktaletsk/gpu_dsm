@@ -51,7 +51,11 @@ chain_head* chain_heads; // host device chain headers arrays, store scalar varia
 int chain_blocks_number;
 ensemble_call_block *chain_blocks;
 
+
+
 //host constants
+double universal_time;//since chain_head do not store universal time due to SP issues
+		      //see chain.h chain_head for explanation
 int N_cha;
 int NK;
 int z_max;
@@ -89,6 +93,7 @@ void chains_malloc() {
 void host_chains_init() {
 	chains_malloc();
 	cout << "generating chain conformations on host..";
+	universal_time=0.0;
 	for (int i = 0; i < N_cha; i++) {
 		sstrentp ptr = chain_index(i);
 		chain_init(&(chain_heads[i]), ptr, NK, z_max);
@@ -212,11 +217,11 @@ stress_plus calc_stress() {
 	return tmps / total_chains;
 }
 
-void gpu_time_step(float reach_time) {
+void gpu_time_step(double reach_time) {
 	for (int i = 0; i < chain_blocks_number; i++) {
 		time_step_call_block(reach_time, &(chain_blocks[i]));
 	}
-
+	universal_time=reach_time;
 }
 
 void get_chains_from_device()    //Copies chains back to host memory
@@ -487,7 +492,7 @@ void load_from_file(char *filename) {
 		cout << "file error\n";
 }
 
-void gpu_Gt_calc(int res, float length, float *&t, float *&x, int &np) {
+void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
 	// how does it work
 	// There is limit on memory. We cannot store stress for every timestep for each chain in the ensemble.
 	// We separate G(t) into several parts(pages), and calculate each part in a separate run
@@ -682,7 +687,7 @@ void gpu_Gt_calc(int res, float length, float *&t, float *&x, int &np) {
 			get_chain_to_device_call_block(&(chain_blocks[i]));
 			cudaMemset(chain_blocks[i].d_correlator_time, 0,
 					sizeof(int) * chain_blocks[i].nc);
-			EQ_time_step_call_block(float(tres * correlator_size),
+			EQ_time_step_call_block(double(tres * correlator_size),
 					&(chain_blocks[i]));
 			chain_blocks[i].corr->counter = correlator_size;
 		}
@@ -705,7 +710,7 @@ void gpu_Gt_calc(int res, float length, float *&t, float *&x, int &np) {
 				get_chain_to_device_call_block(&(chain_blocks[i]));
 				cudaMemset(chain_blocks[i].d_correlator_time, 0,
 						sizeof(int) * chain_blocks[i].nc);
-				EQ_time_step_call_block(float(tres * correlator_size),
+				EQ_time_step_call_block(double(tres * correlator_size),
 						&(chain_blocks[i]));
 				chain_blocks[i].corr->counter = correlator_size;
 			}

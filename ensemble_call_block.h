@@ -37,8 +37,10 @@ typedef struct ensemble_call_block {
 	float *d_dt; // time step size from previous time step. used for applying deformation
 	float *reach_flag; // flag that chain evolution reached required time
 					   //copied to host each times step
+	double block_time;//since chain_head do not store universal time due to SP issues
+	                   //see chain.h chain_head for explanation
 
-					   // delayed dynamics --- see ensemble_kernel
+	// delayed dynamics --- see ensemble_kernel
 
 	int *d_offset;                     //coded array shifting parameters
 	float4 *d_new_strent; //new strent which should be inserted in the middle of the chain//TODO two new_strents will allow do all the updates at once
@@ -57,8 +59,8 @@ void init_call_block(ensemble_call_block *cb, int nc, sstrentp chains,
 void init_block_correlator(ensemble_call_block *cb);
 //prepares correlator if G(t) calculations needed
 
-void time_step_call_block(float reach_time, ensemble_call_block *cb);
-void EQ_time_step_call_block(float reach_time, ensemble_call_block *cb);
+void time_step_call_block(double reach_time, ensemble_call_block *cb);
+void EQ_time_step_call_block(double reach_time, ensemble_call_block *cb);
 //performs time evolution
 
 void get_chain_to_device_call_block(ensemble_call_block *cb);

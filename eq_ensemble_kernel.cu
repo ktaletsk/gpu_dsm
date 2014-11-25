@@ -99,8 +99,8 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent
 }
 
 __global__ __launch_bounds__(tpb_chain_kernel)
-void EQ_chain_CD_kernel(chain_head* gpu_chain_heads, float *tdt,
-		float *reach_flag, float reach_time, int *d_offset,
+void EQ_chain_kernel(chain_head* gpu_chain_heads, float *tdt,
+		float *reach_flag, float next_sync_time, int *d_offset,
 		float4 *d_new_strent, float *d_new_tau_CD, int *d_correlator_time,
 		int *rand_used, int *tau_CD_used) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -112,16 +112,20 @@ void EQ_chain_CD_kernel(chain_head* gpu_chain_heads, float *tdt,
 	uint oft = d_offset[i];
 	d_offset[i] = offset_code(0xffff, +1);
 
-	if ((gpu_chain_heads[i].time >= reach_time)
+	if (reach_flag[i]!=0) {
+		return;
+	}
+	if ((gpu_chain_heads[i].time >= next_sync_time)
 			|| (gpu_chain_heads[i].stall_flag != 0)) {
 		reach_flag[i] = 1;
+		gpu_chain_heads[i].time-=next_sync_time;
 		tdt[i] = 0.0f;
 		return;
 	}
 	float4 new_strent = d_new_strent[i];
 	float new_tCD = d_new_tau_CD[i];
 // 	//check for correlator
-	if (gpu_chain_heads[i].time > d_correlator_time[i] * d_correlator_res) {//TODO add d_correlator_time to gpu_chain_heads
+	if (d_universal_time+gpu_chain_heads[i].time > d_correlator_time[i] * d_correlator_res) {//TODO add d_correlator_time to gpu_chain_heads
 		float4 sum_stress = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 		for (int j = 0; j < tz; j++) {
 			float4 QN1 = tex2D(t_a_QN, make_offset(j, oft), i);

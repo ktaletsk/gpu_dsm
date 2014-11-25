@@ -45,17 +45,21 @@ typedef struct sstrentp {//actually there are only Z-1 tau_CD and only Z-2 Q_i(i
 //this structure contains scalar variables of chain conformation
 typedef struct chain_head {//chain header
 	int Z;//n strands
-	float time;
+	float time;//time since last ensemble synchronization/time_step.
+		   //Single precision float works only up to time~=1E7.
+		   //For time 1E7 dt/time can be below single precision resolution,
+		   //which leads to detailed balance issues
 	float dummy;// dummy field for 16 byte alignment
 	int stall_flag;//algorithm crash flag
 } chain_head;
+
+extern double universal_time;
+
 
 //init chain conformation
 void chain_init(chain_head *chain_head, sstrentp data, int tnk);
 void chain_init(chain_head *chain_head, sstrentp data, int tnk, int z_max);	//z_max is maximum number of entaglements. purpose - truncate z distribution for optimization. NOTE: not tested
 
-//debug output. ignores chain head
-ostream& operator<<(ostream& stream, const sstrentp c);
 //outputs chain conformation
 void print(ostream& stream, const sstrentp c, const chain_head chead);
 

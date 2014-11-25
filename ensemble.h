@@ -41,7 +41,8 @@ sstrentp chain_index(const int i);//absolute navigation i - is a global index of
 sstrentp chain_index(const int bi, const int i);	//block navigation
 //bi is a block index bi :[0..chain_blocks_number]
 //i - is a chain index in the block bi  i:[0..chains_per_call-1]
-
+extern double universal_time;//since chain_head do not store universal time due to SP issues
+	                   //see chain.h chain_head for explanation
 extern int N_cha;	// number of chains
 extern int NK;	//number of chain segments in each chain
 extern int z_max;	// max number of strand in chain (currently same as NK)
@@ -58,9 +59,9 @@ void save_N_distribution_to_file(char *filename, bool cumulative); //TEMP saves 
 void save_Q_distribution_to_file(char* filename, bool cumulative); //TEMP saves Q distribution to file
 void load_from_file(char *filename);  //loads chain conformations from a file
 
-void gpu_time_step(float reach_time);  // performs time evolution of ensemble
+void gpu_time_step(double reach_time);  // performs time evolution of ensemble
 
-void gpu_Gt_calc(int res, float length, float *&t, float *&x, int &np); //G(t) relaxation spectrum calculation
+void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np); //G(t) relaxation spectrum calculation
 
 void gpu_clean();  //free memory used by ensemble
 

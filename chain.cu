@@ -167,29 +167,10 @@ void chain_init(chain_head *chain_head, sstrentp data, int tnk, int z_max) {
 
 }
 
-ostream& operator<<(ostream& stream, const sstrentp c) {
-
-	int end = 10;
-	stream << "N:  ";
-	for (int j = 0; j != end; j++)
-		stream << c.QN[j].w << ' ';
-	stream << "\nQx: ";
-	for (int j = 0; j != end; j++)
-		stream << c.QN[j].x << ' ';
-	stream << "\nQy: ";
-	for (int j = 0; j != end; j++)
-		stream << c.QN[j].y << ' ';
-	stream << "\nQz: ";
-	for (int j = 0; j != end; j++)
-		stream << c.QN[j].z << ' ';
-	stream << '\n';
-	return stream;
-
-}
-
 void print(ostream& stream, const sstrentp c, const chain_head chead) {
-	stream << chead.time << '\n';
-	stream << chead.Z << '\n';
+	stream<<"time "<<universal_time+chead.time<<'\n';
+	stream<<"Z: "<<chead.Z<<'\n';
+// 	stream<<"dummy: "<<chead.dummy<<'\n';//can be used for debug
 	stream << "N:  ";
 	for (int j = 0; j < chead.Z; j++)
 		stream << c.QN[j].w << ' ';

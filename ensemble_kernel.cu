@@ -45,9 +45,10 @@
 #include "chain.h"
 
 //d means device variables
+__constant__ float d_universal_time;
 __constant__ float dBe;
 __constant__ int dnk;
-__constant__ int d_z_max; //actuall array size. might come useful for large beta values and for polydisperse systems
+__constant__ int d_z_max; //limits actual array size. might come useful for large beta values and for polydisperse systems
 __constant__ int dn_cha_per_call; //number of chains in this call. cannot be bigger than chains_per_call
 __constant__ float d_kappa_xx, d_kappa_xy, d_kappa_xz, d_kappa_yx, d_kappa_yy,d_kappa_yz, d_kappa_zx, d_kappa_zy, d_kappa_zz;
 
@@ -105,16 +106,9 @@ __device__ __forceinline__ bool fetch_new_strent(int i, int offset) {
 //deformation
 __device__   __forceinline__ float4 kappa(const float4 QN, const float dt) {//Qx is different for consitency with old version
 	return make_float4(
-			QN.x + dt * d_kappa_xx * QN.x + dt * d_kappa_xy * QN.y
-					+ dt * d_kappa_xz * QN.z,
-			QN.y
-					+ dt
-							* (d_kappa_yx * QN.x + d_kappa_yy * QN.y
-									+ d_kappa_yz * QN.z),
-			QN.z
-					+ dt
-							* (d_kappa_zx * QN.x + d_kappa_zy * QN.y
-									+ d_kappa_zz * QN.z), QN.w);
+			QN.x + dt * d_kappa_xx * QN.x + dt * d_kappa_xy * QN.y + dt * d_kappa_xz * QN.z,
+			QN.y + dt * d_kappa_yx * QN.x + dt * d_kappa_yy * QN.y + dt * d_kappa_yz * QN.z,
+			QN.z + dt * d_kappa_zx * QN.x + dt * d_kappa_zy * QN.y + dt * d_kappa_zz * QN.z, QN.w);
 }
 
 //lifetime generation from uniform random number p
@@ -206,8 +200,8 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void strent_ke
 }
 
 __global__ __launch_bounds__(tpb_chain_kernel)
-void chain_CD_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
-		float reach_time, int *d_offset, float4 *d_new_strent,
+void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
+		float next_sync_time, int *d_offset, float4 *d_new_strent,
 		float *d_new_tau_CD, int *rand_used, int *tau_CD_used) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -218,9 +212,13 @@ void chain_CD_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
 	uint oft = d_offset[i];
 	d_offset[i] = offset_code(0xffff, +1);
 
-	if ((gpu_chain_heads[i].time >= reach_time)
+	if (reach_flag[i]!=0) {
+		return;
+	}
+	if ((gpu_chain_heads[i].time >= next_sync_time)
 			|| (gpu_chain_heads[i].stall_flag != 0)) {
 		reach_flag[i] = 1;
+		gpu_chain_heads[i].time-=next_sync_time;
 		tdt[i] = 0.0f;
 		return;
 	}
