@@ -47,7 +47,7 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent
 	else
 		QN = tex2D(t_a_QN, make_offset(i, oft), j); // all access to strents is done through two operations: first texture fetch
 	float tcd;
-	if (dCD_flag) {//If constrain dynamics is enabled
+	if (dCD_flag) {//If constraint dynamics is enabled
 		if (fetch_new_strent(i, oft))
 			tcd = d_new_tau_CD[j];
 		else
@@ -72,7 +72,8 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent
 		float Q  = QN.x  * QN.x  + QN.y  * QN.y  + QN.z  * QN.z;
 		float Q2 = QN2.x * QN2.x + QN2.y * QN2.y + QN2.z * QN2.z;
 
-		if (QN2.w > 1.0f) { //N=1 mean that shift is not possible, also it will lead to dividing on zero error
+		//Calculating probability of 1 Kuhn step to jump from i strand to (i+1) strand
+		if (QN2.w > 1.0f) { //N=1 mean that shift is not possible, also it will lead to dividing by zero
 			//float prefact=__powf( __fdividef(QN.w*QN2.w,(QN.w+1)*(QN2.w-1)),0.75f);
 
 			float sig1 = __fdividef(0.75f, QN.w * (QN.w + 1));
@@ -84,7 +85,7 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent
 			float friction = __fdividef(2.0f, f1 + f2);
 			wsh.x = friction * __powf(prefact1 * prefact2, 0.75f)* __expf(Q * sig1 - Q2 * sig2);
 		}
-		if (QN.w > 1.0f) {//N=1 mean that shift is not possible, also ot will lead to dividing on zero error
+		if (QN.w > 1.0f) {//N=1 mean that shift is not possible, also it will lead to dividing by zero
 
 			float sig1 = __fdividef(0.75f, QN.w * (QN.w - 1.0f));
 			float sig2 = __fdividef(0.75f, QN2.w * (QN2.w + 1.0f));
@@ -101,12 +102,8 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent
 	}
 }
 
-__global__ __launch_bounds__(tpb_chain_kernel)
-void EQ_chain_kernel(chain_head* gpu_chain_heads, float *tdt,
-		float *reach_flag, float next_sync_time, int *d_offset,
-		float4 *d_new_strent, float *d_new_tau_CD, int *d_correlator_time,
-		int *rand_used, int *tau_CD_used) {
-	int i = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag, float next_sync_time, int *d_offset, float4 *d_new_strent, float *d_new_tau_CD, int *d_correlator_time, int *rand_used, int *tau_CD_used) {
+	int i = blockIdx.x * blockDim.x + threadIdx.x; //Chain index
 
 	if (i >= dn_cha_per_call)
 		return;
@@ -119,8 +116,7 @@ void EQ_chain_kernel(chain_head* gpu_chain_heads, float *tdt,
 	if (reach_flag[i]!=0) {
 		return;
 	}
-	if ((gpu_chain_heads[i].time >= next_sync_time)
-			|| (gpu_chain_heads[i].stall_flag != 0)) {
+	if ((gpu_chain_heads[i].time >= next_sync_time) || (gpu_chain_heads[i].stall_flag != 0)) {
 		reach_flag[i] = 1;
 		gpu_chain_heads[i].time-=next_sync_time;
 		tdt[i] = 0.0f;
@@ -128,41 +124,52 @@ void EQ_chain_kernel(chain_head* gpu_chain_heads, float *tdt,
 	}
 	float4 new_strent = d_new_strent[i];
 	float new_tCD = d_new_tau_CD[i];
-// 	//check for correlator
+
+	//check for correlator
 	if (d_universal_time+gpu_chain_heads[i].time > d_correlator_time[i] * d_correlator_res) {//TODO add d_correlator_time to gpu_chain_heads
 		float4 sum_stress = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 		for (int j = 0; j < tz; j++) {
-			float4 QN1 = tex2D(t_a_QN, make_offset(j, oft), i);
+			float4 QN1;
 			if (fetch_new_strent(j, oft))
 				QN1 = new_strent;
+			else
+				QN1 = tex2D(t_a_QN, make_offset(j, oft), i);
 			sum_stress.x -= __fdividef(3.0f * QN1.x * QN1.y, QN1.w);
 			sum_stress.y -= __fdividef(3.0f * QN1.y * QN1.z, QN1.w);
 			sum_stress.z -= __fdividef(3.0f * QN1.x * QN1.z, QN1.w);
 		}
 		surf2Dwrite(sum_stress, s_correlator, 16 * d_correlator_time[i], i);
 		d_correlator_time[i]++;
-
 	}
 
-// sum W_SD_shifts
+	// sum W_SD_shifts
 	float sum_wshpm = 0.0f;
 	float tsumw;
 	for (int j = 0; j < tz - 1; j++) {
 		surf2Dread(&tsumw, s_sum_W, 4 * j, i);
 		sum_wshpm += tsumw;
 	}
-// W_SD_c/d calc
+
+	// W_SD_c/d calc
 	float W_SD_c_1 = 0.0f, W_SD_d_1 = 0.0f;
 	float W_SD_c_z = 0.0f, W_SD_d_z = 0.0f;
 	//declare vars to reuse later
 	float4 QNheadn, QNtailp;
 
-	float4 QNhead = tex2D(t_a_QN, make_offset(0, oft), i);		// first strent
+	// first strent
+	float4 QNhead;
 	if (fetch_new_strent(0, oft))
 		QNhead = new_strent;
-	float4 QNtail = tex2D(t_a_QN, make_offset(tz - 1, oft), i);	//last strent
+	else
+		QNhead = tex2D(t_a_QN, make_offset(0, oft), i);
+
+	//last strent
+	float4 QNtail;
 	if (fetch_new_strent(tz - 1, oft))
 		QNtail = new_strent;
+	else
+		QNtail = tex2D(t_a_QN, make_offset(tz - 1, oft), i);
+
 	float W_CD_c_z = dCD_flag * d_CD_create_prefact * (QNtail.w - 1.0f); //Create CD on the last strand
 
 	if (tz == 1) {
@@ -171,9 +178,10 @@ void EQ_chain_kernel(chain_head* gpu_chain_heads, float *tdt,
 	} else {
 		if (QNhead.w == 1.0f) {
 			//destruction
-			QNheadn = tex2D(t_a_QN, make_offset(1, oft), i);
 			if (fetch_new_strent(1, oft))
 				QNheadn = new_strent;
+			else
+				QNheadn = tex2D(t_a_QN, make_offset(1, oft), i);
 			float f2 = (tz == 2) ? QNheadn.w + 0.25f : 0.5f * QNheadn.w;
 			W_SD_d_1 = __fdividef(1.0f, 0.75f + f2);
 		} else {
@@ -183,20 +191,19 @@ void EQ_chain_kernel(chain_head* gpu_chain_heads, float *tdt,
 
 		if (QNtail.w == 1.0f) {
 			//destruction
-			QNtailp = tex2D(t_a_QN, make_offset(tz - 2, oft), i);
 			if (fetch_new_strent(tz - 2, oft))
 				QNtailp = new_strent;
-
+			else
+				QNtailp = tex2D(t_a_QN, make_offset(tz - 2, oft), i);
 			float f1 = (tz == 2) ? QNtailp.w + 0.25f : 0.5f * QNtailp.w;
-			W_SD_d_z = __fdividef(1.0f, f1 + 0.75f);
+			W_SD_d_z = __fdividef(1.0f, 0.75f + f1);
 		} else {
 			//creation
 			W_SD_c_z = __fdividef(2.0f, dBe * (QNtail.w + 0.5f));
 		}
 	}
 
-	float sumW = sum_wshpm + W_SD_c_1 + W_SD_c_z + W_SD_d_1 + W_SD_d_z
-			+ W_CD_c_z;
+	float sumW = sum_wshpm + W_SD_c_1 + W_SD_c_z + W_SD_d_1 + W_SD_d_z + W_CD_c_z;
 	tdt[i] = __fdividef(1.0f, sumW);
 	if (tdt[i] == 0.0f)
 		gpu_chain_heads[i].stall_flag = 1;
@@ -216,7 +223,7 @@ void EQ_chain_kernel(chain_head* gpu_chain_heads, float *tdt,
 
 	// picking where(which strent) jump process will happen
 	// excluding SD creation destruction
-	//perhaps one of the most time consuming parts of the code
+	// perhaps one of the most time consuming parts of the code
 	while ((pr >= tpr) && (j < tz - 2)) {
 		pr -= tpr;
 		j++;
@@ -227,7 +234,7 @@ void EQ_chain_kernel(chain_head* gpu_chain_heads, float *tdt,
 // 	  for (int j=0;j<tz-1;j++)
 	if (pr < tpr) {
 		// ok we pick some  strent j
-		// no we need to decide which(SD shift or CDd CDc) jump process will happen
+		// now we need to decide which(SD shift or CDd CDc) jump process will happen
 		// TODO check if order will have an effect on performance
 		float4 QN1 = tex2D(t_a_QN, make_offset(j, oft), i);
 		if (fetch_new_strent(j, oft))

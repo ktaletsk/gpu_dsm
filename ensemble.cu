@@ -685,10 +685,8 @@ void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
 		for (int i = 0; i < chain_blocks_number; i++) {
 			init_block_correlator(&(chain_blocks[i]));
 			get_chain_to_device_call_block(&(chain_blocks[i]));
-			cudaMemset(chain_blocks[i].d_correlator_time, 0,
-					sizeof(int) * chain_blocks[i].nc);
-			EQ_time_step_call_block(double(tres * correlator_size),
-					&(chain_blocks[i]));
+			cudaMemset(chain_blocks[i].d_correlator_time, 0,sizeof(int) * chain_blocks[i].nc);
+			EQ_time_step_call_block(double(tres * correlator_size),&(chain_blocks[i]));
 			chain_blocks[i].corr->counter = correlator_size;
 		}
 		//G_i(t) calculation
