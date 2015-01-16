@@ -2,7 +2,7 @@ OBJS =  cudautil.o gpu_random.o stress.o chain.o ensemble.o correlator.o
 CC = nvcc
 #FLAGS =  -gencode arch=compute_35,code=sm_35 
 #by explicitly specifing compute achitecture you can generate smaller executable and gain around 5% performance 
-FLAGS =  -gencode arch=compute_20,code=sm_20 -gencode arch=compute_30,code=sm_30 -gencode arch=compute_32,code=sm_32 -gencode arch=compute_35,code=sm_35 -gencode arch=compute_50,code=sm_50
+FLAGS =  -gencode arch=compute_20,code=sm_20 -gencode arch=compute_30,code=sm_30 -gencode arch=compute_35,code=sm_35 -gencode arch=compute_50,code=sm_50
 #no architecture 10 support, sorry
 
 DEBUGFLAGS =
