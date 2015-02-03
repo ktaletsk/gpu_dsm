@@ -236,6 +236,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 		// ok we pick some  strent j
 		// now we need to decide which(SD shift or CDd CDc) jump process will happen
 		// TODO check if order will have an effect on performance
+
 		float4 QN1 = tex2D(t_a_QN, make_offset(j, oft), i);
 		if (fetch_new_strent(j, oft))
 			QN1 = new_strent;
@@ -243,10 +244,11 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 		if (fetch_new_strent(j + 1, oft))
 			QN2 = new_strent;
 
-		// first we check if CDd will happen
+		// 1. CDd (destruction by constraint dynamics)
+
 		float wcdd;
 		if (dCD_flag) {
-			wcdd = tex2D(t_a_tCD, make_offset(j, oft), i); //Read CD ///////////Zanulat ifom
+			wcdd = tex2D(t_a_tCD, make_offset(j, oft), i); //Read CD
 			if (fetch_new_strent(j, oft))
 				wcdd = new_tCD;
 		} else
@@ -267,7 +269,8 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 			pr -= wcdd;
 		}
 
-		// next we check for SD shift
+		// 2. SD shift
+
 		// SD shift probs are not saved from entanglement parallel part
 		// so we need to recalculate it
 		float2 twsh = make_float2(0.0f, 0.0f);
@@ -280,29 +283,23 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 
 			float sig1 = __fdividef(0.75f, QN1.w * (QN1.w + 1));
 			float sig2 = __fdividef(0.75f, QN2.w * (QN2.w - 1));
-			float prefact1 =
-					(Q == 0.0f) ? 1.0f : __fdividef(QN1.w, (QN1.w + 1));
-			float prefact2 =
-					(Q2 == 0.0f) ? 1.0f : __fdividef(QN2.w, (QN2.w - 1));
+			float prefact1 = (Q == 0.0f) ? 1.0f : __fdividef(QN1.w, (QN1.w + 1));
+			float prefact2 = (Q2 == 0.0f) ? 1.0f : __fdividef(QN2.w, (QN2.w - 1));
 			float f1 = (Q == 0.0f) ? 2.0f * QN1.w + 0.5f : QN1.w;
 			float f2 = (Q2 == 0.0f) ? 2.0f * QN2.w - 0.5f : QN2.w;
 			float friction = __fdividef(2.0f, f1 + f2);
-			twsh.x = friction * __powf(prefact1 * prefact2, 0.75f)
-					* __expf(Q * sig1 - Q2 * sig2);
+			twsh.x = friction * __powf(prefact1 * prefact2, 0.75f) * __expf(Q * sig1 - Q2 * sig2);
 		}
 		if (QN1.w > 1.0f) {	//N=1 mean that shift is not possible, also ot will lead to dividing on zero error
 
 			float sig1 = __fdividef(0.75f, QN1.w * (QN1.w - 1.0f));
 			float sig2 = __fdividef(0.75f, QN2.w * (QN2.w + 1.0f));
-			float prefact1 =
-					(Q == 0.0f) ? 1.0f : __fdividef(QN1.w, (QN1.w - 1.0f));
-			float prefact2 =
-					(Q2 == 0.0f) ? 1.0f : __fdividef(QN2.w, (QN2.w + 1.0f));
+			float prefact1 = (Q == 0.0f) ? 1.0f : __fdividef(QN1.w, (QN1.w - 1.0f));
+			float prefact2 = (Q2 == 0.0f) ? 1.0f : __fdividef(QN2.w, (QN2.w + 1.0f));
 			float f1 = (Q == 0.0f) ? 2.0f * QN1.w - 0.5f : QN1.w;
 			float f2 = (Q2 == 0.0f) ? 2.0f * QN2.w + 0.5f : QN2.w;
 			float friction = __fdividef(2.0f, f1 + f2);
-			twsh.y = friction * __powf(prefact1 * prefact2, 0.75f)
-					* __expf(-Q * sig1 + Q2 * sig2);
+			twsh.y = friction * __powf(prefact1 * prefact2, 0.75f) * __expf(-Q * sig1 + Q2 * sig2);
 		}
 
 		if (pr < twsh.x + twsh.y) {
@@ -320,7 +317,8 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 		} else {
 			pr -= twsh.x + twsh.y;
 		}
-		//last we check for CDc
+
+		// 3. CDc (creation by constraint dynamics in the middle)
 		float wcdc = dCD_flag * d_CD_create_prefact * (QN1.w - 1.0f); //
 		if (pr < wcdc) {
 			if (tz == d_z_max)
@@ -329,10 +327,8 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 			tau_CD_used[i]++;
 			gpu_chain_heads[i].Z++;
 			d_new_tau_CD[i] = d_tau_CD_f_d_t(temp.w);//__fdividef(1.0f,d_tau_d);
-			float newn = floorf(0.5f + __fdividef(pr * (QN1.w - 2.0f), wcdc))
-					+ 1.0f;
+			float newn = floorf(0.5f + __fdividef(pr * (QN1.w - 2.0f), wcdc)) + 1.0f;
 			if (j == 0) {
-
 				temp.w = QN1.w - newn;
 				float sigma = __fsqrt_rn(__fdividef(temp.w, 3.0f));
 				temp.x *= sigma;
@@ -341,13 +337,10 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 				surf2Dwrite(temp, s_b_QN, 16 * 0, i);
 				d_offset[i] = offset_code(0, -1);
 				d_new_strent[i] = make_float4(0.0f, 0.0f, 0.0f, newn);
-
 				return;
 			}
-
 			temp.w = newn;
-			float sigma = __fsqrt_rn(
-					__fdividef(newn * (QN1.w - newn), 3.0f * QN1.w));
+			float sigma = __fsqrt_rn(__fdividef(newn * (QN1.w - newn), 3.0f * QN1.w));
 			float ration = __fdividef(newn, QN1.w);
 			temp.x *= sigma;
 			temp.y *= sigma;
@@ -368,9 +361,10 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 		pr -= tpr;
 	}
 
-	//ok none of the jump processes in the middle of the chain happened
-	// check  what left
-	//w_CD_c_z
+	//None of the processes in the middle of the chain happened
+	//Now check processes on the left end
+
+	// 4. w_CD_c_z (creation by constraint dynamics on the left end)
 	if (pr < W_CD_c_z) {
 		if (tz == d_z_max)
 			return;	// possible detail balance issue
@@ -380,9 +374,8 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 		gpu_chain_heads[i].Z++;
 		d_new_tau_CD[i] = d_tau_CD_f_d_t(temp.w);	//__fdividef(1.0f,d_tau_d);
 
-		float newn = 1.0f
-				+ floorf(0.5f + __fdividef(pr * (QNtail.w - 2.0f), W_CD_c_z));
-		//floorf(__fdividef(pr*(QNtail.w-1.0f),W_CD_c_z))+1.0f;
+		float newn = 1.0f + floorf(0.5f + __fdividef(pr * (QNtail.w - 2.0f), W_CD_c_z));
+//		floorf(__fdividef(pr*(QNtail.w-1.0f),W_CD_c_z))+1.0f;
 // 	    gpu_chain_heads[i].dummy=1.0f+__fdiv_rn(pr*(QNtail.w-2.0f),W_CD_c_z);
 
 		temp.w = newn;
@@ -390,8 +383,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 		temp.x *= sigma;
 		temp.y *= sigma;
 		temp.z *= sigma;
-		surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNtail.w - newn), s_b_QN,
-				16 * (tz - 1), i);
+		surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNtail.w - newn), s_b_QN, 16 * (tz - 1), i);
 		d_offset[i] = offset_code(tz - 1, -1);
 		d_new_strent[i] = temp;
 		return;
@@ -399,7 +391,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 		pr -= W_CD_c_z;
 	}
 
-	//w_SD_c/d
+	// 5. w_SD_c (creation by sliding dynamics)
 
 	if (pr < W_SD_c_1 + W_SD_c_z) {
 		if (tz == d_z_max)
@@ -407,13 +399,12 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 		float4 temp = tex2D(t_taucd_gauss_rand, tau_CD_used[i], i);
 		tau_CD_used[i]++;
 		gpu_chain_heads[i].Z++;
-// 	d_new_tau_CD[i]=__fdividef(1.0f,d_tau_d);
+//		d_new_tau_CD[i]=__fdividef(1.0f,d_tau_d);
 		d_new_tau_CD[i] = d_tau_CD_f_t(temp.w);
 
 		if (pr < W_SD_c_1) {
 			temp.w = QNhead.w - 1.0f;
-			float sigma =
-					(tz == 1) ? 0.0f : __fsqrt_rn(__fdividef(temp.w, 3.0f));
+			float sigma = (tz == 1) ? 0.0f : __fsqrt_rn(__fdividef(temp.w, 3.0f));
 			temp.x *= sigma;
 			temp.y *= sigma;
 			temp.z *= sigma;
@@ -422,13 +413,11 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 			d_new_strent[i] = make_float4(0.0f, 0.0f, 0.0f, 1.0f);
 		} else {
 			temp.w = QNtail.w - 1.0f;
-			float sigma =
-					(tz == 1) ? 0.0f : __fsqrt_rn(__fdividef(temp.w, 3.0f));
+			float sigma = (tz == 1) ? 0.0f : __fsqrt_rn(__fdividef(temp.w, 3.0f));
 			temp.x *= sigma;
 			temp.y *= sigma;
 			temp.z *= sigma;
-			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 1.0f), s_b_QN,
-					16 * (tz - 1), i);//TODO maybe deformation should be applied here
+			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 1.0f), s_b_QN, 16 * (tz - 1), i);//TODO maybe deformation should be applied here
 			d_offset[i] = offset_code(tz - 1, -1);
 			d_new_strent[i] = temp;
 		}
@@ -438,6 +427,8 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 		pr -= W_SD_c_1 + W_SD_c_z;
 
 	}
+
+	// 6. Destruction by constraint dynamics
 	if (pr < W_SD_d_1 + W_SD_d_z) {	//to delete entanglement
 	// update cell and neigbours
 	//clear W_sd

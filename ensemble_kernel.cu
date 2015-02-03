@@ -1,4 +1,4 @@
-// Copyright 2014 Marat Andreev
+ // Copyright 2014 Marat Andreev
 // 
 // This file is part of gpu_dsm.
 // 

@@ -59,6 +59,7 @@ __global__ __launch_bounds__(ran_tpd) void fill_surface_taucd_gauss_rand (gpu_Ra
 		for (int j=0; j<count;j++){
 			if (g==0.0f){
 				tmp.w=curand_uniform (&localState);
+				//TODO Pick random molecular weight using texture t_gamma_table and RNG and save to tmp.w
 				g2=curand_normal2(&localState);
 				tmp.x=g2.x;
 				tmp.y=g2.y;

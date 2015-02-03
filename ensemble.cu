@@ -51,11 +51,9 @@ chain_head* chain_heads; // host device chain headers arrays, store scalar varia
 int chain_blocks_number;
 ensemble_call_block *chain_blocks;
 
-
-
 //host constants
 double universal_time;//since chain_head do not store universal time due to SP issues
-		      //see chain.h chain_head for explanation
+		      	  	  //see chain.h chain_head for explanation
 int N_cha;
 int NK;
 int z_max;
@@ -280,57 +278,45 @@ void gpu_clean() {
 }
 
 void random_textures_fill(int n_cha) {
-	cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc(32, 0, 0, 0,
-			cudaChannelFormatKindFloat);
-	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32,
-			cudaChannelFormatKindFloat);
+	cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
+	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
 
-	cudaMallocArray(&(d_taucd_gauss_rand), &channelDesc4, uniformrandom_count,
-			n_cha, cudaArraySurfaceLoadStore);
-	cudaMallocArray(&(d_uniformrand), &channelDesc1, uniformrandom_count, n_cha,
-			cudaArraySurfaceLoadStore);
+	cudaMallocArray(&(d_taucd_gauss_rand), &channelDesc4, uniformrandom_count, n_cha, cudaArraySurfaceLoadStore);
+	cudaMallocArray(&(d_uniformrand), &channelDesc1, uniformrandom_count, n_cha, cudaArraySurfaceLoadStore);
 
 	cudaMalloc((void**) &d_rand_used, sizeof(int) * n_cha);
 	cudaMemset(d_rand_used, 0, sizeof(int) * n_cha);
 	cudaMalloc((void**) &d_tau_CD_used, sizeof(int) * n_cha);
 	cudaMemset(d_tau_CD_used, 0, sizeof(int) * n_cha);
 
-	gr_fill_surface_uniformrand(d_random_gens, n_cha, uniformrandom_count,
-			d_uniformrand);
+	gr_fill_surface_uniformrand(d_random_gens, n_cha, uniformrandom_count, d_uniformrand);
 	cudaDeviceSynchronize();
 
 	int taucd_gauss_count = uniformrandom_count;
-	gr_fill_surface_taucd_gauss_rand(d_random_gens2, n_cha, taucd_gauss_count,
-			d_taucd_gauss_rand);
+	gr_fill_surface_taucd_gauss_rand(d_random_gens2, n_cha, taucd_gauss_count, d_taucd_gauss_rand);
 
 	cudaBindTextureToArray(t_uniformrand, d_uniformrand, channelDesc1);
-	cudaBindTextureToArray(t_taucd_gauss_rand, d_taucd_gauss_rand,
-			channelDesc4);
+	cudaBindTextureToArray(t_taucd_gauss_rand, d_taucd_gauss_rand, channelDesc4);
 }
 
 void random_textures_refill(int n_cha) {
 	if (chain_blocks_number != 1)
 		n_cha = chains_per_call;
 
-	cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32, 0, 0, 0,
-			cudaChannelFormatKindFloat);
-	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32,
-			cudaChannelFormatKindFloat);
+	cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
+	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
 
 	cudaUnbindTexture(t_uniformrand);
-	gr_fill_surface_uniformrand(d_random_gens, n_cha, uniformrandom_count,
-			d_uniformrand);
+	gr_fill_surface_uniformrand(d_random_gens, n_cha, uniformrandom_count, d_uniformrand);
 	cudaMemset(d_rand_used, 0, sizeof(int) * n_cha);
 	cudaBindTextureToArray(t_uniformrand, d_uniformrand, channelDesc);
 	cudaDeviceSynchronize();
 
 	//tau_cd gauss 3d vector
 	cudaUnbindTexture(t_taucd_gauss_rand);
-	gr_refill_surface_taucd_gauss_rand(d_random_gens2, n_cha, d_tau_CD_used,
-			d_taucd_gauss_rand);
+	gr_refill_surface_taucd_gauss_rand(d_random_gens2, n_cha, d_tau_CD_used, d_taucd_gauss_rand);
 	cudaMemset(d_tau_CD_used, 0, sizeof(int) * n_cha);
-	cudaBindTextureToArray(t_taucd_gauss_rand, d_taucd_gauss_rand,
-			channelDesc4);
+	cudaBindTextureToArray(t_taucd_gauss_rand, d_taucd_gauss_rand, channelDesc4);
 	cudaDeviceSynchronize();
 }
 
@@ -347,7 +333,7 @@ void save_to_file(char *filename) {
 		cout << "file error\n";
 }
 
-void save_distribution_to_file(char *filename, bool cumulative) {
+void save_Z_distribution_to_file(char *filename, bool cumulative) {
 	ofstream file(filename, ios::out);
 	if (file.is_open()) {
 //		file<<"Number of chains: "<<N_cha<<"\n";
@@ -678,8 +664,7 @@ void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
 		cout.flush();
 		int ip = 1;
 		tres = res * powf(correlator_base, ip - 1);
-		CUDA_SAFE_CALL(
-				cudaMemcpyToSymbol(d_correlator_res, &(tres), sizeof(int)));
+		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(tres), sizeof(int)));
 
 		//time evolution
 		for (int i = 0; i < chain_blocks_number; i++) {

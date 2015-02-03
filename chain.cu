@@ -194,8 +194,7 @@ void save_to_file(ostream& stream, const sstrentp c, const chain_head chead) {
 		stream.write((char*) &(c.tau_CD[j]), sizeof(float));
 }
 
-void load_from_file(istream& stream, const sstrentp c,
-		const chain_head *chead) {
+void load_from_file(istream& stream, const sstrentp c, const chain_head *chead) {
 	stream.read((char*) chead, sizeof(chain_head));
 	for (int j = 0; j < chead->Z; j++)
 		stream.read((char*) &(c.QN[j]), sizeof(float4));

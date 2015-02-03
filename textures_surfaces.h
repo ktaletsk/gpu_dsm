@@ -24,8 +24,8 @@
 
 // see comments in ensemble.h
 
-  texture<float, 2, cudaReadModeElementType> t_uniformrand;		// random numbers uniformly distributed
-  texture<float4, 2, cudaReadModeElementType> t_taucd_gauss_rand;		// tauCD lifetimes and normally distributed random numbers (x,y,z)
+  texture<float, 2, cudaReadModeElementType> t_uniformrand;	// random numbers uniformly distributed
+  texture<float4, 2, cudaReadModeElementType> t_taucd_gauss_rand; // tauCD lifetimes and normally distributed random numbers (x,y,z)
   surface<void,2> rand_buffer;//temp array for random numbers
 
   //TODO replace a/b with source/dest

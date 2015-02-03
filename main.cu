@@ -102,10 +102,10 @@ int main(int narg, char** arg) {
 
 	//Print simulation parameters
 	cout << "\nsimulation parameters:\n";
-	cout << "NK Be N_cha" << "\n";
+	cout << "NK\tBeta\tN_cha" << "\n";
 	cout << NK << '\t' << Be << '\t' << N_cha << "\n";
 	cout << "deformation tensor:" << "\n";
-	cout << kxx << '\t' << kxy << '\t' << kxz << '\n' << kyx << '\t' << kyy << '\t' << kyz << '\t' << kzx << '\t' << kzy << '\t' << kzz << '\n';
+	cout << kxx << '\t' << kxy << '\t' << kxz << '\n' << kyx << '\t' << kyy << '\t' << kyz << '\n' << kzx << '\t' << kzy << '\t' << kzz << '\n';
 	if (G_flag)
 		cout << "G(t) calculation is on\n";
 	else
@@ -120,14 +120,11 @@ int main(int narg, char** arg) {
 	//     kxy=8.16e-05;
 
 	//Determine if there is a flow
-	bool flow = (kxx != 0.0) || (kxy != 0.0) || (kxz != 0.0) || (kyx != 0.0)
-			|| (kyy != 0.0) || (kyz != 0.0) || (kzx != 0.0) || (kzy != 0.0)
-			|| (kzz != 0.0);
+	bool flow = (kxx != 0.0) || (kxy != 0.0) || (kxz != 0.0) || (kyx != 0.0) || (kyy != 0.0) || (kyz != 0.0) || (kzx != 0.0) || (kzy != 0.0) || (kzz != 0.0);
 
 	//Initialize random
 	eran.seed(job_ID * N_cha);
 
-	//
 	pcd = new p_cd(Be, NK, &eran);
 
 	if (loadfile != NULL) {	//load chain conformations from file
@@ -197,11 +194,11 @@ int main(int narg, char** arg) {
 	if (distr) {		//Calculating distributions for Z,N,Q
 		cout << "Saving distribution to file...";
 		if (CD_flag) {
-			save_distribution_to_file("distr_Z.dat", 1);
+			save_Z_distribution_to_file("distr_Z.dat", 1);
 			save_N_distribution_to_file("distr_N.dat", 1);
 			save_Q_distribution_to_file("distr_Q.dat", 1);
 		} else {
-			save_distribution_to_file("distr_Z_.dat", 1);
+			save_Z_distribution_to_file("distr_Z_.dat", 1);
 			save_N_distribution_to_file("distr_N_.dat", 1);
 			save_Q_distribution_to_file("distr_Q_.dat", 1);
 		}
