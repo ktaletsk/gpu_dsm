@@ -254,26 +254,21 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 
 		float wcdd;
 		if (dCD_flag) {
-			wcdd = tex2D(t_a_tCD, make_offset(j, oft), i); //Read CD
+			wcdd = tex2D(t_a_tCD, make_offset(j, oft), i); //Read tau_CD
 			if (fetch_new_strent(j, oft))
 				wcdd = new_tCD;
 		} else
 			wcdd = 0;
 		if (pr < wcdd) {
-
-			float4 temp = make_float4(QN1.x + QN2.x, QN1.y + QN2.y,
-					QN1.z + QN2.z, QN1.w + QN2.w);
-			if ((j == tz - 2) || (j == 0)) {
+			float4 temp = make_float4(QN1.x + QN2.x, QN1.y + QN2.y, QN1.z + QN2.z, QN1.w + QN2.w);
+			if ((j == tz - 2) || (j == 0))
 				temp = make_float4(0.0f, 0.0f, 0.0f, QN1.w + QN2.w);
-			}
 			surf2Dwrite(temp, s_b_QN, 16 * (j + 1), i);
 			d_offset[i] = offset_code(j, +1);
 			gpu_chain_heads[i].Z--;
-
 			return;
-		} else {
+		} else
 			pr -= wcdd;
-		}
 
 		// 2. SD shift
 
@@ -320,11 +315,11 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 			surf2Dwrite(QN1, s_b_QN, 16 * j, i);
 			surf2Dwrite(QN2, s_b_QN, 16 * (j + 1), i);
 			return;
-		} else {
+		} else
 			pr -= twsh.x + twsh.y;
-		}
 
 		// 3. CDc (creation by constraint dynamics in the middle)
+
 		float wcdc = dCD_flag * d_CD_create_prefact * (QN1.w - 1.0f); //
 		if (pr < wcdc) {
 			if (tz == d_z_max)
@@ -363,9 +358,8 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 		} else {
 			pr -= wcdc;
 		}
-	} else {
+	} else
 		pr -= tpr;
-	}
 
 	//None of the processes in the middle of the chain happened
 	//Now check processes on the left end
@@ -374,15 +368,12 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 	if (pr < W_CD_c_z) {
 		if (tz == d_z_max)
 			return;	// possible detail balance issue
-
 		float4 temp = tex2D(t_taucd_gauss_rand, tau_CD_used[i], i);
 		tau_CD_used[i]++;
 		gpu_chain_heads[i].Z++;
 		d_new_tau_CD[i] = d_tau_CD_f_d_t(temp.w);	//__fdividef(1.0f,d_tau_d);
 
 		float newn = 1.0f + floorf(0.5f + __fdividef(pr * (QNtail.w - 2.0f), W_CD_c_z));
-//		floorf(__fdividef(pr*(QNtail.w-1.0f),W_CD_c_z))+1.0f;
-// 	    gpu_chain_heads[i].dummy=1.0f+__fdiv_rn(pr*(QNtail.w-2.0f),W_CD_c_z);
 
 		temp.w = newn;
 		float sigma = (tz == 1) ? 0.0f : __fsqrt_rn(__fdividef(temp.w, 3.0f));
@@ -434,28 +425,21 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 
 	}
 
-	// 6. Destruction by constraint dynamics
+	// 6. Destruction by sliding dynamics
+
 	if (pr < W_SD_d_1 + W_SD_d_z) {	//to delete entanglement
-	// update cell and neigbours
-	//clear W_sd
-	//
-	//form a list of free cell
+	// update cell and neighbors
+	// clear W_sd
+	// form a list of free cell
 		gpu_chain_heads[i].Z--;
 		if (pr < W_SD_d_1) {
-			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNheadn.w + 1.0f), s_b_QN,
-					16 * 1, i);
+			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNheadn.w + 1.0f), s_b_QN, 16 * 1, i);
 			d_offset[i] = offset_code(0, +1);
 		} else {
-			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNtailp.w + 1.0f), s_b_QN,
-					16 * (tz - 2), i);
+			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNtailp.w + 1.0f), s_b_QN, 16 * (tz - 2), i);
 			d_offset[i] = offset_code(tz, +1);
-
 		}
 		return;
-
-	} else {
+	} else
 		pr -= W_SD_d_1 + W_SD_d_z;
-	}
-
 }
-

@@ -91,7 +91,9 @@ int main(int narg, char** arg) {
 	in >> NK;
 	in >> N_cha;
 	in >> kxx >> kxy >> kxz >> kyx >> kyy >> kyz >> kzx >> kzy >> kzz;
-	in >> CD_flag;	//CD_toggle
+	in >> CD_flag;	//Computation mode: 0-only SD / 1-SD+CD
+	in >> PD_flag;
+
 	//int int_t;
 	//in>>int_t;//TODO SD off not implemented
 	in >> G_flag;

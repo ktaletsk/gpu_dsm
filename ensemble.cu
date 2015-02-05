@@ -59,6 +59,7 @@ int NK;
 int z_max;
 float Be;
 float kxx, kxy, kxz, kyx, kyy, kyz, kzx, kzy, kzz;
+bool PD_flag=0;
 
 bool dbug = false;	//true;
 //bool *reach_time_flag=NULL;
