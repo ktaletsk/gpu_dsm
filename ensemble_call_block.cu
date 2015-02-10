@@ -413,31 +413,23 @@ void get_chain_from_device_call_block(ensemble_call_block *cb) { //copy chains b
 
 }
 
-stress_plus calc_stress_call_block(ensemble_call_block *cb,
-		int *r_chain_count) {
+stress_plus calc_stress_call_block(ensemble_call_block *cb, int *r_chain_count) {
 
-	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32,
-			cudaChannelFormatKindFloat);
-
+	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(dn_cha_per_call, &cb->nc, sizeof(int)));
-
 	cudaBindTextureToArray(t_a_QN, cb->d_QN, channelDesc4);
-	stress_calc<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel,
-			tpb_chain_kernel>>>(cb->gpu_chain_heads, cb->d_dt, cb->d_offset,
-			cb->d_new_strent);
+	stress_calc<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel,tpb_chain_kernel>>>(cb->gpu_chain_heads, cb->d_dt, cb->d_offset, cb->d_new_strent);
 	CUT_CHECK_ERROR("kernel execution failed");
 	cudaUnbindTexture(t_a_QN);
 
 	float4 *stress_buf = new float4[cb->nc * 2];
-	cudaMemcpyFromArray(stress_buf, d_stress, 0, 0, cb->nc * sizeof(float4) * 2,
-			cudaMemcpyDeviceToHost);
+	cudaMemcpyFromArray(stress_buf, d_stress, 0, 0, cb->nc * sizeof(float4) * 2, cudaMemcpyDeviceToHost);
 	float4 sum_stress = make_float4(0.0f, 0.0f, 0.0f, 0.0f); //stress: xx,yy,zz,xy
 	float4 sum_stress2 = make_float4(0.0f, 0.0f, 0.0f, 0.0f); //stress: yz,xz; Lpp, Ree
 	chain_head* tchain_heads;
 	tchain_heads = new chain_head[cb->nc];
 
-	cudaMemcpy(tchain_heads, cb->gpu_chain_heads, sizeof(chain_head) * cb->nc,
-			cudaMemcpyDeviceToHost);
+	cudaMemcpy(tchain_heads, cb->gpu_chain_heads, sizeof(chain_head) * cb->nc, cudaMemcpyDeviceToHost);
 	int chain_count = cb->nc;
 	for (int j = 0; j < cb->nc; j++) {
 		if (tchain_heads[j].stall_flag == 0) {
@@ -450,8 +442,7 @@ stress_plus calc_stress_call_block(ensemble_call_block *cb,
 				sum_stress2.y += stress_buf[j * 2 + 1].y;
 				sum_stress2.z += stress_buf[j * 2 + 1].z;
 				sum_stress2.w += stress_buf[j * 2 + 1].w;
-
-				// 	     cout<<"stress chain "<<j<<'\t'<<sum_stress.x<<'\t'<<sum_stress.y<<'\t'<<sum_stress.z<<'\t'<<sum_stress.w<<'\n';
+//				cout<<"stress chain "<<j<<'\t'<<sum_stress.x<<'\t'<<sum_stress.y<<'\t'<<sum_stress.z<<'\t'<<sum_stress.w<<'\n';
 			} else {
 				chain_count--;
 				cout << "chain stall " << j << '\n';  //TODO output gloval index

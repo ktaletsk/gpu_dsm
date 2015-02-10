@@ -396,7 +396,9 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
 		} else {
 			pr -= twsh.x + twsh.y;
 		}
-		//last we check for CDc
+
+		// 3. CDc (creation by constraint dynamics in the middle)
+
 		float wcdc = d_CD_create_prefact * (QN1.w - 1.0f);
 		if (pr < wcdc) {
 			if (tz == d_z_max)
@@ -405,10 +407,8 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
 			tau_CD_used[i]++;
 			gpu_chain_heads[i].Z++;
 			d_new_tau_CD[i] = d_tau_CD_f_d_t(temp.w);//__fdividef(1.0f,d_tau_d);
-			float newn = floorf(0.5f + __fdividef(pr * (QN1.w - 2.0f), wcdc))
-					+ 1.0f;
+			float newn = floorf(0.5f + __fdividef(pr * (QN1.w - 2.0f), wcdc)) + 1.0f;
 			if (j == 0) {
-
 				temp.w = QN1.w - newn;
 				float sigma = __fsqrt_rn(__fdividef(temp.w, 3.0f));
 				temp.x *= sigma;
@@ -417,13 +417,11 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
 				surf2Dwrite(temp, s_b_QN, 16 * 0, i);
 				d_offset[i] = offset_code(0, -1);
 				d_new_strent[i] = make_float4(0.0f, 0.0f, 0.0f, newn);
-
 				return;
 			}
 
 			temp.w = newn;
-			float sigma = __fsqrt_rn(
-					__fdividef(newn * (QN1.w - newn), 3.0f * QN1.w));
+			float sigma = __fsqrt_rn(__fdividef(newn * (QN1.w - newn), 3.0f * QN1.w));
 			float ration = __fdividef(newn, QN1.w);
 			temp.x *= sigma;
 			temp.y *= sigma;
@@ -431,9 +429,7 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
 			temp.x += QN1.x * ration;
 			temp.y += QN1.y * ration;
 			temp.z += QN1.z * ration;
-			surf2Dwrite(
-					make_float4(QN1.x - temp.x, QN1.y - temp.y, QN1.z - temp.z,
-							QN1.w - newn), s_b_QN, 16 * j, i);
+			surf2Dwrite(make_float4(QN1.x - temp.x, QN1.y - temp.y, QN1.z - temp.z, QN1.w - newn), s_b_QN, 16 * j, i);
 			d_offset[i] = offset_code(j, -1);
 			d_new_strent[i] = temp;
 			return;
@@ -496,8 +492,7 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
 			d_new_strent[i] = make_float4(0.0f, 0.0f, 0.0f, 1.0f);
 		} else {
 			temp.w = QNtail.w - 1.0f;
-			float sigma =
-					(tz == 1) ? 0.0f : __fsqrt_rn(__fdividef(temp.w, 3.0f));
+			float sigma = (tz == 1) ? 0.0f : __fsqrt_rn(__fdividef(temp.w, 3.0f));
 			temp.x *= sigma;
 			temp.y *= sigma;
 			temp.z *= sigma;
@@ -519,21 +514,15 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
 	//form a list of free cell
 		gpu_chain_heads[i].Z--;
 		if (pr < W_SD_d_1) {
-			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNheadn.w + 1.0f), s_b_QN,
-					16 * 1, i);
+			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNheadn.w + 1.0f), s_b_QN, 16 * 1, i);
 			d_offset[i] = offset_code(0, +1);
 		} else {
-			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNtailp.w + 1.0f), s_b_QN,
-					16 * (tz - 2), i);
+			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNtailp.w + 1.0f), s_b_QN, 16 * (tz - 2), i);
 			d_offset[i] = offset_code(tz, +1);
-
 		}
 		return;
-
-	} else {
+	} else
 		pr -= W_SD_d_1 + W_SD_d_z;
-	}
-
 }
 
 __global__ __launch_bounds__(tpb_chain_kernel) //stress calculation
@@ -561,8 +550,7 @@ void stress_calc(chain_head* gpu_chain_heads, float *tdt, int *d_offset,
 		sum_stress.w -= __fdividef(3.0f * QN1.x * QN1.y, QN1.w);
 		sum_stress2.x -= __fdividef(3.0f * QN1.y * QN1.z, QN1.w);
 		sum_stress2.y -= __fdividef(3.0f * QN1.x * QN1.z, QN1.w);
-		sum_stress2.z += __fsqrt_rn(
-				QN1.x * QN1.x + QN1.y * QN1.y + QN1.z * QN1.z);
+		sum_stress2.z += __fsqrt_rn(QN1.x * QN1.x + QN1.y * QN1.y + QN1.z * QN1.z);
 		ree_x += QN1.x;
 		ree_y += QN1.y;
 		ree_z += QN1.z;
