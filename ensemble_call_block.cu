@@ -28,7 +28,8 @@ cudaArray* d_uniformrand; // uniform random number supply //used to pick jump pr
 cudaArray* d_taucd_gauss_rand_CD; // 1x uniform + 3x normal distributed random number supply// used for creating entanglements by SD
 cudaArray* d_taucd_gauss_rand_SD; // used for creating entanglements by SD
 int steps_count = 0;    //time step count
-int *d_tau_CD_used;
+int *d_tau_CD_used_SD;
+int *d_tau_CD_used_CD;
 int *d_rand_used;
 
 cudaArray* d_a_QN; //device arrays for vector part of chain conformations
@@ -147,7 +148,7 @@ void time_step_call_block(double reach_time, ensemble_call_block *cb) { //bind t
 				strent_kernel<<<dimGrid, dimBlock>>>(cb->gpu_chain_heads, cb->d_dt, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD);
 				CUT_CHECK_ERROR("kernel execution failed");
 	// 	  		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_steps_count, &steps_count,sizeof(int)));
-				chain_kernel<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel,tpb_chain_kernel>>>(cb->gpu_chain_heads, cb->d_dt, cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD, d_rand_used, d_tau_CD_used);
+				chain_kernel<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel,tpb_chain_kernel>>>(cb->gpu_chain_heads, cb->d_dt, cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD);
 				CUT_CHECK_ERROR("kernel execution failed");
 	// 		if (dbug)  get_chains_from_device_b();
 				cudaUnbindTexture(t_a_QN);
@@ -162,11 +163,7 @@ void time_step_call_block(double reach_time, ensemble_call_block *cb) { //bind t
 				CUT_CHECK_ERROR("kernel execution failed");
 	// 	  	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_steps_count, &steps_count,sizeof(int)));
 
-				chain_kernel<<<
-						(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel,
-						tpb_chain_kernel>>>(cb->gpu_chain_heads, cb->d_dt,
-						cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent,
-						cb->d_new_tau_CD, d_rand_used, d_tau_CD_used);
+				chain_kernel<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel,tpb_chain_kernel>>>(cb->gpu_chain_heads, cb->d_dt, cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD);
 				CUT_CHECK_ERROR("kernel execution failed");
 
 	// 		if (dbug) get_chains_from_device_a();
@@ -262,7 +259,7 @@ void EQ_time_step_call_block(double reach_time, ensemble_call_block *cb) { //bin
 				EQ_strent_kernel<<<dimGrid, dimBlock>>>(cb->gpu_chain_heads,cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD);
 				CUT_CHECK_ERROR("kernel execution failed");
 
-				EQ_chain_kernel<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel,tpb_chain_kernel>>>(cb->gpu_chain_heads, cb->d_dt,cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent,cb->d_new_tau_CD, cb->d_correlator_time, d_rand_used,d_tau_CD_used);
+				EQ_chain_kernel<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel,tpb_chain_kernel>>>(cb->gpu_chain_heads, cb->d_dt,cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent,cb->d_new_tau_CD, cb->d_correlator_time, d_rand_used,d_tau_CD_used_CD,d_tau_CD_used_SD);
 				CUT_CHECK_ERROR("kernel execution failed");
 
 				cudaUnbindTexture(t_a_QN);
@@ -276,7 +273,7 @@ void EQ_time_step_call_block(double reach_time, ensemble_call_block *cb) { //bin
 				EQ_strent_kernel<<<dimGrid, dimBlock>>>(cb->gpu_chain_heads,cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD);
 				CUT_CHECK_ERROR("kernel execution failed");
 
-				EQ_chain_kernel<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel,tpb_chain_kernel>>>(cb->gpu_chain_heads, cb->d_dt,cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent,cb->d_new_tau_CD, cb->d_correlator_time, d_rand_used,d_tau_CD_used);
+				EQ_chain_kernel<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel,tpb_chain_kernel>>>(cb->gpu_chain_heads, cb->d_dt,cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent,cb->d_new_tau_CD, cb->d_correlator_time, d_rand_used,d_tau_CD_used_CD,d_tau_CD_used_SD);
 				CUT_CHECK_ERROR("kernel execution failed");
 
 				cudaUnbindTexture(t_a_QN);

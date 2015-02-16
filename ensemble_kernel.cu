@@ -200,9 +200,7 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void strent_ke
 }
 
 __global__ __launch_bounds__(tpb_chain_kernel)
-void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
-		float next_sync_time, int *d_offset, float4 *d_new_strent,
-		float *d_new_tau_CD, int *rand_used, int *tau_CD_used) {
+void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag, float next_sync_time, int *d_offset, float4 *d_new_strent, float *d_new_tau_CD, int *rand_used, int *tau_CD_used_CD, int *tau_CD_used_SD) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 
 	if (i >= dn_cha_per_call)
@@ -403,8 +401,8 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
 		if (pr < wcdc) {
 			if (tz == d_z_max)
 				return;		// possible detail balance issue
-			float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used[i], i);
-			tau_CD_used[i]++;
+			float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used_CD[i], i);
+			tau_CD_used_CD[i]++;
 			gpu_chain_heads[i].Z++;
 			d_new_tau_CD[i] = d_tau_CD_f_d_t(temp.w);//__fdividef(1.0f,d_tau_d);
 			float newn = floorf(0.5f + __fdividef(pr * (QN1.w - 2.0f), wcdc)) + 1.0f;
@@ -447,8 +445,8 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
 		if (tz == d_z_max)
 			return;	// possible detail balance issue
 
-		float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used[i], i);
-		tau_CD_used[i]++;
+		float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used_CD[i], i);
+		tau_CD_used_CD[i]++;
 		gpu_chain_heads[i].Z++;
 		d_new_tau_CD[i] = d_tau_CD_f_d_t(temp.w);	//__fdividef(1.0f,d_tau_d);
 
@@ -474,8 +472,8 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
 	if (pr < W_SD_c_1 + W_SD_c_z) {
 		if (tz == d_z_max)
 			return;	// possible detail balance issue
-		float4 temp = tex2D(t_taucd_gauss_rand_SD, tau_CD_used[i], i);
-		tau_CD_used[i]++;
+		float4 temp = tex2D(t_taucd_gauss_rand_SD, tau_CD_used_SD[i], i);
+		tau_CD_used_SD[i]++;
 		gpu_chain_heads[i].Z++;
 // 	d_new_tau_CD[i]=__fdividef(1.0f,d_tau_d);
 		d_new_tau_CD[i] = d_tau_CD_f_t(temp.w);
