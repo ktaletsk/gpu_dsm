@@ -269,7 +269,9 @@ void gpu_clean() {
 	cudaFreeArray(d_stress);
 
 	cudaFreeArray(d_uniformrand);
-	cudaFreeArray(d_taucd_gauss_rand);
+	cudaFreeArray(d_taucd_gauss_rand_CD);
+	cudaFreeArray(d_taucd_gauss_rand_SD);
+
 	cudaFree(d_tau_CD_used);
 
 	cudaFree(d_random_gens);
@@ -282,7 +284,8 @@ void random_textures_fill(int n_cha) {
 	cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
 	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
 
-	cudaMallocArray(&(d_taucd_gauss_rand), &channelDesc4, uniformrandom_count, n_cha, cudaArraySurfaceLoadStore);
+	cudaMallocArray(&(d_taucd_gauss_rand_CD), &channelDesc4, uniformrandom_count, n_cha, cudaArraySurfaceLoadStore);
+	cudaMallocArray(&(d_taucd_gauss_rand_SD), &channelDesc4, uniformrandom_count, n_cha, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&(d_uniformrand), &channelDesc1, uniformrandom_count, n_cha, cudaArraySurfaceLoadStore);
 
 	cudaMalloc((void**) &d_rand_used, sizeof(int) * n_cha);
@@ -294,10 +297,12 @@ void random_textures_fill(int n_cha) {
 	cudaDeviceSynchronize();
 
 	int taucd_gauss_count = uniformrandom_count;
-	gr_fill_surface_taucd_gauss_rand(d_random_gens2, n_cha, taucd_gauss_count, d_taucd_gauss_rand);
+	gr_fill_surface_taucd_gauss_rand(d_random_gens2, n_cha, taucd_gauss_count,true, d_taucd_gauss_rand_CD); //Set array with random numbers
+	gr_fill_surface_taucd_gauss_rand(d_random_gens2, n_cha, taucd_gauss_count,false, d_taucd_gauss_rand_SD);
 
 	cudaBindTextureToArray(t_uniformrand, d_uniformrand, channelDesc1);
-	cudaBindTextureToArray(t_taucd_gauss_rand, d_taucd_gauss_rand, channelDesc4);
+	cudaBindTextureToArray(t_taucd_gauss_rand_CD, d_taucd_gauss_rand_CD, channelDesc4);
+	cudaBindTextureToArray(t_taucd_gauss_rand_SD, d_taucd_gauss_rand_SD, channelDesc4);
 }
 
 void random_textures_refill(int n_cha) {
@@ -314,10 +319,12 @@ void random_textures_refill(int n_cha) {
 	cudaDeviceSynchronize();
 
 	//tau_cd gauss 3d vector
-	cudaUnbindTexture(t_taucd_gauss_rand);
-	gr_refill_surface_taucd_gauss_rand(d_random_gens2, n_cha, d_tau_CD_used, d_taucd_gauss_rand);
+	cudaUnbindTexture(t_taucd_gauss_rand_CD);
+	gr_refill_surface_taucd_gauss_rand(d_random_gens2, n_cha, d_tau_CD_used, d_taucd_gauss_rand_CD);
+	//gr_refill_surface_taucd_gauss_rand(d_random_gens2, n_cha, d_tau_SD_used, d_taucd_gauss_rand_SD);
 	cudaMemset(d_tau_CD_used, 0, sizeof(int) * n_cha);
-	cudaBindTextureToArray(t_taucd_gauss_rand, d_taucd_gauss_rand, channelDesc4);
+	cudaBindTextureToArray(t_taucd_gauss_rand_CD, d_taucd_gauss_rand_CD, channelDesc4);
+	cudaBindTextureToArray(t_taucd_gauss_rand_SD, d_taucd_gauss_rand_SD, channelDesc4);
 	cudaDeviceSynchronize();
 }
 

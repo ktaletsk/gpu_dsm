@@ -25,7 +25,8 @@ gpu_Ran *d_random_gens; // device random number generators
 gpu_Ran *d_random_gens2; //first is used to pick jump process, second is used for creation of new entanglements
 //temporary arrays fpr random numbers sequences
 cudaArray* d_uniformrand; // uniform random number supply //used to pick jump process
-cudaArray* d_taucd_gauss_rand; // 1x uniform + 3x normal distributed random number supply// used for creating entanglements
+cudaArray* d_taucd_gauss_rand_CD; // 1x uniform + 3x normal distributed random number supply// used for creating entanglements by SD
+cudaArray* d_taucd_gauss_rand_SD; // used for creating entanglements by SD
 int steps_count = 0;    //time step count
 int *d_tau_CD_used;
 int *d_rand_used;
@@ -287,15 +288,13 @@ void EQ_time_step_call_block(double reach_time, ensemble_call_block *cb) { //bin
 			// check for rand refill
 			if (steps_count % uniformrandom_count == 0) {
 				if (dbug)
-					cout << "steps_count " << steps_count
-							<< ". random_textures_refill()\n";
+					cout << "steps_count " << steps_count << ". random_textures_refill()\n";
 				random_textures_refill(cb->nc);
 				steps_count = 0;
 			}
 
 			// check for reached time
-			cudaMemcpy(rtbuffer, cb->reach_flag, sizeof(float) * cb->nc,
-					cudaMemcpyDeviceToHost);
+			cudaMemcpy(rtbuffer, cb->reach_flag, sizeof(float) * cb->nc, cudaMemcpyDeviceToHost);
 			float sumrt = 0;
 			for (int i = 0; i < cb->nc; i++) {
 				sumrt += rtbuffer[i];
@@ -304,8 +303,7 @@ void EQ_time_step_call_block(double reach_time, ensemble_call_block *cb) { //bin
 
 			if (dbug) {
 				float *dtbuffer = new float[cb->nc];
-				cudaMemcpy(dtbuffer, cb->d_dt, sizeof(float) * cb->nc,
-						cudaMemcpyDeviceToHost);
+				cudaMemcpy(dtbuffer, cb->d_dt, sizeof(float) * cb->nc, cudaMemcpyDeviceToHost);
 
 	//  		get_chain_from_device_call_block(cb);
 
