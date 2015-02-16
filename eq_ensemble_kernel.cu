@@ -324,7 +324,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 		if (pr < wcdc) {
 			if (tz == d_z_max)
 				return;		// possible detail balance issue
-			float4 temp = tex2D(t_taucd_gauss_rand, tau_CD_used[i], i);
+			float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used[i], i);
 			tau_CD_used[i]++;
 			gpu_chain_heads[i].Z++;
 			d_new_tau_CD[i] = d_tau_CD_f_d_t(temp.w);//__fdividef(1.0f,d_tau_d);
@@ -368,7 +368,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 	if (pr < W_CD_c_z) {
 		if (tz == d_z_max)
 			return;	// possible detail balance issue
-		float4 temp = tex2D(t_taucd_gauss_rand, tau_CD_used[i], i);
+		float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used[i], i);
 		tau_CD_used[i]++;
 		gpu_chain_heads[i].Z++;
 		d_new_tau_CD[i] = d_tau_CD_f_d_t(temp.w);	//__fdividef(1.0f,d_tau_d);
@@ -393,7 +393,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 	if (pr < W_SD_c_1 + W_SD_c_z) {
 		if (tz == d_z_max)
 			return;	// possible detail balance issue
-		float4 temp = tex2D(t_taucd_gauss_rand, tau_CD_used[i], i);
+		float4 temp = tex2D(t_taucd_gauss_rand_SD, tau_CD_used[i], i);
 		tau_CD_used[i]++;
 		gpu_chain_heads[i].Z++;
 //		d_new_tau_CD[i]=__fdividef(1.0f,d_tau_d);
