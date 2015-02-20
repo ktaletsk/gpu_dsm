@@ -62,7 +62,7 @@ struct p_cd { //Generates \tau_CD lifetimes
 	float tau_CD_f_t() {
 		float p = ran->flt();
 		if (p < (1.0f - g)) {
-			cout << "Bug check: " << alpha;
+			//cout << "Bug check: " << alpha;
 			return powf(p / At + powf(tau_0, alpha), 1.0f / alpha);
 		} else {
 			return tau_d;

@@ -93,11 +93,9 @@ void chain_init(chain_head *chain_head, sstrentp data, int tnk) {
 // 	tz=1;
 	float *tent_tau = new float[tz - 1];   //temporaly arrays
 	if (CD_flag != 0) {
-		for (int k = 0; k < tz - 1; tent_tau[k++] = pcd->tau_CD_f_t())
-			;   //1-SD entanglement lifetime
+		for (int k = 0; k < tz - 1; tent_tau[k++] = pcd->tau_CD_f_t());   //1-SD entanglement lifetime
 	} else
-		for (int k = 0; k < tz - 1; tent_tau[k++] = 0.0)
-			;
+		for (int k = 0; k < tz - 1; tent_tau[k++] = 0.0);
 
 	int *tN;
 	float * Qxtmp, *Qytmp, *Qztmp;
@@ -133,11 +131,9 @@ void chain_init(chain_head *chain_head, sstrentp data, int tnk, int z_max) {
 	int tz = z_dist_truncated(tnk, z_max);   //z distribution
 	float *tent_tau = new float[tz - 1];   //temporaly arrays
 	if (CD_flag != 0) {
-		for (int k = 0; k < tz - 1; tent_tau[k++] = pcd->tau_CD_f_t())
-			;   //1-SD entanglement lifetime
+		for (int k = 0; k < tz - 1; tent_tau[k++] = pcd->tau_CD_f_t());   //1-SD entanglement lifetime
 	} else
-		for (int k = 0; k < tz - 1; tent_tau[k++] = 0.0)
-			;
+		for (int k = 0; k < tz - 1; tent_tau[k++] = 0.0);
 
 	int *tN;
 	float * Qxtmp, *Qytmp, *Qztmp;
