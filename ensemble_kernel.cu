@@ -55,8 +55,6 @@ __constant__ float d_kappa_xx, d_kappa_xy, d_kappa_xz, d_kappa_yx, d_kappa_yy,d_
 //CD constants
 __constant__ int dCD_flag;
 __constant__ float d_CD_create_prefact;
-__constant__ float d_At, d_Ct, d_Dt, d_Adt, d_Bdt, d_Cdt, d_Ddt;
-__constant__ float d_g, d_alpha, d_tau_0, d_tau_max, d_tau_d, d_tau_d_inv;
 
 //Next variables actually declared in ensemble_call_block.h
 //    float *d_dt; // time step size from prevous time step. used for appling deformation
@@ -111,13 +109,13 @@ __device__   __forceinline__ float4 kappa(const float4 QN, const float dt) {//Qx
 			QN.z + dt * d_kappa_zx * QN.x + dt * d_kappa_zy * QN.y + dt * d_kappa_zz * QN.z, QN.w);
 }
 
-//lifetime generation from uniform random number p
-__device__ __forceinline__ float d_tau_CD_f_d_t(float p) {
-	return p < d_Bdt ? __powf(p * d_Adt + d_Ddt, d_Cdt) : d_tau_d_inv;
-}
-__device__ __forceinline__ float d_tau_CD_f_t(float p) {
-	return p < 1.0f - d_g ? __powf(p * d_At + d_Dt, d_Ct) : d_tau_d_inv;
-}
+////lifetime generation from uniform random number p
+//__device__ __forceinline__ float d_tau_CD_f_d_t(float p) {
+//	return p < d_Bdt ? __powf(p * d_Adt + d_Ddt, d_Cdt) : d_tau_d_inv;
+//}
+//__device__ __forceinline__ float d_tau_CD_f_t(float p) {
+//	return p < 1.0f - d_g ? __powf(p * d_At + d_Dt, d_Ct) : d_tau_d_inv;
+//}
 
 //The entanglement parallel part of the code
 //2D kernel: i- entanglement index j - chain index
@@ -404,7 +402,7 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag, fl
 			float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used_CD[i], i);
 			tau_CD_used_CD[i]++;
 			gpu_chain_heads[i].Z++;
-			d_new_tau_CD[i] = d_tau_CD_f_d_t(temp.w);//__fdividef(1.0f,d_tau_d);
+			d_new_tau_CD[i] = temp.w;//__fdividef(1.0f,d_tau_d);
 			float newn = floorf(0.5f + __fdividef(pr * (QN1.w - 2.0f), wcdc)) + 1.0f;
 			if (j == 0) {
 				temp.w = QN1.w - newn;
@@ -448,7 +446,7 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag, fl
 		float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used_CD[i], i);
 		tau_CD_used_CD[i]++;
 		gpu_chain_heads[i].Z++;
-		d_new_tau_CD[i] = d_tau_CD_f_d_t(temp.w);	//__fdividef(1.0f,d_tau_d);
+		d_new_tau_CD[i] = temp.w;	//__fdividef(1.0f,d_tau_d);
 
 		float newn = floorf(0.5f + __fdividef(pr * (QNtail.w - 2.0f), W_CD_c_z))
 				+ 1.0f;
@@ -476,7 +474,7 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag, fl
 		tau_CD_used_SD[i]++;
 		gpu_chain_heads[i].Z++;
 // 	d_new_tau_CD[i]=__fdividef(1.0f,d_tau_d);
-		d_new_tau_CD[i] = d_tau_CD_f_t(temp.w);
+		d_new_tau_CD[i] = temp.w;
 
 		if (pr < W_SD_c_1) {
 			temp.w = QNhead.w - 1.0f;

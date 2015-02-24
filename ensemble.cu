@@ -121,28 +121,28 @@ void gpu_init(int seed) {
 	float cdtemp = pcd->W_CD_destroy_aver() / Be;
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(dCD_flag, &CD_flag, sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_CD_create_prefact, &cdtemp, sizeof(float)));
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_g, &(pcd->g), sizeof(float)));
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_alpha, &(pcd->alpha), sizeof(float)));
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_0, &(pcd->tau_0), sizeof(float)));
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_max, &(pcd->tau_max), sizeof(float)));
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_d, &(pcd->tau_d), sizeof(float)));
-	cdtemp = 1.0f / pcd->tau_d;
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_d_inv, &(cdtemp), sizeof(float)));
-
-	cdtemp = 1.0f / pcd->At;
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_At, &cdtemp, sizeof(float)));
-	cdtemp = powf(pcd->tau_0, pcd->alpha);
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Dt, &cdtemp, sizeof(float)));
-	cdtemp = -1.0f / pcd->alpha;
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Ct, &cdtemp, sizeof(float)));
-	cdtemp = pcd->normdt / pcd->Adt;
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Adt, &cdtemp, sizeof(float)));
-	cdtemp = pcd->Bdt / pcd->normdt;
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Bdt, &cdtemp, sizeof(float)));
-	cdtemp = -1.0f / (pcd->alpha - 1.0f);
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Cdt, &cdtemp, sizeof(float)));
-	cdtemp = powf(pcd->tau_0, pcd->alpha - 1.0f);
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Ddt, &(cdtemp), sizeof(float)));
+//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_g, &(pcd->g), sizeof(float)));
+//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_alpha, &(pcd->alpha), sizeof(float)));
+//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_0, &(pcd->tau_0), sizeof(float)));
+//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_max, &(pcd->tau_max), sizeof(float)));
+//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_d, &(pcd->tau_d), sizeof(float)));
+//	cdtemp = 1.0f / pcd->tau_d;
+//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_d_inv, &(cdtemp), sizeof(float)));
+//
+//	cdtemp = 1.0f / pcd->At;
+//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_At, &cdtemp, sizeof(float)));
+//	cdtemp = powf(pcd->tau_0, pcd->alpha);
+//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Dt, &cdtemp, sizeof(float)));
+//	cdtemp = -1.0f / pcd->alpha;
+//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Ct, &cdtemp, sizeof(float)));
+//	cdtemp = pcd->normdt / pcd->Adt;
+//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Adt, &cdtemp, sizeof(float)));
+//	cdtemp = pcd->Bdt / pcd->normdt;
+//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Bdt, &cdtemp, sizeof(float)));
+//	cdtemp = -1.0f / (pcd->alpha - 1.0f);
+//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Cdt, &cdtemp, sizeof(float)));
+//	cdtemp = powf(pcd->tau_0, pcd->alpha - 1.0f);
+//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Ddt, &(cdtemp), sizeof(float)));
 
 	cout << " device constants done\n";
 
@@ -300,8 +300,8 @@ void random_textures_fill(int n_cha) {
 	cudaDeviceSynchronize();
 
 	int taucd_gauss_count = uniformrandom_count;
-	gr_fill_surface_taucd_gauss_rand(d_random_gens2, n_cha, taucd_gauss_count,true, d_taucd_gauss_rand_CD); //Set array with random numbers
-	gr_fill_surface_taucd_gauss_rand(d_random_gens2, n_cha, taucd_gauss_count,false, d_taucd_gauss_rand_SD);
+	gr_fill_surface_taucd_gauss_rand(d_random_gens2, n_cha, taucd_gauss_count,false, d_taucd_gauss_rand_CD); //Set array with random numbers
+	gr_fill_surface_taucd_gauss_rand(d_random_gens2, n_cha, taucd_gauss_count, true, d_taucd_gauss_rand_SD);
 
 	cudaBindTextureToArray(t_uniformrand, d_uniformrand, channelDesc1);
 	cudaBindTextureToArray(t_taucd_gauss_rand_CD, d_taucd_gauss_rand_CD, channelDesc4);
@@ -323,8 +323,8 @@ void random_textures_refill(int n_cha) {
 
 	//tau_cd gauss 3d vector
 	cudaUnbindTexture(t_taucd_gauss_rand_CD);
-	gr_refill_surface_taucd_gauss_rand(d_random_gens2, n_cha, d_tau_CD_used_CD, d_taucd_gauss_rand_CD);
-	gr_refill_surface_taucd_gauss_rand(d_random_gens2, n_cha, d_tau_CD_used_SD, d_taucd_gauss_rand_SD);
+	gr_refill_surface_taucd_gauss_rand(d_random_gens2, n_cha, d_tau_CD_used_CD,false, d_taucd_gauss_rand_CD);
+	gr_refill_surface_taucd_gauss_rand(d_random_gens2, n_cha, d_tau_CD_used_SD, true, d_taucd_gauss_rand_SD);
 	cudaMemset(d_tau_CD_used_CD, 0, sizeof(int) * n_cha);
 	cudaMemset(d_tau_CD_used_SD, 0, sizeof(int) * n_cha);
 	cudaBindTextureToArray(t_taucd_gauss_rand_CD, d_taucd_gauss_rand_CD, channelDesc4);

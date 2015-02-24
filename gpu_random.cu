@@ -18,6 +18,9 @@
 //  #include <cuda.h>
 #include "gpu_random.h"
 #include "random.h"
+#include "pcd_tau.h"
+
+extern p_cd *pcd;
 // #include <iostream>
 
 
@@ -29,9 +32,37 @@
 #include "cuda_call.h"      
 #include "textures_surfaces.h"
 
+//CD constants
+__constant__ float d_At, d_Ct, d_Dt, d_Adt, d_Bdt, d_Cdt, d_Ddt;
+__constant__ float d_g, d_alpha, d_tau_0, d_tau_max, d_tau_d, d_tau_d_inv;
 
+void gpu_ran_init (){
+	cout << "preparing GPU random number generator parameters..\n";
 
-void gpu_ran_init (){//dummy
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_g, &(pcd->g), sizeof(float)));
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_alpha, &(pcd->alpha), sizeof(float)));
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_0, &(pcd->tau_0), sizeof(float)));
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_max, &(pcd->tau_max), sizeof(float)));
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_d, &(pcd->tau_d), sizeof(float)));
+	float cdtemp = 1.0f / pcd->tau_d;
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_d_inv, &(cdtemp), sizeof(float)));
+
+	cdtemp = 1.0f / pcd->At;
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_At, &cdtemp, sizeof(float)));
+	cdtemp = powf(pcd->tau_0, pcd->alpha);
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Dt, &cdtemp, sizeof(float)));
+	cdtemp = -1.0f / pcd->alpha;
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Ct, &cdtemp, sizeof(float)));
+	cdtemp = pcd->normdt / pcd->Adt;
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Adt, &cdtemp, sizeof(float)));
+	cdtemp = pcd->Bdt / pcd->normdt;
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Bdt, &cdtemp, sizeof(float)));
+	cdtemp = -1.0f / (pcd->alpha - 1.0f);
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Cdt, &cdtemp, sizeof(float)));
+	cdtemp = powf(pcd->tau_0, pcd->alpha - 1.0f);
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Ddt, &(cdtemp), sizeof(float)));
+
+	cout << "device random number generator parameters done\n";
 	}
 
 //
@@ -70,6 +101,14 @@ void gr_fill_surface_uniformrand(gpu_Ran *gr,int sz,int count , cudaArray*  d_un
 	cudaDeviceSynchronize();
 }
 
+//lifetime generation from uniform random number p
+__device__ __forceinline__ float d_tau_CD_f_d_t(float p) {
+	return p < d_Bdt ? __powf(p * d_Adt + d_Ddt, d_Cdt) : d_tau_d_inv;
+}
+__device__ __forceinline__ float d_tau_CD_f_t(float p) {
+	return p < 1.0f - d_g ? __powf(p * d_At + d_Dt, d_Ct) : d_tau_d_inv;
+}
+
 //
 __global__ __launch_bounds__(ran_tpd) void fill_surface_taucd_gauss_rand (gpu_Ran *state, int n, int count, bool SDCD_toggle){
 	int i=blockIdx.x*blockDim.x+threadIdx.x;
@@ -79,9 +118,14 @@ __global__ __launch_bounds__(ran_tpd) void fill_surface_taucd_gauss_rand (gpu_Ra
 	if (i<n){
 		curandState localState = state[i];
 		for (int j=0; j<count;j++){
+			//Pick a uniform distributed random number
+			tmp.x=curand_uniform (&localState);
+			//TODO Pick random molecular weight using texture t_gamma_table and RNG and save to tmp.w
 			if (g==0.0f){
-				tmp.w=curand_uniform (&localState);
-				//TODO Pick random molecular weight using texture t_gamma_table and RNG and save to tmp.w
+				if (SDCD_toggle == true)
+					tmp.w=d_tau_CD_f_t(tmp.x);
+				else
+					tmp.w=d_tau_CD_f_d_t(tmp.x);
 				g2=curand_normal2(&localState);
 				tmp.x=g2.x;
 				tmp.y=g2.y;
@@ -89,7 +133,10 @@ __global__ __launch_bounds__(ran_tpd) void fill_surface_taucd_gauss_rand (gpu_Ra
 				tmp.z=g2.x;
 				g=g2.y;
 			}else{
-				tmp.w=curand_uniform (&localState);
+				if (SDCD_toggle == true)
+					tmp.w=d_tau_CD_f_t(tmp.x);
+				else
+					tmp.w=d_tau_CD_f_d_t(tmp.x);
 				tmp.x=g;
 				g2=curand_normal2(&localState);
 				tmp.y=g2.x;
@@ -103,7 +150,7 @@ __global__ __launch_bounds__(ran_tpd) void fill_surface_taucd_gauss_rand (gpu_Ra
 }
 
 //
-__global__ __launch_bounds__(ran_tpd) void refill_surface_taucd_gauss_rand (gpu_Ran *state,int n,int *count){
+__global__ __launch_bounds__(ran_tpd) void refill_surface_taucd_gauss_rand (gpu_Ran *state, int n, int *count, bool SDCD_toggle){
 	int i=blockIdx.x*blockDim.x+threadIdx.x;
 	float4 tmp;
 	float g=0.0f;
@@ -112,8 +159,12 @@ __global__ __launch_bounds__(ran_tpd) void refill_surface_taucd_gauss_rand (gpu_
 		int cnt=count[i];
 		curandState localState = state[i];
 	    for (int j=0; j<cnt;j++){
+	    	tmp.x=curand_uniform (&localState);
 			if (g==0.0f){
-				tmp.w=curand_uniform (&localState);
+				if (SDCD_toggle == true)
+					tmp.w=d_tau_CD_f_t(tmp.x);
+				else
+					tmp.w=d_tau_CD_f_d_t(tmp.x);
 				g2=curand_normal2(&localState);
 				tmp.x=g2.x;
 				tmp.y=g2.y;
@@ -121,7 +172,10 @@ __global__ __launch_bounds__(ran_tpd) void refill_surface_taucd_gauss_rand (gpu_
 				tmp.z=g2.x;
 				g=g2.y;
 			}else{
-				tmp.w=curand_uniform (&localState);
+				if (SDCD_toggle == true)
+					tmp.w=d_tau_CD_f_t(tmp.x);
+				else
+					tmp.w=d_tau_CD_f_d_t(tmp.x);
 				tmp.x=g;
 				g2=curand_normal2(&localState);
 				tmp.y=g2.x;
@@ -135,7 +189,7 @@ __global__ __launch_bounds__(ran_tpd) void refill_surface_taucd_gauss_rand (gpu_
 }
 
 //
-void gr_fill_surface_taucd_gauss_rand(gpu_Ran *gr,int sz,int count,bool SDCD_toggle,cudaArray*  d_taucd_gauss_rand ){
+void gr_fill_surface_taucd_gauss_rand(gpu_Ran *gr, int sz, int count, bool SDCD_toggle, cudaArray* d_taucd_gauss_rand){
 	cudaBindSurfaceToArray(rand_buffer, d_taucd_gauss_rand);
     fill_surface_taucd_gauss_rand<<<(sz+ ran_tpd-1)/ ran_tpd, ran_tpd>>>(gr,sz,count,SDCD_toggle);
 	CUT_CHECK_ERROR("kernel execution failed");
@@ -143,9 +197,9 @@ void gr_fill_surface_taucd_gauss_rand(gpu_Ran *gr,int sz,int count,bool SDCD_tog
 }
 
 //
-void gr_refill_surface_taucd_gauss_rand(gpu_Ran *gr,int sz,int *count,cudaArray*  d_taucd_gauss_rand ){
+void gr_refill_surface_taucd_gauss_rand(gpu_Ran *gr, int sz, int *count, bool SDCD_toggle, cudaArray* d_taucd_gauss_rand){
 	cudaBindSurfaceToArray(rand_buffer, d_taucd_gauss_rand);
-	refill_surface_taucd_gauss_rand<<<(sz+ ran_tpd-1)/ ran_tpd, ran_tpd>>>(gr,sz,count);
+	refill_surface_taucd_gauss_rand<<<(sz+ ran_tpd-1)/ ran_tpd, ran_tpd>>>(gr,sz,count,SDCD_toggle);
 	CUT_CHECK_ERROR("kernel execution failed");
  	cudaDeviceSynchronize();
 }

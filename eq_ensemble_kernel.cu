@@ -327,7 +327,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 			float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used_CD[i], i);
 			tau_CD_used_CD[i]++;
 			gpu_chain_heads[i].Z++;
-			d_new_tau_CD[i] = d_tau_CD_f_d_t(temp.w);//__fdividef(1.0f,d_tau_d);
+			d_new_tau_CD[i] = temp.w;//__fdividef(1.0f,d_tau_d);
 			float newn = floorf(0.5f + __fdividef(pr * (QN1.w - 2.0f), wcdc)) + 1.0f;
 			if (j == 0) {
 				temp.w = QN1.w - newn;
@@ -371,7 +371,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 		float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used_CD[i], i);
 		tau_CD_used_CD[i]++;
 		gpu_chain_heads[i].Z++;
-		d_new_tau_CD[i] = d_tau_CD_f_d_t(temp.w);	//__fdividef(1.0f,d_tau_d);
+		d_new_tau_CD[i] = temp.w;	//__fdividef(1.0f,d_tau_d);
 
 		float newn = 1.0f + floorf(0.5f + __fdividef(pr * (QNtail.w - 2.0f), W_CD_c_z));
 
@@ -397,7 +397,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 		tau_CD_used_SD[i]++;
 		gpu_chain_heads[i].Z++;
 //		d_new_tau_CD[i]=__fdividef(1.0f,d_tau_d);
-		d_new_tau_CD[i] = d_tau_CD_f_t(temp.w);
+		d_new_tau_CD[i] = temp.w;
 
 		if (pr < W_SD_c_1) {
 			temp.w = QNhead.w - 1.0f;
