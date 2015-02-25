@@ -53,7 +53,7 @@ __constant__ int dn_cha_per_call; //number of chains in this call. cannot be big
 __constant__ float d_kappa_xx, d_kappa_xy, d_kappa_xz, d_kappa_yx, d_kappa_yy,d_kappa_yz, d_kappa_zx, d_kappa_zy, d_kappa_zz;
 
 //CD constants
-__constant__ int dCD_flag;
+__constant__ int d_CD_flag;
 __constant__ float d_CD_create_prefact;
 
 //Next variables actually declared in ensemble_call_block.h
@@ -109,14 +109,6 @@ __device__   __forceinline__ float4 kappa(const float4 QN, const float dt) {//Qx
 			QN.z + dt * d_kappa_zx * QN.x + dt * d_kappa_zy * QN.y + dt * d_kappa_zz * QN.z, QN.w);
 }
 
-////lifetime generation from uniform random number p
-//__device__ __forceinline__ float d_tau_CD_f_d_t(float p) {
-//	return p < d_Bdt ? __powf(p * d_Adt + d_Ddt, d_Cdt) : d_tau_d_inv;
-//}
-//__device__ __forceinline__ float d_tau_CD_f_t(float p) {
-//	return p < 1.0f - d_g ? __powf(p * d_At + d_Dt, d_Ct) : d_tau_d_inv;
-//}
-
 //The entanglement parallel part of the code
 //2D kernel: i- entanglement index j - chain index
 __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void strent_kernel(chain_head* gpu_chain_heads, float *tdt, int *d_offset, float4 *d_new_strent, float *d_new_tau_CD) {    //TODO add reach flag
@@ -133,7 +125,7 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void strent_ke
 	if (fetch_new_strent(i, oft))
 		QN = d_new_strent[j]; //second check if strent created last time step should go here
 	float tcd;
-	if (dCD_flag) {
+	if (d_CD_flag) {
 		tcd = tex2D(t_a_tCD, make_offset(i, oft), j); ////////////////
 		if (fetch_new_strent(i, oft))
 			tcd = d_new_tau_CD[j];
@@ -186,11 +178,7 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void strent_ke
 					* __expf(-Q * sig1 + Q2 * sig2);
 		}
 		//write probabilities into temp array(surface)
-		surf2Dwrite(
-				wsh.x + wsh.y
-						+ dCD_flag
-								* (tcd + d_CD_create_prefact * (QN.w - 1.0f)),
-				s_sum_W, 4 * i, j); //sum
+		surf2Dwrite(wsh.x + wsh.y+ d_CD_flag * (tcd + d_CD_create_prefact * (QN.w - 1.0f)), s_sum_W, 4 * i, j); //sum
 	}
 	//write updated chain conformation
 	surf2Dwrite(QN, s_b_QN, 16 * i, j);
@@ -317,7 +305,7 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag, fl
 
 		// first we check if CDd will happen
 		float wcdd;
-		if (dCD_flag) {
+		if (d_CD_flag) {
 			wcdd = tex2D(t_a_tCD, make_offset(j, oft), i);    //////////////////
 			if (fetch_new_strent(j, oft))
 				wcdd = new_tCD;
