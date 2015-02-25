@@ -47,7 +47,7 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent
 	else
 		QN = tex2D(t_a_QN, make_offset(i, oft), j); // all access to strents is done through two operations: first texture fetch
 	float tcd;
-	if (dCD_flag) {//If constraint dynamics is enabled
+	if (d_CD_flag) {//If constraint dynamics is enabled
 		if (fetch_new_strent(i, oft))
 			tcd = d_new_tau_CD[j];
 		else
@@ -98,7 +98,7 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent
 		}
 // 	    surf2Dwrite(wsh.x,s_W_SD_pm,8*i,j);//TODO funny bug i have no idea but doesn't work other way
 // 	    surf2Dwrite(wsh.y,s_W_SD_pm,8*i+4,j);//seems to work with float4 below
-		surf2Dwrite(wsh.x + wsh.y + dCD_flag * (tcd + d_CD_create_prefact * (QN.w - 1.0f)), s_sum_W, 4 * i, j);
+		surf2Dwrite(wsh.x + wsh.y + d_CD_flag * (tcd + d_CD_create_prefact * (QN.w - 1.0f)), s_sum_W, 4 * i, j);
 	}
 }
 
@@ -170,7 +170,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 	else
 		QNtail = tex2D(t_a_QN, make_offset(tz - 1, oft), i);
 
-	float W_CD_c_z = dCD_flag * d_CD_create_prefact * (QNtail.w - 1.0f); //Create CD on the last strand
+	float W_CD_c_z = d_CD_flag * d_CD_create_prefact * (QNtail.w - 1.0f); //Create CD on the last strand
 
 	if (tz == 1) {
 		W_SD_c_1 = __fdividef(1.0f, (dBe * dnk));
@@ -247,7 +247,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 		// 1. CDd (destruction by constraint dynamics)
 
 		float wcdd;
-		if (dCD_flag) {
+		if (d_CD_flag) {
 			wcdd = tex2D(t_a_tCD, make_offset(j, oft), i); //Read tau_CD
 			if (fetch_new_strent(j, oft))
 				wcdd = new_tCD;
@@ -314,7 +314,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 
 		// 3. CDc (creation by constraint dynamics in the middle)
 
-		float wcdc = dCD_flag * d_CD_create_prefact * (QN1.w - 1.0f); //
+		float wcdc = d_CD_flag * d_CD_create_prefact * (QN1.w - 1.0f); //
 		if (pr < wcdc) {
 			if (tz == d_z_max)
 				return;		// possible detail balance issue

@@ -119,30 +119,8 @@ void gpu_init(int seed) {
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_kappa_zz, &kzz, sizeof(float)));
 
 	float cdtemp = pcd->W_CD_destroy_aver() / Be;
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(dCD_flag, &CD_flag, sizeof(int)));
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_CD_flag, &CD_flag, sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_CD_create_prefact, &cdtemp, sizeof(float)));
-//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_g, &(pcd->g), sizeof(float)));
-//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_alpha, &(pcd->alpha), sizeof(float)));
-//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_0, &(pcd->tau_0), sizeof(float)));
-//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_max, &(pcd->tau_max), sizeof(float)));
-//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_d, &(pcd->tau_d), sizeof(float)));
-//	cdtemp = 1.0f / pcd->tau_d;
-//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_d_inv, &(cdtemp), sizeof(float)));
-//
-//	cdtemp = 1.0f / pcd->At;
-//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_At, &cdtemp, sizeof(float)));
-//	cdtemp = powf(pcd->tau_0, pcd->alpha);
-//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Dt, &cdtemp, sizeof(float)));
-//	cdtemp = -1.0f / pcd->alpha;
-//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Ct, &cdtemp, sizeof(float)));
-//	cdtemp = pcd->normdt / pcd->Adt;
-//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Adt, &cdtemp, sizeof(float)));
-//	cdtemp = pcd->Bdt / pcd->normdt;
-//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Bdt, &cdtemp, sizeof(float)));
-//	cdtemp = -1.0f / (pcd->alpha - 1.0f);
-//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Cdt, &cdtemp, sizeof(float)));
-//	cdtemp = powf(pcd->tau_0, pcd->alpha - 1.0f);
-//	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Ddt, &(cdtemp), sizeof(float)));
 
 	cout << " device constants done\n";
 

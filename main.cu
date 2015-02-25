@@ -124,6 +124,7 @@ int main(int narg, char** arg) {
 	//Determine if there is a flow
 	bool flow = (kxx != 0.0) || (kxy != 0.0) || (kxz != 0.0) || (kyx != 0.0) || (kyy != 0.0) || (kyz != 0.0) || (kzx != 0.0) || (kzy != 0.0) || (kzz != 0.0);
 
+
 	//Initialize random
 	eran.seed(job_ID * N_cha);
 
