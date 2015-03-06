@@ -116,7 +116,9 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 	if (reach_flag[i]!=0) {
 		return;
 	}
-	if ((gpu_chain_heads[i].time >= next_sync_time) || (gpu_chain_heads[i].stall_flag != 0)) {
+	if (((gpu_chain_heads[i].time >= next_sync_time)&&
+	     (d_universal_time+next_sync_time<=d_correlator_time[i] * d_correlator_res)) ||  (gpu_chain_heads[i].stall_flag != 0))
+	   {
 		reach_flag[i] = 1;
 		gpu_chain_heads[i].time-=next_sync_time;
 		tdt[i] = 0.0f;
@@ -140,6 +142,10 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 		}
 		surf2Dwrite(sum_stress, s_correlator, 16 * d_correlator_time[i], i);
 		d_correlator_time[i]++;
+		if (d_universal_time+gpu_chain_heads[i].time > d_correlator_time[i] * d_correlator_res){
+		  return;
+		  //do nothing until next step
+		}
 	}
 
 	// sum W_SD_shifts
