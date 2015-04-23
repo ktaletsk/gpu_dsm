@@ -691,10 +691,8 @@ void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
 
 			for (int i = 0; i < chain_blocks_number; i++) {
 				get_chain_to_device_call_block(&(chain_blocks[i]));
-				cudaMemset(chain_blocks[i].d_correlator_time, 0,
-						sizeof(int) * chain_blocks[i].nc);
-				EQ_time_step_call_block(double(tres * correlator_size),
-						&(chain_blocks[i]));
+				cudaMemset(chain_blocks[i].d_correlator_time, 0, sizeof(int) * chain_blocks[i].nc);
+				EQ_time_step_call_block(double(tres * correlator_size), &(chain_blocks[i]));
 				chain_blocks[i].corr->counter = correlator_size;
 			}
 
@@ -717,15 +715,13 @@ void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
 
 		for (int i = 0; i < chain_blocks_number; i++) {
 			get_chain_to_device_call_block(&(chain_blocks[i]));
-			cudaMemset(chain_blocks[i].d_correlator_time, 0,
-					sizeof(int) * chain_blocks[i].nc);
-			EQ_time_step_call_block(length, &(chain_blocks[i]));
-			chain_blocks[i].corr->counter = last_page_counter;
+			cudaMemset(chain_blocks[i].d_correlator_time, 0, sizeof(int) * chain_blocks[i].nc);
+			EQ_time_step_call_block(double(tres * correlator_size), &(chain_blocks[i]));
+			chain_blocks[i].corr->counter = correlator_size;
 		}
 
 		for (int i = 0; i < chain_blocks_number; i++) {
-			chain_blocks[i].corr->calc(&(tint[tick_pointer_page[ip - 1]]),
-					&(x_buf[tick_pointer_page[ip - 1]]), np_last_page);
+			chain_blocks[i].corr->calc(&(tint[tick_pointer_page[ip - 1]]), &(x_buf[tick_pointer_page[ip - 1]]), np_last_page);
 			for (int j = tick_pointer_page[ip - 1];
 					j < tick_pointer_page[ip - 1] + np_last_page; j++) {
 				x[j] += x_buf[j] * chain_blocks[i].nc / N_cha;
