@@ -207,15 +207,12 @@ struct Ran {
 	Ran(int ISEED) {use_last=0;mti=N+1;seed(ISEED);}
 	
 	float flt(){return genrand_real3();}
-	/* boxmuller.c           Implements the Polar form of the Box-Muller
-                         Transformation
-
-                      (c) Copyright 1994, Everett F. Carter Jr.
-                          Permission is granted by the author to use
-			  this software for any application provided this
-			  copyright notice is preserved.
-
-*/
+	/* boxmuller.c           Implements the Polar form of the Box-Muller Transformation
+	 * (c) Copyright 1994, Everett F. Carter Jr.
+	 * Permission is granted by the author to use
+	 * this software for any application provided this
+	 * copyright notice is preserved.
+	 */
 	float box_muller(float m, float s)	/* normal random variate generator */
 	{				        /* mean m, standard deviation s */
 		float x1, x2, w, y1;

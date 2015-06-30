@@ -25,8 +25,10 @@
 #include "timer.h"
 #include "detailed_balance.h"
 #include "job_ID.h"
-
+extern float a,b,mp,Mk;
+extern void make_gamma_table (float a, float b);
 using namespace std;
+
 
 Ran eran(1);
 p_cd *pcd;
@@ -42,6 +44,7 @@ int main(int narg, char** arg) {
 	int G_flag = 0;
 	double simulation_time;
 	double t_step_size;
+
 	cout << '\n';
 
 	//Processing command line parameters
@@ -124,6 +127,15 @@ int main(int narg, char** arg) {
 	//Determine if there is a flow
 	bool flow = (kxx != 0.0) || (kxy != 0.0) || (kxz != 0.0) || (kyx != 0.0) || (kyy != 0.0) || (kyz != 0.0) || (kzx != 0.0) || (kzy != 0.0) || (kzz != 0.0);
 
+	if (PD_flag) {
+		ifstream in2;
+		in2.open("polydisp.dat");
+		in2 >> a;
+		in2 >> b;
+		in2 >> mp;
+		in2 >> Mk;
+		make_gamma_table (a, b);
+	}
 
 	//Initialize random
 	eran.seed(job_ID * N_cha);

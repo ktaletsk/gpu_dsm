@@ -505,13 +505,10 @@ void deactivate_block(ensemble_call_block *cb) {
 	;						 //copies chain conformations to storing memory
 
 	if (!(steps_count & 0x00000001)) {
-		cudaMemcpyArrayToArray(cb->d_QN, 0, 0, d_a_QN, 0, 0,
-				z_max * sizeof(float) * 4 * cb->nc, cudaMemcpyDeviceToDevice);
-		cudaMemcpyArrayToArray(cb->d_tCD, 0, 0, d_a_tCD, 0, 0,
-				z_max * sizeof(float) * cb->nc, cudaMemcpyDeviceToDevice);
+		cudaMemcpyArrayToArray(cb->d_QN, 0, 0, d_a_QN, 0, 0, z_max * sizeof(float) * 4 * cb->nc, cudaMemcpyDeviceToDevice);
+		cudaMemcpyArrayToArray(cb->d_tCD, 0, 0, d_a_tCD, 0, 0, z_max * sizeof(float) * cb->nc, cudaMemcpyDeviceToDevice);
 	} else {
-		cudaMemcpyArrayToArray(cb->d_QN, 0, 0, d_b_QN, 0, 0,
-				z_max * sizeof(float) * 4 * cb->nc, cudaMemcpyDeviceToDevice);
+		cudaMemcpyArrayToArray(cb->d_QN, 0, 0, d_b_QN, 0, 0, z_max * sizeof(float) * 4 * cb->nc, cudaMemcpyDeviceToDevice);
 		cudaMemcpyArrayToArray(cb->d_tCD, 0, 0, d_b_tCD, 0, 0,
 				z_max * sizeof(float) * cb->nc, cudaMemcpyDeviceToDevice);
 	}

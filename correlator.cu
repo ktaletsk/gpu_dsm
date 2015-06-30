@@ -55,8 +55,7 @@ c_correlator::~c_correlator() {
 	cudaFreeArray(d_corr_function);
 }
 
-__global__ __launch_bounds__(ran_tpd)
-void corr_function_calc_kernel(int *d_time_ticks) {
+__global__ __launch_bounds__(ran_tpd) void corr_function_calc_kernel(int *d_time_ticks) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x; //i- entanglement index
 	if (i >= d_corr_nc)
 		return;
@@ -93,9 +92,7 @@ void c_correlator::calc(int *t, float *x, int np) {
 	corr_temp = nc;
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_corr_nc, &(corr_temp), sizeof(int)));
 	corr_temp = counter;
-	CUDA_SAFE_CALL(
-			cudaMemcpyToSymbol(d_correlator_counter, &(corr_temp),
-					sizeof(int)));
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_counter, &(corr_temp),sizeof(int)));
 	//correlation calculation
 // 	int *ti=new int[np];
 // 	for(int j=0;j<np;j++) {ti[j]=int (t[j]);}
@@ -116,14 +113,20 @@ void c_correlator::calc(int *t, float *x, int np) {
 	cudaMemcpy2DFromArray(x_buf, sizeof(float) * max_corr_function_length,
 			d_corr_function, 0, 0, sizeof(float) * max_corr_function_length, nc,
 			cudaMemcpyDeviceToHost);
+
+	int error = 0;
+
 	float *sum_x = new float[max_corr_function_length];
 	for (int j = 0; j < np; j++) {
 		sum_x[j] = 0.0;
 		for (int i = 0; i < nc; i++) {
 			sum_x[j] += x_buf[i * max_corr_function_length + j];
+			if (x_buf[i * max_corr_function_length + j] != x_buf[i * max_corr_function_length + j])
+				error ++;
 		}
 		x[j] = sum_x[j] / nc;
 	}
 	delete[] x_buf;
 	delete[] sum_x;
+	cout << "\n" << error << " NaNs\n";
 }

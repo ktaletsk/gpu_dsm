@@ -31,6 +31,8 @@ void random_textures_fill(int n_cha);
 
 using namespace std;
 
+extern cudaArray* d_gamma_table;
+
 #define chains_per_call 32000
 //MAX surface size is 32768
 
@@ -95,7 +97,7 @@ void host_chains_init() {
 	universal_time=0.0;
 	for (int i = 0; i < N_cha; i++) {
 		sstrentp ptr = chain_index(i);
-		chain_init(&(chain_heads[i]), ptr, NK, z_max);
+		chain_init(&(chain_heads[i]), ptr, NK, z_max, PD_flag);
 	}
 	cout << "done\n";
 }
@@ -255,6 +257,8 @@ void gpu_clean() {
 
 	cudaFree(d_random_gens);
 	cudaFree(d_random_gens2);
+
+	cudaFree(d_gamma_table);
 	cout << "done.\n";
 
 }
@@ -278,8 +282,8 @@ void random_textures_fill(int n_cha) {
 	cudaDeviceSynchronize();
 
 	int taucd_gauss_count = uniformrandom_count;
-	gr_fill_surface_taucd_gauss_rand(d_random_gens2, n_cha, taucd_gauss_count,false, d_taucd_gauss_rand_CD); //Set array with random numbers
-	gr_fill_surface_taucd_gauss_rand(d_random_gens2, n_cha, taucd_gauss_count, true, d_taucd_gauss_rand_SD);
+	gr_fill_surface_taucd_gauss_rand(d_random_gens2, n_cha, taucd_gauss_count, false, d_taucd_gauss_rand_CD); //Set array with random numbers
+	gr_fill_surface_taucd_gauss_rand(d_random_gens2, n_cha, taucd_gauss_count, true,  d_taucd_gauss_rand_SD);
 
 	cudaBindTextureToArray(t_uniformrand, d_uniformrand, channelDesc1);
 	cudaBindTextureToArray(t_taucd_gauss_rand_CD, d_taucd_gauss_rand_CD, channelDesc4);
@@ -707,17 +711,14 @@ void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
 
 		for (int i = 0; i < chain_blocks_number; i++) {
 			get_chain_to_device_call_block(&(chain_blocks[i]));
-			cudaMemset(chain_blocks[i].d_correlator_time, 0,
-					sizeof(int) * chain_blocks[i].nc);
+			cudaMemset(chain_blocks[i].d_correlator_time, 0, sizeof(int) * chain_blocks[i].nc);
 			EQ_time_step_call_block(length, &(chain_blocks[i]));
 			chain_blocks[i].corr->counter = last_page_counter;
 		}
 
 		for (int i = 0; i < chain_blocks_number; i++) {
-			chain_blocks[i].corr->calc(&(tint[tick_pointer_page[ip - 1]]),
-					&(x_buf[tick_pointer_page[ip - 1]]), np_last_page);
-			for (int j = tick_pointer_page[ip - 1];
-					j < tick_pointer_page[ip - 1] + np_last_page; j++) {
+			chain_blocks[i].corr->calc(&(tint[tick_pointer_page[ip - 1]]), &(x_buf[tick_pointer_page[ip - 1]]), np_last_page);
+			for (int j = tick_pointer_page[ip - 1]; j < tick_pointer_page[ip - 1] + np_last_page; j++) {
 				x[j] += x_buf[j] * chain_blocks[i].nc / N_cha;
 			}
 		}

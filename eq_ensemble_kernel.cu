@@ -140,6 +140,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 			sum_stress.y -= __fdividef(3.0f * QN1.y * QN1.z, QN1.w);
 			sum_stress.z -= __fdividef(3.0f * QN1.x * QN1.z, QN1.w);
 		}
+
 		surf2Dwrite(sum_stress, s_correlator, 16 * d_correlator_time[i], i);
 		d_correlator_time[i]++;
 		if (d_universal_time+gpu_chain_heads[i].time > d_correlator_time[i] * d_correlator_res){

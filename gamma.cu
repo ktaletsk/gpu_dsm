@@ -1,24 +1,19 @@
-#include <math.h>
+#include "gamma.h"
+
 #define ITMAX 100 //Maximum allowed number of iterations.
 #define EPS 3.0e-7 //Relative accuracy.
 #define FPMIN 1.0e-30 //Number near the smallest representable floating-point number.
 
-#define GAMMATABLESIZE 200000
-#define GAMMATABLECUTOFF 30
+float gamma_table_s[GAMMATABLESIZE];
+float gamma_table_x[GAMMATABLESIZE];
+float temp_gamma_table_x;
+float temp_gamma_table_s;
 
-double gamma_table_s[GAMMATABLESIZE];
-double gamma_table_x[GAMMATABLESIZE];
-double gamma_new_table_x[GAMMATABLESIZE];
-double temp_gamma_table_x;
-double temp_gamma_table_s;
-double step = 0;
-int table_size=0;
-
-double gammp(double a, double x) { //Returns the incomplete gamma function P(a, x).
-	void gcf(double *gammcf, double a, double x, double *gln);
-	void gser(double *gamser, double a, double x, double *gln);
+float gammp(float a, float x) { //Returns the incomplete gamma function P(a, x).
+	void gcf(float *gammcf, float a, float x, float *gln);
+	void gser(float *gamser, float a, float x, float *gln);
 	void nrerror(char error_text[]);
-	double gamser, gammcf, gln;
+	float gamser, gammcf, gln;
 	if (x < 0.0 || a <= 0.0)
 		return -1.0;
 	if (x < (a + 1.0)) { //Use the series representation.
@@ -30,11 +25,11 @@ double gammp(double a, double x) { //Returns the incomplete gamma function P(a, 
 	}
 }
 
-double gammq(double a, double x) { //Returns the incomplete gamma function Q(a, x) ≡ 1 − P(a, x).
-	void gcf(double *gammcf, double a, double x, double *gln);
-	void gser(double *gamser, double a, double x, double *gln);
+float gammq(float a, float x) { //Returns the incomplete gamma function Q(a, x) ≡ 1 − P(a, x).
+	void gcf(float *gammcf, float a, float x, float *gln);
+	void gser(float *gamser, float a, float x, float *gln);
 	void nrerror(char error_text[]);
-	double gamser, gammcf, gln;
+	float gamser, gammcf, gln;
 	if (x < 0.0 || a <= 0.0)
 		return -1.0;
 	if (x < (a + 1.0)) { //Use the series representation
@@ -49,11 +44,11 @@ double gammq(double a, double x) { //Returns the incomplete gamma function Q(a, 
 
 //Returns the incomplete gamma function P(a, x) evaluated by its series representation as gamser.
 //Also returns ln Γ(a) as gln.
-void gser(double *gamser, double a, double x, double *gln) {
-	double gammln(double xx);
+void gser(float *gamser, float a, float x, float *gln) {
+	float gammln(float xx);
 	void nrerror(char error_text[]);
 	int n;
-	double sum, del, ap;
+	float sum, del, ap;
 	*gln = lgamma(a);
 	if (x <= 0.0) {
 		if (x < 0.0)
@@ -78,11 +73,11 @@ void gser(double *gamser, double a, double x, double *gln) {
 
 //Returns the incomplete gamma function Q(a, x) evaluated by its continued fraction representation
 //as gammcf. Also returns ln Γ(a) as gln.
-void gcf(double *gammcf, double a, double x, double *gln) {
-	double gammln(double xx);
+void gcf(float *gammcf, float a, float x, float *gln) {
+	float gammln(float xx);
 	void nrerror(char error_text[]);
 	int i;
-	double an, b, c, d, del, h;
+	float an, b, c, d, del, h;
 	*gln = lgamma(a);
 	b = x + 1.0 - a; //Set up for evaluating continued fraction by modified Lentz’s method (§5.2) with b0 = 0.
 	c = 1.0 / FPMIN;
@@ -106,7 +101,7 @@ void gcf(double *gammcf, double a, double x, double *gln) {
 	*gammcf = exp(-x + a * log(x) - (*gln)) * h; //Put factors in front.
 }
 
-void gamma (double a, double b) {
+void make_gamma_table (float a, float b) {
 	for (int i = 0; i < GAMMATABLESIZE; i++) {
 		gamma_table_x[i] = i * 1.0f * GAMMATABLECUTOFF / (GAMMATABLESIZE - 1);
 		gamma_table_s[i] = gammp((a + 2) / b, pow(gamma_table_x[i], b));
@@ -125,7 +120,7 @@ void gamma (double a, double b) {
 			j++;
 		}
 	}
-	temp_gamma_table_x=gamma_new_table_x[j];
+	temp_gamma_table_x=gamma_new_table_x[j-1];
 	while (j<1/step) {
 		//Add new point
 		temp_gamma_table_x+=1.0f * GAMMATABLECUTOFF / (GAMMATABLESIZE - 1);
