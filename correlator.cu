@@ -114,19 +114,19 @@ void c_correlator::calc(int *t, float *x, int np) {
 			d_corr_function, 0, 0, sizeof(float) * max_corr_function_length, nc,
 			cudaMemcpyDeviceToHost);
 
-	int error = 0;
+//	int error = 0;
 
 	float *sum_x = new float[max_corr_function_length];
 	for (int j = 0; j < np; j++) {
 		sum_x[j] = 0.0;
 		for (int i = 0; i < nc; i++) {
 			sum_x[j] += x_buf[i * max_corr_function_length + j];
-			if (x_buf[i * max_corr_function_length + j] != x_buf[i * max_corr_function_length + j])
-				error ++;
+//			if (x_buf[i * max_corr_function_length + j] != x_buf[i * max_corr_function_length + j])
+//				error ++;
 		}
 		x[j] = sum_x[j] / nc;
 	}
 	delete[] x_buf;
 	delete[] sum_x;
-	cout << "\n" << error << " NaNs\n";
+//	cout << "\n" << error << " NaNs\n";
 }

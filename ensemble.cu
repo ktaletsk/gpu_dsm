@@ -327,8 +327,9 @@ void save_to_file(char *filename) {
 		cout << "file error\n";
 }
 
-void save_Z_distribution_to_file(char *filename, bool cumulative) {
-	ofstream file(filename, ios::out);
+void save_Z_distribution_to_file(string filename /*char *filename*/, bool cumulative) {
+
+	ofstream file(filename.c_str(), ios::out);
 	if (file.is_open()) {
 //		file<<"Number of chains: "<<N_cha<<"\n";
 
@@ -360,8 +361,8 @@ void save_Z_distribution_to_file(char *filename, bool cumulative) {
 		cout << "file error\n";
 }
 
-void save_N_distribution_to_file(char *filename, bool cumulative) {
-	ofstream file(filename, ios::out);
+void save_N_distribution_to_file(string filename, bool cumulative) {
+	ofstream file(filename.c_str(), ios::out);
 	if (file.is_open()) {
 		//Search for maximum and minimum of N across all strands in all chains
 		int Nmin = chain_index(0).QN[0].w;
@@ -403,8 +404,8 @@ int compare(const void * a, const void * b) {
 	return (fa > fb) - (fa < fb);
 }
 
-void save_Q_distribution_to_file(char* filename, bool cumulative) {
-	ofstream file(filename, ios::out);
+void save_Q_distribution_to_file(string filename, bool cumulative) {
+	ofstream file(filename.c_str(), ios::out);
 	if (file.is_open()) {
 		//Search for maximal and minimal value of |Q| across all strands in all chains
 
