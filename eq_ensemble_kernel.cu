@@ -1,4 +1,4 @@
-// Copyright 2014 Marat Andreev
+// Copyright 2015 Marat Andreev, Konstantin Taletskiy, Maria Katzarova
 // 
 // This file is part of gpu_dsm.
 // 
@@ -47,7 +47,7 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent
 	else
 		QN = tex2D(t_a_QN, make_offset(i, oft), j); // all access to strents is done through two operations: first texture fetch
 	float tcd;
-	if (dCD_flag) {//If constraint dynamics is enabled
+	if (d_CD_flag) {//If constraint dynamics is enabled
 		if (fetch_new_strent(i, oft))
 			tcd = d_new_tau_CD[j];
 		else
@@ -98,11 +98,11 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent
 		}
 // 	    surf2Dwrite(wsh.x,s_W_SD_pm,8*i,j);//TODO funny bug i have no idea but doesn't work other way
 // 	    surf2Dwrite(wsh.y,s_W_SD_pm,8*i+4,j);//seems to work with float4 below
-		surf2Dwrite(wsh.x + wsh.y + dCD_flag * (tcd + d_CD_create_prefact * (QN.w - 1.0f)), s_sum_W, 4 * i, j);
+		surf2Dwrite(wsh.x + wsh.y + d_CD_flag * (tcd + d_CD_create_prefact * (QN.w - 1.0f)), s_sum_W, 4 * i, j);
 	}
 }
 
-__global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag, float next_sync_time, int *d_offset, float4 *d_new_strent, float *d_new_tau_CD, int *d_correlator_time, int *rand_used, int *tau_CD_used) {
+__global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag, float next_sync_time, int *d_offset, float4 *d_new_strent, float *d_new_tau_CD, int *d_correlator_time, int *rand_used, int *tau_CD_used_CD, int *tau_CD_used_SD) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x; //Chain index
 
 	if (i >= dn_cha_per_call)
@@ -140,6 +140,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 			sum_stress.y -= __fdividef(3.0f * QN1.y * QN1.z, QN1.w);
 			sum_stress.z -= __fdividef(3.0f * QN1.x * QN1.z, QN1.w);
 		}
+
 		surf2Dwrite(sum_stress, s_correlator, 16 * d_correlator_time[i], i);
 		d_correlator_time[i]++;
 		if (d_universal_time+gpu_chain_heads[i].time > d_correlator_time[i] * d_correlator_res){
@@ -176,7 +177,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 	else
 		QNtail = tex2D(t_a_QN, make_offset(tz - 1, oft), i);
 
-	float W_CD_c_z = dCD_flag * d_CD_create_prefact * (QNtail.w - 1.0f); //Create CD on the last strand
+	float W_CD_c_z = d_CD_flag * d_CD_create_prefact * (QNtail.w - 1.0f); //Create CD on the last strand
 
 	if (tz == 1) {
 		W_SD_c_1 = __fdividef(1.0f, (dBe * dnk));
@@ -253,27 +254,22 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 		// 1. CDd (destruction by constraint dynamics)
 
 		float wcdd;
-		if (dCD_flag) {
-			wcdd = tex2D(t_a_tCD, make_offset(j, oft), i); //Read CD
+		if (d_CD_flag) {
+			wcdd = tex2D(t_a_tCD, make_offset(j, oft), i); //Read tau_CD
 			if (fetch_new_strent(j, oft))
 				wcdd = new_tCD;
 		} else
 			wcdd = 0;
 		if (pr < wcdd) {
-
-			float4 temp = make_float4(QN1.x + QN2.x, QN1.y + QN2.y,
-					QN1.z + QN2.z, QN1.w + QN2.w);
-			if ((j == tz - 2) || (j == 0)) {
+			float4 temp = make_float4(QN1.x + QN2.x, QN1.y + QN2.y, QN1.z + QN2.z, QN1.w + QN2.w);
+			if ((j == tz - 2) || (j == 0))
 				temp = make_float4(0.0f, 0.0f, 0.0f, QN1.w + QN2.w);
-			}
 			surf2Dwrite(temp, s_b_QN, 16 * (j + 1), i);
 			d_offset[i] = offset_code(j, +1);
 			gpu_chain_heads[i].Z--;
-
 			return;
-		} else {
+		} else
 			pr -= wcdd;
-		}
 
 		// 2. SD shift
 
@@ -320,19 +316,19 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 			surf2Dwrite(QN1, s_b_QN, 16 * j, i);
 			surf2Dwrite(QN2, s_b_QN, 16 * (j + 1), i);
 			return;
-		} else {
+		} else
 			pr -= twsh.x + twsh.y;
-		}
 
 		// 3. CDc (creation by constraint dynamics in the middle)
-		float wcdc = dCD_flag * d_CD_create_prefact * (QN1.w - 1.0f); //
+
+		float wcdc = d_CD_flag * d_CD_create_prefact * (QN1.w - 1.0f); //
 		if (pr < wcdc) {
 			if (tz == d_z_max)
 				return;		// possible detail balance issue
-			float4 temp = tex2D(t_taucd_gauss_rand, tau_CD_used[i], i);
-			tau_CD_used[i]++;
+			float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used_CD[i], i);
+			tau_CD_used_CD[i]++;
 			gpu_chain_heads[i].Z++;
-			d_new_tau_CD[i] = d_tau_CD_f_d_t(temp.w);//__fdividef(1.0f,d_tau_d);
+			d_new_tau_CD[i] = temp.w;//__fdividef(1.0f,d_tau_d);
 			float newn = floorf(0.5f + __fdividef(pr * (QN1.w - 2.0f), wcdc)) + 1.0f;
 			if (j == 0) {
 				temp.w = QN1.w - newn;
@@ -363,9 +359,8 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 		} else {
 			pr -= wcdc;
 		}
-	} else {
+	} else
 		pr -= tpr;
-	}
 
 	//None of the processes in the middle of the chain happened
 	//Now check processes on the left end
@@ -374,15 +369,12 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 	if (pr < W_CD_c_z) {
 		if (tz == d_z_max)
 			return;	// possible detail balance issue
-
-		float4 temp = tex2D(t_taucd_gauss_rand, tau_CD_used[i], i);
-		tau_CD_used[i]++;
+		float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used_CD[i], i);
+		tau_CD_used_CD[i]++;
 		gpu_chain_heads[i].Z++;
-		d_new_tau_CD[i] = d_tau_CD_f_d_t(temp.w);	//__fdividef(1.0f,d_tau_d);
+		d_new_tau_CD[i] = temp.w;	//__fdividef(1.0f,d_tau_d);
 
 		float newn = 1.0f + floorf(0.5f + __fdividef(pr * (QNtail.w - 2.0f), W_CD_c_z));
-//		floorf(__fdividef(pr*(QNtail.w-1.0f),W_CD_c_z))+1.0f;
-// 	    gpu_chain_heads[i].dummy=1.0f+__fdiv_rn(pr*(QNtail.w-2.0f),W_CD_c_z);
 
 		temp.w = newn;
 		float sigma = (tz == 1) ? 0.0f : __fsqrt_rn(__fdividef(temp.w, 3.0f));
@@ -402,11 +394,11 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 	if (pr < W_SD_c_1 + W_SD_c_z) {
 		if (tz == d_z_max)
 			return;	// possible detail balance issue
-		float4 temp = tex2D(t_taucd_gauss_rand, tau_CD_used[i], i);
-		tau_CD_used[i]++;
+		float4 temp = tex2D(t_taucd_gauss_rand_SD, tau_CD_used_SD[i], i);
+		tau_CD_used_SD[i]++;
 		gpu_chain_heads[i].Z++;
 //		d_new_tau_CD[i]=__fdividef(1.0f,d_tau_d);
-		d_new_tau_CD[i] = d_tau_CD_f_t(temp.w);
+		d_new_tau_CD[i] = temp.w;
 
 		if (pr < W_SD_c_1) {
 			temp.w = QNhead.w - 1.0f;
@@ -434,28 +426,21 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 
 	}
 
-	// 6. Destruction by constraint dynamics
+	// 6. Destruction by sliding dynamics
+
 	if (pr < W_SD_d_1 + W_SD_d_z) {	//to delete entanglement
-	// update cell and neigbours
-	//clear W_sd
-	//
-	//form a list of free cell
+	// update cell and neighbors
+	// clear W_sd
+	// form a list of free cell
 		gpu_chain_heads[i].Z--;
 		if (pr < W_SD_d_1) {
-			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNheadn.w + 1.0f), s_b_QN,
-					16 * 1, i);
+			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNheadn.w + 1.0f), s_b_QN, 16 * 1, i);
 			d_offset[i] = offset_code(0, +1);
 		} else {
-			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNtailp.w + 1.0f), s_b_QN,
-					16 * (tz - 2), i);
+			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNtailp.w + 1.0f), s_b_QN, 16 * (tz - 2), i);
 			d_offset[i] = offset_code(tz, +1);
-
 		}
 		return;
-
-	} else {
+	} else
 		pr -= W_SD_d_1 + W_SD_d_z;
-	}
-
 }
-

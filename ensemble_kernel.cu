@@ -1,4 +1,4 @@
- // Copyright 2014 Marat Andreev
+// Copyright 2015 Marat Andreev, Konstantin Taletskiy, Maria Katzarova
 // 
 // This file is part of gpu_dsm.
 // 
@@ -53,10 +53,8 @@ __constant__ int dn_cha_per_call; //number of chains in this call. cannot be big
 __constant__ float d_kappa_xx, d_kappa_xy, d_kappa_xz, d_kappa_yx, d_kappa_yy,d_kappa_yz, d_kappa_zx, d_kappa_zy, d_kappa_zz;
 
 //CD constants
-__constant__ int dCD_flag;
+__constant__ int d_CD_flag;
 __constant__ float d_CD_create_prefact;
-__constant__ float d_At, d_Ct, d_Dt, d_Adt, d_Bdt, d_Cdt, d_Ddt;
-__constant__ float d_g, d_alpha, d_tau_0, d_tau_max, d_tau_d, d_tau_d_inv;
 
 //Next variables actually declared in ensemble_call_block.h
 //    float *d_dt; // time step size from prevous time step. used for appling deformation
@@ -111,14 +109,6 @@ __device__   __forceinline__ float4 kappa(const float4 QN, const float dt) {//Qx
 			QN.z + dt * d_kappa_zx * QN.x + dt * d_kappa_zy * QN.y + dt * d_kappa_zz * QN.z, QN.w);
 }
 
-//lifetime generation from uniform random number p
-__device__ __forceinline__ float d_tau_CD_f_d_t(float p) {
-	return p < d_Bdt ? __powf(p * d_Adt + d_Ddt, d_Cdt) : d_tau_d_inv;
-}
-__device__ __forceinline__ float d_tau_CD_f_t(float p) {
-	return p < 1.0f - d_g ? __powf(p * d_At + d_Dt, d_Ct) : d_tau_d_inv;
-}
-
 //The entanglement parallel part of the code
 //2D kernel: i- entanglement index j - chain index
 __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void strent_kernel(chain_head* gpu_chain_heads, float *tdt, int *d_offset, float4 *d_new_strent, float *d_new_tau_CD) {    //TODO add reach flag
@@ -135,7 +125,7 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void strent_ke
 	if (fetch_new_strent(i, oft))
 		QN = d_new_strent[j]; //second check if strent created last time step should go here
 	float tcd;
-	if (dCD_flag) {
+	if (d_CD_flag) {
 		tcd = tex2D(t_a_tCD, make_offset(i, oft), j); ////////////////
 		if (fetch_new_strent(i, oft))
 			tcd = d_new_tau_CD[j];
@@ -188,11 +178,7 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void strent_ke
 					* __expf(-Q * sig1 + Q2 * sig2);
 		}
 		//write probabilities into temp array(surface)
-		surf2Dwrite(
-				wsh.x + wsh.y
-						+ dCD_flag
-								* (tcd + d_CD_create_prefact * (QN.w - 1.0f)),
-				s_sum_W, 4 * i, j); //sum
+		surf2Dwrite(wsh.x + wsh.y+ d_CD_flag * (tcd + d_CD_create_prefact * (QN.w - 1.0f)), s_sum_W, 4 * i, j); //sum
 	}
 	//write updated chain conformation
 	surf2Dwrite(QN, s_b_QN, 16 * i, j);
@@ -200,9 +186,7 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void strent_ke
 }
 
 __global__ __launch_bounds__(tpb_chain_kernel)
-void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
-		float next_sync_time, int *d_offset, float4 *d_new_strent,
-		float *d_new_tau_CD, int *rand_used, int *tau_CD_used) {
+void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag, float next_sync_time, int *d_offset, float4 *d_new_strent, float *d_new_tau_CD, int *rand_used, int *tau_CD_used_CD, int *tau_CD_used_SD) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 
 	if (i >= dn_cha_per_call)
@@ -321,7 +305,7 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
 
 		// first we check if CDd will happen
 		float wcdd;
-		if (dCD_flag) {
+		if (d_CD_flag) {
 			wcdd = tex2D(t_a_tCD, make_offset(j, oft), i);    //////////////////
 			if (fetch_new_strent(j, oft))
 				wcdd = new_tCD;
@@ -396,19 +380,19 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
 		} else {
 			pr -= twsh.x + twsh.y;
 		}
-		//last we check for CDc
+
+		// 3. CDc (creation by constraint dynamics in the middle)
+
 		float wcdc = d_CD_create_prefact * (QN1.w - 1.0f);
 		if (pr < wcdc) {
 			if (tz == d_z_max)
 				return;		// possible detail balance issue
-			float4 temp = tex2D(t_taucd_gauss_rand, tau_CD_used[i], i);
-			tau_CD_used[i]++;
+			float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used_CD[i], i);
+			tau_CD_used_CD[i]++;
 			gpu_chain_heads[i].Z++;
-			d_new_tau_CD[i] = d_tau_CD_f_d_t(temp.w);//__fdividef(1.0f,d_tau_d);
-			float newn = floorf(0.5f + __fdividef(pr * (QN1.w - 2.0f), wcdc))
-					+ 1.0f;
+			d_new_tau_CD[i] = temp.w;//__fdividef(1.0f,d_tau_d);
+			float newn = floorf(0.5f + __fdividef(pr * (QN1.w - 2.0f), wcdc)) + 1.0f;
 			if (j == 0) {
-
 				temp.w = QN1.w - newn;
 				float sigma = __fsqrt_rn(__fdividef(temp.w, 3.0f));
 				temp.x *= sigma;
@@ -417,13 +401,11 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
 				surf2Dwrite(temp, s_b_QN, 16 * 0, i);
 				d_offset[i] = offset_code(0, -1);
 				d_new_strent[i] = make_float4(0.0f, 0.0f, 0.0f, newn);
-
 				return;
 			}
 
 			temp.w = newn;
-			float sigma = __fsqrt_rn(
-					__fdividef(newn * (QN1.w - newn), 3.0f * QN1.w));
+			float sigma = __fsqrt_rn(__fdividef(newn * (QN1.w - newn), 3.0f * QN1.w));
 			float ration = __fdividef(newn, QN1.w);
 			temp.x *= sigma;
 			temp.y *= sigma;
@@ -431,9 +413,7 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
 			temp.x += QN1.x * ration;
 			temp.y += QN1.y * ration;
 			temp.z += QN1.z * ration;
-			surf2Dwrite(
-					make_float4(QN1.x - temp.x, QN1.y - temp.y, QN1.z - temp.z,
-							QN1.w - newn), s_b_QN, 16 * j, i);
+			surf2Dwrite(make_float4(QN1.x - temp.x, QN1.y - temp.y, QN1.z - temp.z, QN1.w - newn), s_b_QN, 16 * j, i);
 			d_offset[i] = offset_code(j, -1);
 			d_new_strent[i] = temp;
 			return;
@@ -451,10 +431,10 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
 		if (tz == d_z_max)
 			return;	// possible detail balance issue
 
-		float4 temp = tex2D(t_taucd_gauss_rand, tau_CD_used[i], i);
-		tau_CD_used[i]++;
+		float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used_CD[i], i);
+		tau_CD_used_CD[i]++;
 		gpu_chain_heads[i].Z++;
-		d_new_tau_CD[i] = d_tau_CD_f_d_t(temp.w);	//__fdividef(1.0f,d_tau_d);
+		d_new_tau_CD[i] = temp.w;	//__fdividef(1.0f,d_tau_d);
 
 		float newn = floorf(0.5f + __fdividef(pr * (QNtail.w - 2.0f), W_CD_c_z))
 				+ 1.0f;
@@ -478,11 +458,11 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
 	if (pr < W_SD_c_1 + W_SD_c_z) {
 		if (tz == d_z_max)
 			return;	// possible detail balance issue
-		float4 temp = tex2D(t_taucd_gauss_rand, tau_CD_used[i], i);
-		tau_CD_used[i]++;
+		float4 temp = tex2D(t_taucd_gauss_rand_SD, tau_CD_used_SD[i], i);
+		tau_CD_used_SD[i]++;
 		gpu_chain_heads[i].Z++;
 // 	d_new_tau_CD[i]=__fdividef(1.0f,d_tau_d);
-		d_new_tau_CD[i] = d_tau_CD_f_t(temp.w);
+		d_new_tau_CD[i] = temp.w;
 
 		if (pr < W_SD_c_1) {
 			temp.w = QNhead.w - 1.0f;
@@ -496,8 +476,7 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
 			d_new_strent[i] = make_float4(0.0f, 0.0f, 0.0f, 1.0f);
 		} else {
 			temp.w = QNtail.w - 1.0f;
-			float sigma =
-					(tz == 1) ? 0.0f : __fsqrt_rn(__fdividef(temp.w, 3.0f));
+			float sigma = (tz == 1) ? 0.0f : __fsqrt_rn(__fdividef(temp.w, 3.0f));
 			temp.x *= sigma;
 			temp.y *= sigma;
 			temp.z *= sigma;
@@ -519,21 +498,15 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
 	//form a list of free cell
 		gpu_chain_heads[i].Z--;
 		if (pr < W_SD_d_1) {
-			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNheadn.w + 1.0f), s_b_QN,
-					16 * 1, i);
+			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNheadn.w + 1.0f), s_b_QN, 16 * 1, i);
 			d_offset[i] = offset_code(0, +1);
 		} else {
-			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNtailp.w + 1.0f), s_b_QN,
-					16 * (tz - 2), i);
+			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNtailp.w + 1.0f), s_b_QN, 16 * (tz - 2), i);
 			d_offset[i] = offset_code(tz, +1);
-
 		}
 		return;
-
-	} else {
+	} else
 		pr -= W_SD_d_1 + W_SD_d_z;
-	}
-
 }
 
 __global__ __launch_bounds__(tpb_chain_kernel) //stress calculation
@@ -561,8 +534,7 @@ void stress_calc(chain_head* gpu_chain_heads, float *tdt, int *d_offset,
 		sum_stress.w -= __fdividef(3.0f * QN1.x * QN1.y, QN1.w);
 		sum_stress2.x -= __fdividef(3.0f * QN1.y * QN1.z, QN1.w);
 		sum_stress2.y -= __fdividef(3.0f * QN1.x * QN1.z, QN1.w);
-		sum_stress2.z += __fsqrt_rn(
-				QN1.x * QN1.x + QN1.y * QN1.y + QN1.z * QN1.z);
+		sum_stress2.z += __fsqrt_rn(QN1.x * QN1.x + QN1.y * QN1.y + QN1.z * QN1.z);
 		ree_x += QN1.x;
 		ree_y += QN1.y;
 		ree_z += QN1.z;

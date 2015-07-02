@@ -1,4 +1,4 @@
-// Copyright 2014 Marat Andreev
+// Copyright 2015 Marat Andreev, Konstantin Taletskiy, Maria Katzarova
 // 
 // This file is part of gpu_dsm.
 // 
@@ -25,7 +25,8 @@
 // see comments in ensemble.h
 
   texture<float, 2, cudaReadModeElementType> t_uniformrand;	// random numbers uniformly distributed
-  texture<float4, 2, cudaReadModeElementType> t_taucd_gauss_rand; // tauCD lifetimes and normally distributed random numbers (x,y,z)
+  texture<float4, 2, cudaReadModeElementType> t_taucd_gauss_rand_CD; // tauCD lifetimes and normally distributed random numbers (x,y,z), created by CD
+  texture<float4, 2, cudaReadModeElementType> t_taucd_gauss_rand_SD; // for new entaglments created by SD
   surface<void,2> rand_buffer;//temp array for random numbers
 
   //TODO replace a/b with source/dest

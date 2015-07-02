@@ -1,4 +1,4 @@
-// Copyright 2014 Marat Andreev
+// Copyright 2015 Marat Andreev, Konstantin Taletskiy, Maria Katzarova
 // 
 // This file is part of gpu_dsm.
 // 
@@ -25,8 +25,10 @@
 #include "timer.h"
 #include "detailed_balance.h"
 #include "job_ID.h"
-
+extern float a,b,mp,Mk;
+extern void make_gamma_table (float a, float b);
 using namespace std;
+
 
 Ran eran(1);
 p_cd *pcd;
@@ -42,6 +44,7 @@ int main(int narg, char** arg) {
 	int G_flag = 0;
 	double simulation_time;
 	double t_step_size;
+
 	cout << '\n';
 
 	//Processing command line parameters
@@ -91,7 +94,9 @@ int main(int narg, char** arg) {
 	in >> NK;
 	in >> N_cha;
 	in >> kxx >> kxy >> kxz >> kyx >> kyy >> kyz >> kzx >> kzy >> kzz;
-	in >> CD_flag;	//CD_toggle
+	in >> CD_flag;	//Computation mode: 0-only SD / 1-SD+CD
+	in >> PD_flag;
+
 	//int int_t;
 	//in>>int_t;//TODO SD off not implemented
 	in >> G_flag;
@@ -121,6 +126,16 @@ int main(int narg, char** arg) {
 
 	//Determine if there is a flow
 	bool flow = (kxx != 0.0) || (kxy != 0.0) || (kxz != 0.0) || (kyx != 0.0) || (kyy != 0.0) || (kyz != 0.0) || (kzx != 0.0) || (kzy != 0.0) || (kzz != 0.0);
+
+	if (PD_flag) {
+		ifstream in2;
+		in2.open("polydisp.dat");
+		in2 >> a;
+		in2 >> b;
+		in2 >> mp;
+		in2 >> Mk;
+		make_gamma_table (a, b);
+	}
 
 	//Initialize random
 	eran.seed(job_ID * N_cha);
@@ -162,23 +177,14 @@ int main(int narg, char** arg) {
 		if (G_flag) {
 			cout << "G(t) calc...\n";
 			cout.flush();
-			ofstream G_file;
-			//cout<<filename_ID("tau")<<'\n';
-			G_file.open(filename_ID("G"));
 			float *t, *x;
 			int np;
 			timer.start();
 			gpu_Gt_calc(t_step_size, simulation_time, t, x, np);
 			cout << "G(t) calc done\n";
-			for (int j = 0; j < np; j++) {
-				cout << t[j] << '\t' << x[j] << '\n';
-				G_file << t[j] << '\t' << x[j] << '\n';
-			}
 			timer.stop();
-			G_file.close();
 		} else {
-			cout
-					<< "There are no flow and no equilibrium quantity to calculate. Exiting... \n";
+			cout<< "There are no flow and no equilibrium quantity to calculate. Exiting... \n";
 		}
 	}
 

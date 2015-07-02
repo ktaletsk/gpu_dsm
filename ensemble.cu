@@ -1,4 +1,4 @@
-// Copyright 2014 Marat Andreev
+// Copyright 2015 Marat Andreev, Konstantin Taletskiy, Maria Katzarova
 // 
 // This file is part of gpu_dsm.
 // 
@@ -23,6 +23,7 @@
 #include "cudautil.h"
 #include "cuda_call.h"
 #include "textures_surfaces.h"
+extern char * filename_ID(string filename);
 
 void random_textures_refill(int n_cha);
 void random_textures_fill(int n_cha);
@@ -30,6 +31,8 @@ void random_textures_fill(int n_cha);
 #include "ensemble_call_block.cu"
 
 using namespace std;
+
+extern cudaArray* d_gamma_table;
 
 #define chains_per_call 32000
 //MAX surface size is 32768
@@ -59,6 +62,7 @@ int NK;
 int z_max;
 float Be;
 float kxx, kxy, kxz, kyx, kyy, kyz, kzx, kzy, kzz;
+bool PD_flag=0;
 
 bool dbug = false;	//true;
 //bool *reach_time_flag=NULL;
@@ -94,7 +98,7 @@ void host_chains_init() {
 	universal_time=0.0;
 	for (int i = 0; i < N_cha; i++) {
 		sstrentp ptr = chain_index(i);
-		chain_init(&(chain_heads[i]), ptr, NK, z_max);
+		chain_init(&(chain_heads[i]), ptr, NK, z_max, PD_flag);
 	}
 	cout << "done\n";
 }
@@ -118,30 +122,8 @@ void gpu_init(int seed) {
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_kappa_zz, &kzz, sizeof(float)));
 
 	float cdtemp = pcd->W_CD_destroy_aver() / Be;
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(dCD_flag, &CD_flag, sizeof(int)));
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_CD_flag, &CD_flag, sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_CD_create_prefact, &cdtemp, sizeof(float)));
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_g, &(pcd->g), sizeof(float)));
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_alpha, &(pcd->alpha), sizeof(float)));
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_0, &(pcd->tau_0), sizeof(float)));
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_max, &(pcd->tau_max), sizeof(float)));
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_d, &(pcd->tau_d), sizeof(float)));
-	cdtemp = 1.0f / pcd->tau_d;
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_d_inv, &(cdtemp), sizeof(float)));
-
-	cdtemp = 1.0f / pcd->At;
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_At, &cdtemp, sizeof(float)));
-	cdtemp = powf(pcd->tau_0, pcd->alpha);
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Dt, &cdtemp, sizeof(float)));
-	cdtemp = -1.0f / pcd->alpha;
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Ct, &cdtemp, sizeof(float)));
-	cdtemp = pcd->normdt / pcd->Adt;
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Adt, &cdtemp, sizeof(float)));
-	cdtemp = pcd->Bdt / pcd->normdt;
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Bdt, &cdtemp, sizeof(float)));
-	cdtemp = -1.0f / (pcd->alpha - 1.0f);
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Cdt, &cdtemp, sizeof(float)));
-	cdtemp = powf(pcd->tau_0, pcd->alpha - 1.0f);
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Ddt, &(cdtemp), sizeof(float)));
 
 	cout << " device constants done\n";
 
@@ -268,11 +250,16 @@ void gpu_clean() {
 	cudaFreeArray(d_stress);
 
 	cudaFreeArray(d_uniformrand);
-	cudaFreeArray(d_taucd_gauss_rand);
-	cudaFree(d_tau_CD_used);
+	cudaFreeArray(d_taucd_gauss_rand_CD);
+	cudaFreeArray(d_taucd_gauss_rand_SD);
+
+	cudaFree(d_tau_CD_used_SD);
+	cudaFree(d_tau_CD_used_CD);
 
 	cudaFree(d_random_gens);
 	cudaFree(d_random_gens2);
+
+	cudaFree(d_gamma_table);
 	cout << "done.\n";
 
 }
@@ -281,22 +268,27 @@ void random_textures_fill(int n_cha) {
 	cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
 	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
 
-	cudaMallocArray(&(d_taucd_gauss_rand), &channelDesc4, uniformrandom_count, n_cha, cudaArraySurfaceLoadStore);
+	cudaMallocArray(&(d_taucd_gauss_rand_CD), &channelDesc4, uniformrandom_count, n_cha, cudaArraySurfaceLoadStore);
+	cudaMallocArray(&(d_taucd_gauss_rand_SD), &channelDesc4, uniformrandom_count, n_cha, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&(d_uniformrand), &channelDesc1, uniformrandom_count, n_cha, cudaArraySurfaceLoadStore);
 
 	cudaMalloc((void**) &d_rand_used, sizeof(int) * n_cha);
 	cudaMemset(d_rand_used, 0, sizeof(int) * n_cha);
-	cudaMalloc((void**) &d_tau_CD_used, sizeof(int) * n_cha);
-	cudaMemset(d_tau_CD_used, 0, sizeof(int) * n_cha);
+	cudaMalloc((void**) &d_tau_CD_used_CD, sizeof(int) * n_cha);
+	cudaMalloc((void**) &d_tau_CD_used_SD, sizeof(int) * n_cha);
+	cudaMemset(d_tau_CD_used_CD, 0, sizeof(int) * n_cha);
+	cudaMemset(d_tau_CD_used_SD, 0, sizeof(int) * n_cha);
 
 	gr_fill_surface_uniformrand(d_random_gens, n_cha, uniformrandom_count, d_uniformrand);
 	cudaDeviceSynchronize();
 
 	int taucd_gauss_count = uniformrandom_count;
-	gr_fill_surface_taucd_gauss_rand(d_random_gens2, n_cha, taucd_gauss_count, d_taucd_gauss_rand);
+	gr_fill_surface_taucd_gauss_rand(d_random_gens2, n_cha, taucd_gauss_count, false, d_taucd_gauss_rand_CD); //Set array with random numbers
+	gr_fill_surface_taucd_gauss_rand(d_random_gens2, n_cha, taucd_gauss_count, true,  d_taucd_gauss_rand_SD);
 
 	cudaBindTextureToArray(t_uniformrand, d_uniformrand, channelDesc1);
-	cudaBindTextureToArray(t_taucd_gauss_rand, d_taucd_gauss_rand, channelDesc4);
+	cudaBindTextureToArray(t_taucd_gauss_rand_CD, d_taucd_gauss_rand_CD, channelDesc4);
+	cudaBindTextureToArray(t_taucd_gauss_rand_SD, d_taucd_gauss_rand_SD, channelDesc4);
 }
 
 void random_textures_refill(int n_cha) {
@@ -313,10 +305,13 @@ void random_textures_refill(int n_cha) {
 	cudaDeviceSynchronize();
 
 	//tau_cd gauss 3d vector
-	cudaUnbindTexture(t_taucd_gauss_rand);
-	gr_refill_surface_taucd_gauss_rand(d_random_gens2, n_cha, d_tau_CD_used, d_taucd_gauss_rand);
-	cudaMemset(d_tau_CD_used, 0, sizeof(int) * n_cha);
-	cudaBindTextureToArray(t_taucd_gauss_rand, d_taucd_gauss_rand, channelDesc4);
+	cudaUnbindTexture(t_taucd_gauss_rand_CD);
+	gr_refill_surface_taucd_gauss_rand(d_random_gens2, n_cha, d_tau_CD_used_CD,false, d_taucd_gauss_rand_CD);
+	gr_refill_surface_taucd_gauss_rand(d_random_gens2, n_cha, d_tau_CD_used_SD, true, d_taucd_gauss_rand_SD);
+	cudaMemset(d_tau_CD_used_CD, 0, sizeof(int) * n_cha);
+	cudaMemset(d_tau_CD_used_SD, 0, sizeof(int) * n_cha);
+	cudaBindTextureToArray(t_taucd_gauss_rand_CD, d_taucd_gauss_rand_CD, channelDesc4);
+	cudaBindTextureToArray(t_taucd_gauss_rand_SD, d_taucd_gauss_rand_SD, channelDesc4);
 	cudaDeviceSynchronize();
 }
 
@@ -333,8 +328,9 @@ void save_to_file(char *filename) {
 		cout << "file error\n";
 }
 
-void save_Z_distribution_to_file(char *filename, bool cumulative) {
-	ofstream file(filename, ios::out);
+void save_Z_distribution_to_file(string filename /*char *filename*/, bool cumulative) {
+
+	ofstream file(filename.c_str(), ios::out);
 	if (file.is_open()) {
 //		file<<"Number of chains: "<<N_cha<<"\n";
 
@@ -366,8 +362,8 @@ void save_Z_distribution_to_file(char *filename, bool cumulative) {
 		cout << "file error\n";
 }
 
-void save_N_distribution_to_file(char *filename, bool cumulative) {
-	ofstream file(filename, ios::out);
+void save_N_distribution_to_file(string filename, bool cumulative) {
+	ofstream file(filename.c_str(), ios::out);
 	if (file.is_open()) {
 		//Search for maximum and minimum of N across all strands in all chains
 		int Nmin = chain_index(0).QN[0].w;
@@ -409,8 +405,8 @@ int compare(const void * a, const void * b) {
 	return (fa > fb) - (fa < fb);
 }
 
-void save_Q_distribution_to_file(char* filename, bool cumulative) {
-	ofstream file(filename, ios::out);
+void save_Q_distribution_to_file(string filename, bool cumulative) {
+	ofstream file(filename.c_str(), ios::out);
 	if (file.is_open()) {
 		//Search for maximal and minimal value of |Q| across all strands in all chains
 
@@ -478,6 +474,69 @@ void load_from_file(char *filename) {
 		cout << "file error\n";
 }
 
+void Gt_brutforce(int res, double length, float *&t, float *&x, int &np) {
+	//Start simulation
+	//Save as much stress as posssible on GPU memory
+	//Sync with stress file
+	//Continue simulation
+	//At the end perform brutforce correlator calculation
+
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(res), sizeof(int))); //Copy timestep for calculation
+	//There is restriction on the size of any array in CUDA
+	//We divide ensemble of chains into blocks if necessary
+	//And evaluate for each block
+	for (int i = 0; i < chain_blocks_number; i++) {
+		init_block_correlator(&(chain_blocks[i]));//Initialize correlator structure in cb
+		EQ_time_step_call_block(length, &(chain_blocks[i]));
+		chain_blocks[i].corr->counter = length / res;
+	}
+	int counter = length / res / 2;
+	//prepare log space time marks
+
+	//trial run to find out how many ticks
+	long t1 = 0;
+	int n = 1, inc = 1, series = 4;
+	while (t1 + inc < counter - 1) {
+		t1 += inc;
+		if (n % series == 0) {
+			inc *= 2;
+		}
+		n++;
+		//      cout<<"n t1 "<<n<<' '<<t1<<'\n';
+	}
+	//  cout<<" n"<<n<<'\n';
+	np = n;
+	//full run
+	t = new float[n];
+	int *tint = new int[n];
+	x = new float[n];
+	t1 = 0;
+	n = 1, inc = 1, series = 4;
+	t[0] = 0;
+	tint[0] = 0;
+	while (t1 + inc < counter - 1) {
+		t1 += inc;
+		if (n % series == 0) {
+			inc *= 2;
+		}
+		t[n] = res * float(t1);
+		tint[n] = t1;
+		n++;
+	}
+	float *x_buf = new float[np];
+	for (int j = 0; j < np; j++) {
+		x[j] = 0.0f;
+	}
+	for (int i = 0; i < chain_blocks_number; i++) {
+		chain_blocks[i].corr->calc(tint, x_buf, np);
+		for (int j = 0; j < np; j++) {
+			x[j] += x_buf[j] * chain_blocks[i].nc / N_cha;
+		}
+	}
+	delete[] x_buf;
+	delete[] tint;
+}
+
 void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
 	// how does it work
 	// There is limit on memory. We cannot store stress for every timestep for each chain in the ensemble.
@@ -490,6 +549,8 @@ void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
 	// We use these saved values to calculate G_2(t)
 	// and so on...
 	// In the end, we combine {G_i(t)} into final (G(t))
+	ofstream G_file;
+	G_file.open(filename_ID("G"));
 
 	if (length / res < correlator_size) {        //if one run is enough
 		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(res),sizeof(int))); //Copy timestep for calculation
@@ -548,6 +609,11 @@ void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
 				x[j] += x_buf[j] * chain_blocks[i].nc / N_cha;
 			}
 		}
+		for (int j = 0; j < np; j++) {
+			cout << t[j] << '\t' << x[j] << '\n';
+			G_file << t[j] << '\t' << x[j] << '\n';
+		}
+
 		delete[] x_buf;
 		delete[] tint;
 	} else { //multiple runs required
@@ -681,6 +747,10 @@ void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
 				x[j] += x_buf[j] * chain_blocks[i].nc / N_cha;
 			}
 		}
+		for (int j = 0; j < np_first_page; j++) {
+			cout << t[j] << '\t' << x[j] << '\n';
+			G_file << t[j] << '\t' << x[j] << '\n';
+		}
 		cout << "done\n";
 		for (int ip = 2; ip < page_count; ip++) {
 			cout << "running page " << ip << "...";
@@ -697,12 +767,14 @@ void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
 			}
 
 			for (int i = 0; i < chain_blocks_number; i++) {
-				chain_blocks[i].corr->calc(&(tint[tick_pointer_page[ip - 1]]),
-						&(x_buf[tick_pointer_page[ip - 1]]), np_page);
-				for (int j = tick_pointer_page[ip - 1];
-						j < tick_pointer_page[ip - 1] + np_page; j++) {
+				chain_blocks[i].corr->calc(&(tint[tick_pointer_page[ip - 1]]), &(x_buf[tick_pointer_page[ip - 1]]), np_page);
+				for (int j = tick_pointer_page[ip - 1]; j < tick_pointer_page[ip - 1] + np_page; j++) {
 					x[j] += x_buf[j] * chain_blocks[i].nc / N_cha;
 				}
+			}
+			for (int j = tick_pointer_page[ip - 1]; j < tick_pointer_page[ip - 1] + np_page; j++) {
+				cout << t[j] << '\t' << x[j] << '\n';
+				G_file << t[j] << '\t' << x[j] << '\n';
 			}
 			cout << "done\n";
 		}
@@ -722,15 +794,19 @@ void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
 
 		for (int i = 0; i < chain_blocks_number; i++) {
 			chain_blocks[i].corr->calc(&(tint[tick_pointer_page[ip - 1]]), &(x_buf[tick_pointer_page[ip - 1]]), np_last_page);
-			for (int j = tick_pointer_page[ip - 1];
-					j < tick_pointer_page[ip - 1] + np_last_page; j++) {
+			for (int j = tick_pointer_page[ip - 1]; j < tick_pointer_page[ip - 1] + np_last_page; j++) {
 				x[j] += x_buf[j] * chain_blocks[i].nc / N_cha;
 			}
+		}
+		for (int j = tick_pointer_page[ip - 1]; j < tick_pointer_page[ip - 1] + np_last_page; j++) {
+			cout << t[j] << '\t' << x[j] << '\n';
+			G_file << t[j] << '\t' << x[j] << '\n';
 		}
 		cout << "done\n";
 
 		delete[] tint;
 		delete[] x_buf;
 	}
+	G_file.close();
 }
 

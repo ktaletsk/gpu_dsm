@@ -1,4 +1,4 @@
-// Copyright 2014 Marat Andreev
+// Copyright 2015 Marat Andreev, Konstantin Taletskiy, Maria Katzarova
 // 
 // This file is part of gpu_dsm.
 // 
@@ -57,8 +57,8 @@ extern double universal_time;
 
 
 //init chain conformation
-void chain_init(chain_head *chain_head, sstrentp data, int tnk);
-void chain_init(chain_head *chain_head, sstrentp data, int tnk, int z_max);	//z_max is maximum number of entaglements. purpose - truncate z distribution for optimization. NOTE: not tested
+void chain_init(chain_head *chain_head, sstrentp data, int tnk, bool PD_flag);
+void chain_init(chain_head *chain_head, sstrentp data, int tnk, int z_max, bool PD_flag);	//z_max is maximum number of entaglements. purpose - truncate z distribution for optimization. NOTE: not tested
 
 //outputs chain conformation
 void print(ostream& stream, const sstrentp c, const chain_head chead);

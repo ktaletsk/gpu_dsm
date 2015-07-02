@@ -1,4 +1,4 @@
-// Copyright 2014 Marat Andreev
+// Copyright 2015 Marat Andreev, Konstantin Taletskiy, Maria Katzarova
 // 
 // This file is part of gpu_dsm.
 // 
@@ -48,19 +48,21 @@ extern int NK;	//number of chain segments in each chain
 extern int z_max;	// max number of strand in chain (currently same as NK)
 extern bool dbug;	//debug flag
 extern float kxx, kxy, kxz, kyx, kyy, kyz, kzx, kzy, kzz;	//deformation tensor
+extern bool PD_flag;
 
 //public functions
 void host_chains_init();	//prepares chain conformations on host
 void gpu_init(int seed);// prepares GPU kernels,random number generators and copies chains to host memory
 void get_chains_from_device();	//Copies chains back to host memory
 void save_to_file(char *filename);	//saves chain conformations to a file
-void save_Z_distribution_to_file(char *filename, bool cumulative); //saves Z distrubution to file
-void save_N_distribution_to_file(char *filename, bool cumulative); //saves N distribution to file
-void save_Q_distribution_to_file(char* filename, bool cumulative); //saves Q distribution to file
+void save_Z_distribution_to_file(string filename, bool cumulative); //saves Z distrubution to file
+void save_N_distribution_to_file(string filename, bool cumulative); //saves N distribution to file
+void save_Q_distribution_to_file(string filename, bool cumulative); //saves Q distribution to file
 void load_from_file(char *filename);  //loads chain conformations from a file
 
 void gpu_time_step(double reach_time);  // performs time evolution of ensemble
 
+void Gt_brutforce(int res, double length, float *&t, float *&x, int &np);
 void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np); //G(t) relaxation spectrum calculation
 
 void gpu_clean();  //free memory used by ensemble
