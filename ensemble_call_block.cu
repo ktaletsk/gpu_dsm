@@ -1,4 +1,4 @@
-// Copyright 2014 Marat Andreev
+// Copyright 2015 Marat Andreev, Konstantin Taletskiy, Maria Katzarova
 // 
 // This file is part of gpu_dsm.
 // 
@@ -293,27 +293,9 @@ void EQ_time_step_call_block(double reach_time, ensemble_call_block *cb) { //bin
 			// check for reached time
 			cudaMemcpy(rtbuffer, cb->reach_flag, sizeof(float) * cb->nc, cudaMemcpyDeviceToHost);
 			float sumrt = 0;
-			for (int i = 0; i < cb->nc; i++) {
+			for (int i = 0; i < cb->nc; i++)
 				sumrt += rtbuffer[i];
-			}
 			reach_flag_all = (sumrt == cb->nc);
-
-			if (dbug) {
-				float *dtbuffer = new float[cb->nc];
-				cudaMemcpy(dtbuffer, cb->d_dt, sizeof(float) * cb->nc, cudaMemcpyDeviceToHost);
-
-	//  		get_chain_from_device_call_block(cb);
-
-				for (int i = 0; i < 1 + 0 * cb->nc; i++) {	//just one chain
-					cout << "dt " << dtbuffer[i] << '\n';
-	// 		    cout<<NK<<'\n';
-	// 		    print(cout,cb->chain_index(i),cb->chain_heads[i]);
-	// 		    cout<<"\n";
-					cout << "\n";
-				}
-				delete[] dtbuffer;
-			}
-
 		}
 	}//loop ends
 	cb->block_time=reach_time;

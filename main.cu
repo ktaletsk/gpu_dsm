@@ -1,4 +1,4 @@
-// Copyright 2014 Marat Andreev
+// Copyright 2015 Marat Andreev, Konstantin Taletskiy, Maria Katzarova
 // 
 // This file is part of gpu_dsm.
 // 
@@ -177,23 +177,14 @@ int main(int narg, char** arg) {
 		if (G_flag) {
 			cout << "G(t) calc...\n";
 			cout.flush();
-			ofstream G_file;
-			//cout<<filename_ID("tau")<<'\n';
-			G_file.open(filename_ID("G"));
 			float *t, *x;
 			int np;
 			timer.start();
 			gpu_Gt_calc(t_step_size, simulation_time, t, x, np);
 			cout << "G(t) calc done\n";
-			for (int j = 0; j < np; j++) {
-				cout << t[j] << '\t' << x[j] << '\n';
-				G_file << t[j] << '\t' << x[j] << '\n';
-			}
 			timer.stop();
-			G_file.close();
 		} else {
-			cout
-					<< "There are no flow and no equilibrium quantity to calculate. Exiting... \n";
+			cout<< "There are no flow and no equilibrium quantity to calculate. Exiting... \n";
 		}
 	}
 

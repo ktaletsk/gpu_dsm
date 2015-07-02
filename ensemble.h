@@ -1,4 +1,4 @@
-// Copyright 2014 Marat Andreev
+// Copyright 2015 Marat Andreev, Konstantin Taletskiy, Maria Katzarova
 // 
 // This file is part of gpu_dsm.
 // 
@@ -62,6 +62,7 @@ void load_from_file(char *filename);  //loads chain conformations from a file
 
 void gpu_time_step(double reach_time);  // performs time evolution of ensemble
 
+void Gt_brutforce(int res, double length, float *&t, float *&x, int &np);
 void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np); //G(t) relaxation spectrum calculation
 
 void gpu_clean();  //free memory used by ensemble

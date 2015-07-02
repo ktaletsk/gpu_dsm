@@ -1,4 +1,4 @@
-// Copyright 2014 Marat Andreev
+// Copyright 2015 Marat Andreev, Konstantin Taletskiy, Maria Katzarova
 // 
 // This file is part of gpu_dsm.
 // 
@@ -23,6 +23,7 @@
 #include "cudautil.h"
 #include "cuda_call.h"
 #include "textures_surfaces.h"
+extern char * filename_ID(string filename);
 
 void random_textures_refill(int n_cha);
 void random_textures_fill(int n_cha);
@@ -473,6 +474,69 @@ void load_from_file(char *filename) {
 		cout << "file error\n";
 }
 
+void Gt_brutforce(int res, double length, float *&t, float *&x, int &np) {
+	//Start simulation
+	//Save as much stress as posssible on GPU memory
+	//Sync with stress file
+	//Continue simulation
+	//At the end perform brutforce correlator calculation
+
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(res), sizeof(int))); //Copy timestep for calculation
+	//There is restriction on the size of any array in CUDA
+	//We divide ensemble of chains into blocks if necessary
+	//And evaluate for each block
+	for (int i = 0; i < chain_blocks_number; i++) {
+		init_block_correlator(&(chain_blocks[i]));//Initialize correlator structure in cb
+		EQ_time_step_call_block(length, &(chain_blocks[i]));
+		chain_blocks[i].corr->counter = length / res;
+	}
+	int counter = length / res / 2;
+	//prepare log space time marks
+
+	//trial run to find out how many ticks
+	long t1 = 0;
+	int n = 1, inc = 1, series = 4;
+	while (t1 + inc < counter - 1) {
+		t1 += inc;
+		if (n % series == 0) {
+			inc *= 2;
+		}
+		n++;
+		//      cout<<"n t1 "<<n<<' '<<t1<<'\n';
+	}
+	//  cout<<" n"<<n<<'\n';
+	np = n;
+	//full run
+	t = new float[n];
+	int *tint = new int[n];
+	x = new float[n];
+	t1 = 0;
+	n = 1, inc = 1, series = 4;
+	t[0] = 0;
+	tint[0] = 0;
+	while (t1 + inc < counter - 1) {
+		t1 += inc;
+		if (n % series == 0) {
+			inc *= 2;
+		}
+		t[n] = res * float(t1);
+		tint[n] = t1;
+		n++;
+	}
+	float *x_buf = new float[np];
+	for (int j = 0; j < np; j++) {
+		x[j] = 0.0f;
+	}
+	for (int i = 0; i < chain_blocks_number; i++) {
+		chain_blocks[i].corr->calc(tint, x_buf, np);
+		for (int j = 0; j < np; j++) {
+			x[j] += x_buf[j] * chain_blocks[i].nc / N_cha;
+		}
+	}
+	delete[] x_buf;
+	delete[] tint;
+}
+
 void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
 	// how does it work
 	// There is limit on memory. We cannot store stress for every timestep for each chain in the ensemble.
@@ -485,6 +549,8 @@ void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
 	// We use these saved values to calculate G_2(t)
 	// and so on...
 	// In the end, we combine {G_i(t)} into final (G(t))
+	ofstream G_file;
+	G_file.open(filename_ID("G"));
 
 	if (length / res < correlator_size) {        //if one run is enough
 		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(res),sizeof(int))); //Copy timestep for calculation
@@ -543,6 +609,11 @@ void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
 				x[j] += x_buf[j] * chain_blocks[i].nc / N_cha;
 			}
 		}
+		for (int j = 0; j < np; j++) {
+			cout << t[j] << '\t' << x[j] << '\n';
+			G_file << t[j] << '\t' << x[j] << '\n';
+		}
+
 		delete[] x_buf;
 		delete[] tint;
 	} else { //multiple runs required
@@ -676,6 +747,10 @@ void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
 				x[j] += x_buf[j] * chain_blocks[i].nc / N_cha;
 			}
 		}
+		for (int j = 0; j < np_first_page; j++) {
+			cout << t[j] << '\t' << x[j] << '\n';
+			G_file << t[j] << '\t' << x[j] << '\n';
+		}
 		cout << "done\n";
 		for (int ip = 2; ip < page_count; ip++) {
 			cout << "running page " << ip << "...";
@@ -686,20 +761,20 @@ void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
 
 			for (int i = 0; i < chain_blocks_number; i++) {
 				get_chain_to_device_call_block(&(chain_blocks[i]));
-				cudaMemset(chain_blocks[i].d_correlator_time, 0,
-						sizeof(int) * chain_blocks[i].nc);
-				EQ_time_step_call_block(double(tres * correlator_size),
-						&(chain_blocks[i]));
+				cudaMemset(chain_blocks[i].d_correlator_time, 0, sizeof(int) * chain_blocks[i].nc);
+				EQ_time_step_call_block(double(tres * correlator_size), &(chain_blocks[i]));
 				chain_blocks[i].corr->counter = correlator_size;
 			}
 
 			for (int i = 0; i < chain_blocks_number; i++) {
-				chain_blocks[i].corr->calc(&(tint[tick_pointer_page[ip - 1]]),
-						&(x_buf[tick_pointer_page[ip - 1]]), np_page);
-				for (int j = tick_pointer_page[ip - 1];
-						j < tick_pointer_page[ip - 1] + np_page; j++) {
+				chain_blocks[i].corr->calc(&(tint[tick_pointer_page[ip - 1]]), &(x_buf[tick_pointer_page[ip - 1]]), np_page);
+				for (int j = tick_pointer_page[ip - 1]; j < tick_pointer_page[ip - 1] + np_page; j++) {
 					x[j] += x_buf[j] * chain_blocks[i].nc / N_cha;
 				}
+			}
+			for (int j = tick_pointer_page[ip - 1]; j < tick_pointer_page[ip - 1] + np_page; j++) {
+				cout << t[j] << '\t' << x[j] << '\n';
+				G_file << t[j] << '\t' << x[j] << '\n';
 			}
 			cout << "done\n";
 		}
@@ -723,10 +798,15 @@ void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
 				x[j] += x_buf[j] * chain_blocks[i].nc / N_cha;
 			}
 		}
+		for (int j = tick_pointer_page[ip - 1]; j < tick_pointer_page[ip - 1] + np_last_page; j++) {
+			cout << t[j] << '\t' << x[j] << '\n';
+			G_file << t[j] << '\t' << x[j] << '\n';
+		}
 		cout << "done\n";
 
 		delete[] tint;
 		delete[] x_buf;
 	}
+	G_file.close();
 }
 

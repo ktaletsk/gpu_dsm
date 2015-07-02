@@ -1,4 +1,4 @@
-// Copyright 2014 Marat Andreev
+// Copyright 2015 Marat Andreev, Konstantin Taletskiy, Maria Katzarova
 // 
 // This file is part of gpu_dsm.
 // 
@@ -21,6 +21,4 @@
 #include "cuda_call.h"
 
 void checkCUDA(int dev);//checks for presence of GPU and selects device number dev to use
-
-
 #endif

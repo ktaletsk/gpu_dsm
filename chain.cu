@@ -1,4 +1,4 @@
-// Copyright 2014 Marat Andreev
+// Copyright 2015 Marat Andreev, Konstantin Taletskiy, Maria Katzarova
 // 
 // This file is part of gpu_dsm.
 // 
@@ -92,7 +92,7 @@ void Q_dist(int tz, int *Ntmp, float *&Qxtmp, float *&Qytmp, float *&Qztmp) {
 	}
 }
 
-float tau_dist(float Be, int Nk) {
+__host__ __device__ float tau_dist(float p,float Be, int Nk) {
 	float g, alpha, tau_0, tau_max, tau_d, At;
 	double z = (Nk + Be) / (Be + 1.0);
 	g = 0.667f;
@@ -115,7 +115,6 @@ float tau_dist(float Be, int Nk) {
 	//init vars
 	At = (1.0f - g) / (powf(tau_max, alpha) - powf(tau_0, alpha));
 
-	float p = eran.flt();
 	if (p < (1.0f - g)) {
 		return powf(p / At + powf(tau_0, alpha), 1.0f / alpha);
 	} else {
@@ -139,10 +138,10 @@ void chain_init(chain_head *chain_head, sstrentp data, int tnk, bool PD_flag) {
 				int Nk__= (int)(x*mp/Mk);
 
 				//Lifetime of entanglement
-				tent_tau[k] = tau_dist(Be, Nk__);
+				tent_tau[k] = tau_dist(eran.flt(),Be, Nk__);
 			}
 			else
-				tent_tau[k] = tau_dist(Be, tnk);
+				tent_tau[k] = tau_dist(eran.flt(),Be, tnk);
 	} else
 		for (int k = 0; k < tz - 1; tent_tau[k++] = 0.0);
 
@@ -189,9 +188,9 @@ void chain_init(chain_head *chain_head, sstrentp data, int tnk, int z_max, bool 
 				int Nk__ = (int) (x * mp / Mk);
 
 				//Lifetime of entanglement
-				tent_tau[k] = tau_dist(Be, Nk__);
+				tent_tau[k] = tau_dist(eran.flt(),Be, Nk__);
 			} else
-				tent_tau[k] = tau_dist(Be, tnk);
+				tent_tau[k] = tau_dist(eran.flt(),Be, tnk);
 	else
 		for (int k = 0; k < tz - 1; tent_tau[k++] = 0.0);
 
