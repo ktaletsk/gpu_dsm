@@ -180,7 +180,8 @@ int main(int narg, char** arg) {
 			float *t, *x;
 			int np;
 			timer.start();
-			gpu_Gt_calc(t_step_size, simulation_time, t, x, np);
+			//gpu_Gt_calc(t_step_size, simulation_time, t, x, np);
+			Gt_brutforce(t_step_size, simulation_time, t, x, np);
 			cout << "G(t) calc done\n";
 			timer.stop();
 		} else {

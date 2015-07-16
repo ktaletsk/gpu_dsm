@@ -34,11 +34,12 @@ endif
 
 DEPS = gpu_random.h cudautil.h cuda_call.h stress.h chain.h ensemble.h ensemble_kernel.cu ensemble_call_block.cu textures_surfaces.h pcd_tau.h detailed_balance.h job_ID.h correlator.h gamma.h
 
-all: gpu_DSM
-
 #For debug you need to generate CPU (-g) and GPU (-G) debug information
 #For ability to watch state of variables you need to generate additional information (-keep)
 debug: DEBUGFLAGS = -g -G -keep
+debug: gpu_DSM
+
+all: gpu_DSM
 
 gpu_DSM:  main.o $(OBJS) 
 	$(CC) main.o $(OBJS) $(LIBS) -o gpu_DSM

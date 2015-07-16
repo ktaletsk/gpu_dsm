@@ -22,33 +22,32 @@
 #include "correlator.h"
 
 typedef struct ensemble_call_block {
-	//host vars
-	int nc;
-	sstrentp chains; //just a pointer
-	chain_head* chain_heads; //just a pointer
+	//chain conformations on host (CPU)
+	int nc; //number of chains
+	sstrentp chains; //vector values
+	chain_head* chain_heads; //scalar values
 
-	//cudaArray vars
-	cudaArray* d_QN; //device arrays for vector part of chain conformations
+	//chain conformation on device (GPU)
+	cudaArray* d_QN;  //device arrays for vector part of chain conformations
 	cudaArray* d_tCD; //these arrays used to store conformations
 
 	//regular device arrays
 	chain_head* gpu_chain_heads;
 
-	float *d_dt; // time step size from previous time step. used for applying deformation
+	float *d_dt;       // time step size from previous time step. used for applying deformation
 	float *reach_flag; // flag that chain evolution reached required time
 					   //copied to host each times step
-	double block_time;//since chain_head do not store universal time due to SP issues
+	double block_time; //since chain_head do not store universal time due to SP issues
 	                   //see chain.h chain_head for explanation
 
 	// delayed dynamics --- see ensemble_kernel
-
-	int *d_offset;                     //coded array shifting parameters
+	int *d_offset;        //coded array shifting parameters
 	float4 *d_new_strent; //new strent which should be inserted in the middle of the chain//TODO two new_strents will allow do all the updates at once
-	float *d_new_tau_CD;                     //new life time
+	float *d_new_tau_CD;  //new life time
 
-											 //G(t) calculations
-	c_correlator *corr;                     //correlator
-	int *d_correlator_time;                     //index of next cell to fill
+	//G(t) calculations
+	c_correlator *corr;     //correlator
+	int *d_correlator_time; //index of next cell to fill
 
 } ensemble_call_block;
 

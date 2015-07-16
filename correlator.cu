@@ -41,15 +41,17 @@ c_correlator::c_correlator(int na) {
 	nc = na;
 	counter = 0;
 	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
-	cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
-	cudaMallocArray(&d_correlator, &channelDesc4, correlator_size, nc, cudaArraySurfaceLoadStore);
-	cudaMallocArray(&(d_corr_function), &channelDesc1, max_corr_function_length, nc, cudaArraySurfaceLoadStore);
+	cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc(32, 0,  0,  0,  cudaChannelFormatKindFloat);
+	cudaMallocArray(&d_correlator,    &channelDesc4, correlator_size,          nc, cudaArraySurfaceLoadStore);
+	cudaMallocArray(&d_corr_function, &channelDesc1, max_corr_function_length, nc, cudaArraySurfaceLoadStore);
+	stress = (float4 *)malloc(sizeof(float4)*correlator_size*nc);
 	CUT_CHECK_ERROR("kernel execution failed");
 }
 
 c_correlator::~c_correlator() {
 	cudaFreeArray(d_correlator);
 	cudaFreeArray(d_corr_function);
+	free(stress);
 }
 
 __global__ __launch_bounds__(ran_tpd) void corr_function_calc_kernel(int *d_time_ticks) {

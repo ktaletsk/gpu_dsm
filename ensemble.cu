@@ -39,7 +39,6 @@ extern cudaArray* d_gamma_table;
 
 sstrentp chains; // host chain conformations
 
-//on device there are two arrays with vector part of chain conformations
 // and only one array with scalar part chain conformation
 // every time the vector part is copied from one array to another
 // coping is done in entanglement parallel portion of the code
@@ -481,60 +480,104 @@ void Gt_brutforce(int res, double length, float *&t, float *&x, int &np) {
 	//Continue simulation
 	//At the end perform brutforce correlator calculation
 
+	ofstream G_file;
+	G_file.open(filename_ID("G"));
+
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(res), sizeof(int))); //Copy timestep for calculation
 	//There is restriction on the size of any array in CUDA
 	//We divide ensemble of chains into blocks if necessary
 	//And evaluate for each block
 	for (int i = 0; i < chain_blocks_number; i++) {
 		init_block_correlator(&(chain_blocks[i]));//Initialize correlator structure in cb
-		EQ_time_step_call_block(length, &(chain_blocks[i]));
-		chain_blocks[i].corr->counter = length / res;
 	}
-	int counter = length / res / 2;
-	//prepare log space time marks
+
+	int split = (length/res - 1) / correlator_size + 1;
+	int cur_length;
+
+	ofstream file("stress.dat", ios::out | ios::app);
+	for (int k = 0; k < split; k++) {
+		cout << "\nCalculating split " << k+1 << "...\n";
+		if (k == split - 1)
+			cur_length = length - (split - 1) * correlator_size * res;
+		else
+			cur_length = correlator_size;
+		cout << "\n" << cur_length << "\n";
+		for (int i = 0; i < chain_blocks_number; i++) {
+			get_chain_to_device_call_block(&(chain_blocks[i]));
+			EQ_time_step_call_block(cur_length, &(chain_blocks[i]));
+			get_chain_from_device_call_block(&(chain_blocks[i]));
+			cudaMemcpy2DFromArray((chain_blocks+i)->corr->stress, 16 * cur_length, (chain_blocks+i)->corr->d_correlator,0,0,16 * cur_length, (chain_blocks+i)->nc,cudaMemcpyDeviceToHost);
+
+			//Save stress for current block/current split in file
+			//file.write((char*) (chain_blocks[i].corr->stress), sizeof(float)*correlator_size*(chain_blocks+i)->nc);
+			for (int j=0; j< cur_length * (chain_blocks+i)->nc ; j++) {
+				//file << ((chain_blocks[i].corr->stress)+j)->x << "\t";
+				file.write( (char *)((chain_blocks[i].corr->stress)+j),sizeof(float4));
+//				if ((j+1)%cur_length == 0)
+//					file << "\n";
+			}
+		}
+	}
+	file.close();
+
+//	int counter = length / res / 2;
+
+	//Calculate correlation function from file
+
+	//TEST - try to obtain stress for one particular chain
+//	file.open(filename, ios::in | ios::binary | ios::app);
+////	for (int k = 0; k < split; k++) {
+////
+////	};
+//	file close();
 
 	//trial run to find out how many ticks
-	long t1 = 0;
-	int n = 1, inc = 1, series = 4;
-	while (t1 + inc < counter - 1) {
-		t1 += inc;
-		if (n % series == 0) {
-			inc *= 2;
-		}
-		n++;
-		//      cout<<"n t1 "<<n<<' '<<t1<<'\n';
-	}
-	//  cout<<" n"<<n<<'\n';
-	np = n;
-	//full run
-	t = new float[n];
-	int *tint = new int[n];
-	x = new float[n];
-	t1 = 0;
-	n = 1, inc = 1, series = 4;
-	t[0] = 0;
-	tint[0] = 0;
-	while (t1 + inc < counter - 1) {
-		t1 += inc;
-		if (n % series == 0) {
-			inc *= 2;
-		}
-		t[n] = res * float(t1);
-		tint[n] = t1;
-		n++;
-	}
-	float *x_buf = new float[np];
-	for (int j = 0; j < np; j++) {
-		x[j] = 0.0f;
-	}
-	for (int i = 0; i < chain_blocks_number; i++) {
-		chain_blocks[i].corr->calc(tint, x_buf, np);
-		for (int j = 0; j < np; j++) {
-			x[j] += x_buf[j] * chain_blocks[i].nc / N_cha;
-		}
-	}
-	delete[] x_buf;
-	delete[] tint;
+//	long t1 = 0;
+//	int n = 1, inc = 1, series = 4;
+//	while (t1 + inc < counter - 1) {
+//		t1 += inc;
+//		if (n % series == 0) {
+//			inc *= 2;
+//		}
+//		n++;
+//	}
+//	np = n;
+//	//full run
+//	t = new float[n];
+//	int *tint = new int[n];
+//	x = new float[n];
+//	t1 = 0;
+//	n = 1, inc = 1, series = 4;
+//	t[0] = 0;
+//	tint[0] = 0;
+//	while (t1 + inc < counter - 1) {
+//		t1 += inc;
+//		if (n % series == 0) {
+//			inc *= 2;
+//		}
+//		t[n] = res * float(t1);
+//		tint[n] = t1;
+//		n++;
+//	}
+//	float *x_buf = new float[np];
+//	for (int j = 0; j < np; j++) {
+//		x[j] = 0.0f;
+//	}
+//	for (int i = 0; i < chain_blocks_number; i++) {
+//		chain_blocks[i].corr->calc(tint, x_buf, np);
+//		for (int j = 0; j < np; j++) {
+//			x[j] += x_buf[j] * chain_blocks[i].nc / N_cha;
+//		}
+//	}
+//
+//	for (int j = 0; j < np; j++) {
+//				cout << t[j] << '\t' << x[j] << '\n';
+//				G_file << t[j] << '\t' << x[j] << '\n';
+//			}
+//
+//	delete[] x_buf;
+//	delete[] tint;
+	G_file.close();
 }
 
 void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
