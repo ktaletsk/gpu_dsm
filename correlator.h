@@ -28,7 +28,7 @@
 #define correlator_size 1024// size of  correlator page
 #define max_corr_function_length 100// size of the random arrays
 surface<void, 2> s_correlator; //float4 xy,yz,xz,dummy
-texture<float4, 2, cudaReadModeElementType> t_correlator;	// tauxy,tauyz,tauzx
+texture<float4, cudaTextureType2D, cudaReadModeElementType> t_correlator;	// tauxy,tauyz,tauzx
 surface<void, 2> s_corr_function;
 
 //in order to calculate correlation function of arbitrary length correlator can be reused
@@ -56,6 +56,7 @@ public:
 	c_correlator(int nc);
 	~c_correlator();
 	void calc(int *t, float *x, int np);
+	float4* stress;
 };
 
 void init_correlator();
