@@ -227,7 +227,7 @@ void EQ_time_step_call_block(double reach_time, ensemble_call_block *cb) { //bin
 	dim3 dimGrid((z_max + dimBlock.x - 1) / dimBlock.x,(cb->nc + dimBlock.y - 1) / dimBlock.y);
 
 	activate_block(cb);
-
+	steps_count = 0;
 	float time_step_interval=reach_time-cb->block_time;
 	int number_of_syncs=int(floor((time_step_interval-0.5)/max_sync_interval))+1;
 
