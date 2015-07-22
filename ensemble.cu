@@ -504,11 +504,11 @@ void Gt_brutforce(int res, double length, float *&t, float *&x, int &np) {
 			n_steps = correlator_size;
 		cur_length  = n_steps * res;
 		for (int i = 0; i < chain_blocks_number; i++) {
-			//get_chain_to_device_call_block(&(chain_blocks[i]));
+			get_chain_to_device_call_block(&(chain_blocks[i]));
 			chain_blocks[i].block_time = 0;
 			cudaMemset(chain_blocks[i].d_correlator_time, 0,sizeof(int) * chain_blocks[i].nc);
 			EQ_time_step_call_block(cur_length, &(chain_blocks[i]));
-			//get_chain_from_device_call_block(&(chain_blocks[i]));
+			get_chain_from_device_call_block(&(chain_blocks[i]));
 			cudaMemcpy2DFromArray((chain_blocks+i)->corr->stress, 16 * n_steps, (chain_blocks+i)->corr->d_correlator,0,0,16 * n_steps, (chain_blocks+i)->nc,cudaMemcpyDeviceToHost);
 
 //			//Clear d_correlator
@@ -545,6 +545,7 @@ void Gt_brutforce(int res, double length, float *&t, float *&x, int &np) {
 	t = new float[n];
 	int *tint = new int[n];
 	x = new float[n];
+	double *xx = new double[n];
 	t1 = 0;
 	n = 1, inc = 1, series = 4;
 	t[0] = 0;
@@ -566,6 +567,7 @@ void Gt_brutforce(int res, double length, float *&t, float *&x, int &np) {
 	cout << "\nCalculating correlation function...\n";
 	float4 stress_1chain[(int)(length/res)];
 	ifstream file2("stress.dat", ios::in | ios::binary | ios::app);
+	ofstream ddbug("stress_1_chain", ios::out);
 	for (int i = 0; i < N_cha; i++) {//iterate chains
 		for (int k = 0; k < split; k++) {//iterate time splits for particular chain
 			if (k == split - 1)
@@ -584,16 +586,19 @@ void Gt_brutforce(int res, double length, float *&t, float *&x, int &np) {
 			else if (k == split - 2)
 				file2.seekg(16 * (N_cha - 1 - i) * n_steps, ios::cur);
 		}
-		//Claculate autocrrelation for particular chain
+
+		//Calculate autocorrelation for particular chain
 		for (int l = 0; l < np; l++) {//iterate time lag
-			for (int time = 0; time < (int)(length/res) - tint[l]; time++) {//iterate time
-				x[l] += (stress_1chain[time].x * stress_1chain[time + tint[l]].x +
-							 stress_1chain[time].y * stress_1chain[time + tint[l]].y +
-							 stress_1chain[time].z * stress_1chain[time + tint[l]].z) /
-							 (3 * ((int)(length/res) - tint[l]) * N_cha );
+			for (int time = 0; time < ((int)(length/res) - tint[l]); time++) {//iterate time
+				xx[l] += (stress_1chain[time].x * stress_1chain[time + tint[l]].x +
+						 stress_1chain[time].y * stress_1chain[time + tint[l]].y +
+						 stress_1chain[time].z * stress_1chain[time + tint[l]].z) /
+						 (3 * ((int)(length/res) - tint[l]) * N_cha );
 			}
 		}
 	}
+	for (int l = 0; l < np; l++)
+		x[l] = (float)xx[l];
 	file2.close();
 	std::remove("stress.dat");
 
