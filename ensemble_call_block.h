@@ -58,8 +58,8 @@ void init_call_block(ensemble_call_block *cb, int nc, sstrentp chains,
 void init_block_correlator(ensemble_call_block *cb);
 //prepares correlator if G(t) calculations needed
 
-void time_step_call_block(double reach_time, ensemble_call_block *cb);
-void EQ_time_step_call_block(double reach_time, ensemble_call_block *cb);
+int time_step_call_block(double reach_time, ensemble_call_block *cb, bool* run_flag);
+int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, bool* run_flag);
 //performs time evolution
 
 void get_chain_to_device_call_block(ensemble_call_block *cb);

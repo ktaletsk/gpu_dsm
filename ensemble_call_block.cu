@@ -101,7 +101,7 @@ void init_block_correlator(ensemble_call_block *cb) {
 	CUT_CHECK_ERROR("kernel execution failed");//Debug feature, check error code
 }
 
-void time_step_call_block(double reach_time, ensemble_call_block *cb) {
+int time_step_call_block(double reach_time, ensemble_call_block *cb, bool* run_flag) {
 	//bind textures_surfaces perform time evolution unbind textures_surfaces
 	//ensemble_call_block *cb pointer for call block structure, just ref parameter
 	//sstrentp chains, chain_head* chain_heads needed for debug//TODO not implemented
@@ -205,17 +205,18 @@ void time_step_call_block(double reach_time, ensemble_call_block *cb) {
 					cout << "\n";
 				}
 				delete[] dtbuffer;
-
 			}
+            if (*run_flag==false)
+                return -1;
 		}
 	}	//loop end
 	cb->block_time=reach_time;
 	delete[] rtbuffer;
 	deactivate_block(cb);
-
+	return 0;
 }
 
-void EQ_time_step_call_block(double reach_time, ensemble_call_block *cb) { //bind textures_surfaces perform time evolution unbinds textures_surfaces
+int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, bool* run_flag) { //bind textures_surfaces perform time evolution unbinds textures_surfaces
 	//ensemble_call_block *cb pointer for call block structure, just ref parameter
 	//sstrentp chains, chain_head* chain_heads needed for debug//TODO not implemented
 
@@ -287,20 +288,20 @@ void EQ_time_step_call_block(double reach_time, ensemble_call_block *cb) { //bin
 				steps_count = 0;
 			}
 
-			//Maybe sync d_correlator here (for brutforce calculations)???
-
-
 			// check for reached time
 			cudaMemcpy(rtbuffer, cb->reach_flag, sizeof(float) * cb->nc, cudaMemcpyDeviceToHost);
 			float sumrt = 0;
 			for (int i = 0; i < cb->nc; i++)
 				sumrt += rtbuffer[i];
 			reach_flag_all = (sumrt == cb->nc);
+			if (*run_flag==false)
+				return -1;
 		}
 	}//loop ends
 	cb->block_time=reach_time;
 	delete[] rtbuffer;
 	deactivate_block(cb);
+	return 0;
 }
 
 // utility functions

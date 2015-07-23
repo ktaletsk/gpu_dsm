@@ -60,10 +60,10 @@ void save_N_distribution_to_file(string filename, bool cumulative); //saves N di
 void save_Q_distribution_to_file(string filename, bool cumulative); //saves Q distribution to file
 void load_from_file(char *filename);  //loads chain conformations from a file
 
-void gpu_time_step(double reach_time);  // performs time evolution of ensemble
+int gpu_time_step(double reach_time, bool* run_flag);  // performs time evolution of ensemble
 
-void Gt_brutforce(int res, double length, float *&t, float *&x, int &np);
-void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np); //G(t) relaxation spectrum calculation
+int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* run_flag);
+int gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np, bool* run_flag); //G(t) relaxation spectrum calculation
 
 void gpu_clean();  //free memory used by ensemble
 

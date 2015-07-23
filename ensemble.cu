@@ -196,11 +196,12 @@ stress_plus calc_stress() {
 	return tmps / total_chains;
 }
 
-void gpu_time_step(double reach_time) {
+int gpu_time_step(double reach_time, bool* run_flag) {
 	for (int i = 0; i < chain_blocks_number; i++) {
-		time_step_call_block(reach_time, &(chain_blocks[i]));
+		if(time_step_call_block(reach_time, &(chain_blocks[i]), run_flag)==-1) return -1;
 	}
 	universal_time=reach_time;
+	return 0;
 }
 
 void get_chains_from_device()    //Copies chains back to host memory
@@ -473,7 +474,7 @@ void load_from_file(char *filename) {
 		cout << "file error\n";
 }
 
-void Gt_brutforce(int res, double length, float *&t, float *&x, int &np) {
+int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* run_flag) {
 	//Start simulation
 	//Save as much stress as posssible on GPU memory
 	//Sync with stress file
@@ -487,13 +488,11 @@ void Gt_brutforce(int res, double length, float *&t, float *&x, int &np) {
 	//There is restriction on the size of any array in CUDA
 	//We divide ensemble of chains into blocks if necessary
 	//And evaluate for each block
-	for (int i = 0; i < chain_blocks_number; i++) {
+	for (int i = 0; i < chain_blocks_number; i++)
 		init_block_correlator(&(chain_blocks[i]));//Initialize correlator structure in cb
-	}
 
 	int split = (length/res - 1) / correlator_size + 1;
-	int cur_length;
-	int n_steps;
+	int cur_length, n_steps;
 
 	ofstream file("stress.dat", ios::out /*| ios::binary*/ | ios::app);
 	for (int k = 0; k < split; k++) {
@@ -504,11 +503,11 @@ void Gt_brutforce(int res, double length, float *&t, float *&x, int &np) {
 			n_steps = correlator_size;
 		cur_length  = n_steps * res;
 		for (int i = 0; i < chain_blocks_number; i++) {
-			//get_chain_to_device_call_block(&(chain_blocks[i]));
+			get_chain_to_device_call_block(&(chain_blocks[i]));
 			chain_blocks[i].block_time = 0;
 			cudaMemset(chain_blocks[i].d_correlator_time, 0,sizeof(int) * chain_blocks[i].nc);
-			EQ_time_step_call_block(cur_length, &(chain_blocks[i]));
-			//get_chain_from_device_call_block(&(chain_blocks[i]));
+			if(EQ_time_step_call_block(cur_length, &(chain_blocks[i]),run_flag)==-1) return -1;
+			get_chain_from_device_call_block(&(chain_blocks[i]));
 			cudaMemcpy2DFromArray((chain_blocks+i)->corr->stress, 16 * n_steps, (chain_blocks+i)->corr->d_correlator,0,0,16 * n_steps, (chain_blocks+i)->nc,cudaMemcpyDeviceToHost);
 
 			//Save stress for current block/current split in file
@@ -599,9 +598,10 @@ void Gt_brutforce(int res, double length, float *&t, float *&x, int &np) {
 	delete[] x_buf;
 	delete[] tint;
 	G_file.close();
+	return 0;
 }
 
-void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
+int gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np, bool* run_flag) {
 	// how does it work
 	// There is limit on memory. We cannot store stress for every timestep for each chain in the ensemble.
 	// We separate G(t) into several parts(pages), and calculate each part in a separate run
@@ -624,7 +624,7 @@ void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
 		//And evaluate for each block
 		for (int i = 0; i < chain_blocks_number; i++) {
 			init_block_correlator(&(chain_blocks[i]));//Initialize correlator structure in cb
-			EQ_time_step_call_block(length, &(chain_blocks[i]));
+			if(EQ_time_step_call_block(length, &(chain_blocks[i]),run_flag)==-1) return -1;
 			chain_blocks[i].corr->counter = length / res;
 			/*		time_step_call_block(res*correlator_size,&(chain_blocks[i]));
 			 chain_blocks[i].corr->counter=correlator_size;*/
@@ -801,7 +801,7 @@ void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
 			init_block_correlator(&(chain_blocks[i]));
 			get_chain_to_device_call_block(&(chain_blocks[i]));
 			cudaMemset(chain_blocks[i].d_correlator_time, 0,sizeof(int) * chain_blocks[i].nc);
-			EQ_time_step_call_block(double(tres * correlator_size),&(chain_blocks[i]));
+			if(EQ_time_step_call_block(double(tres * correlator_size),&(chain_blocks[i]),run_flag)==-1) return -1;
 			chain_blocks[i].corr->counter = correlator_size;
 		}
 		//G_i(t) calculation
@@ -826,7 +826,7 @@ void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
 			for (int i = 0; i < chain_blocks_number; i++) {
 				get_chain_to_device_call_block(&(chain_blocks[i]));
 				cudaMemset(chain_blocks[i].d_correlator_time, 0, sizeof(int) * chain_blocks[i].nc);
-				EQ_time_step_call_block(double(tres * correlator_size), &(chain_blocks[i]));
+				if(EQ_time_step_call_block(double(tres * correlator_size), &(chain_blocks[i]),run_flag)==-1) return -1;
 				chain_blocks[i].corr->counter = correlator_size;
 			}
 
@@ -852,7 +852,7 @@ void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
 		for (int i = 0; i < chain_blocks_number; i++) {
 			get_chain_to_device_call_block(&(chain_blocks[i]));
 			cudaMemset(chain_blocks[i].d_correlator_time, 0, sizeof(int) * chain_blocks[i].nc);
-			EQ_time_step_call_block(double(tres * correlator_size), &(chain_blocks[i]));
+			if(EQ_time_step_call_block(double(tres * correlator_size), &(chain_blocks[i]),run_flag)==-1) return -1;
 			chain_blocks[i].corr->counter = correlator_size;
 		}
 
@@ -872,5 +872,6 @@ void gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np) {
 		delete[] x_buf;
 	}
 	G_file.close();
+	return 0;
 }
 
