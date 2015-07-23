@@ -497,32 +497,23 @@ void Gt_brutforce(int res, double length, float *&t, float *&x, int &np) {
 
 	ofstream file("stress.dat", ios::out /*| ios::binary*/ | ios::app);
 	for (int k = 0; k < split; k++) {
-		cout << "\nCalculating split " << k+1 << "...\n";
+		cout << "\nCalculating split " << k+1 << "...";
 		if (k == split - 1)
 			n_steps = length/res - (split - 1) * correlator_size;
 		else
 			n_steps = correlator_size;
 		cur_length  = n_steps * res;
 		for (int i = 0; i < chain_blocks_number; i++) {
-			get_chain_to_device_call_block(&(chain_blocks[i]));
+			//get_chain_to_device_call_block(&(chain_blocks[i]));
 			chain_blocks[i].block_time = 0;
 			cudaMemset(chain_blocks[i].d_correlator_time, 0,sizeof(int) * chain_blocks[i].nc);
 			EQ_time_step_call_block(cur_length, &(chain_blocks[i]));
-			get_chain_from_device_call_block(&(chain_blocks[i]));
+			//get_chain_from_device_call_block(&(chain_blocks[i]));
 			cudaMemcpy2DFromArray((chain_blocks+i)->corr->stress, 16 * n_steps, (chain_blocks+i)->corr->d_correlator,0,0,16 * n_steps, (chain_blocks+i)->nc,cudaMemcpyDeviceToHost);
-
-//			//Clear d_correlator
-//			float zeros[4*correlator_size * (chain_blocks+i)->nc];
-//			for (int e=0; e< 4 * correlator_size * (chain_blocks+i)->nc; e++)
-//				zeros[e]=0;
-//			cudaMemcpyToArray((chain_blocks+i)->corr->d_correlator, 0, 0, &zeros, 16 * correlator_size * (chain_blocks+i)->nc,cudaMemcpyHostToDevice);
 
 			//Save stress for current block/current split in file
 			for (int j=0; j< n_steps * (chain_blocks+i)->nc ; j++)
 				file.write( (char *)((chain_blocks[i].corr->stress)+j),sizeof(float4));
-//				if (j%n_steps == 0)
-//					file << "\n";
-//				file << (chain_blocks[i].corr->stress)[j].x << "\t";
 		}
 	}
 	file.close();
@@ -567,7 +558,6 @@ void Gt_brutforce(int res, double length, float *&t, float *&x, int &np) {
 	cout << "\nCalculating correlation function...\n";
 	float4 stress_1chain[(int)(length/res)];
 	ifstream file2("stress.dat", ios::in | ios::binary | ios::app);
-	ofstream ddbug("stress_1_chain", ios::out);
 	for (int i = 0; i < N_cha; i++) {//iterate chains
 		for (int k = 0; k < split; k++) {//iterate time splits for particular chain
 			if (k == split - 1)
