@@ -552,6 +552,7 @@ int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* ru
 	float *x_buf = new float[np];
 	for (int j = 0; j < np; j++) {
 		x[j] = 0.0f;
+		xx[j] = 0.0f;
 	}
 
 	cout << "\nCalculating correlation function...\n";
