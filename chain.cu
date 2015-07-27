@@ -27,10 +27,10 @@ extern float gamma_new_table_x[200000];
 
 int CD_flag = 0;
 
-int z_dist(int tNk) {
+int z_dist(int tNk, Ran* eran) {
 	//entanglement distribution
 // 	return 1 + int(binomial_distr(1.0/(1.0+Be), tNk-1));//binomial_distr see random module
-	double t = eran.flt() / (1.0 + Be) * pow(1.0 + 1.0 / Be, tNk);
+	double t = eran->flt() / (1.0 + Be) * pow(1.0 + 1.0 / Be, tNk);
 	int z = 1;
 	double sum = 0.0, si = 1.0 / Be;
 	while (sum < t) {
@@ -41,10 +41,10 @@ int z_dist(int tNk) {
 	return z - 1;
 }
 
-int z_dist_truncated(int tNk, int z_max) {
-	int tz = z_dist(tNk);
+int z_dist_truncated(int tNk, int z_max, Ran* eran) {
+	int tz = z_dist(tNk, eran);
 	while (tz > z_max)
-		tz = z_dist(tNk);
+		tz = z_dist(tNk, eran);
 	return tz;
 }
 
@@ -59,14 +59,14 @@ float ratio(int A, int n, int i) {
 	return rat;
 }
 
-void N_dist(int ztmp, int *&tN, int tNk) {
+void N_dist(int ztmp, int *&tN, int tNk, Ran* eran) {
 	tN = new int[ztmp];
 	if (ztmp == 1)
 		tN[0] = tNk;
 	else {
 		int A = tNk - 1;
 		for (int i = ztmp; i > 1; i--) {
-			float p = eran.flt();
+			float p = eran->flt();
 			int Ntmp = 0;
 			float sum = 0.0;
 			while ((p >= sum) && ((++Ntmp) != A - i + 2))
@@ -78,16 +78,16 @@ void N_dist(int ztmp, int *&tN, int tNk) {
 	}
 }
 
-void Q_dist(int tz, int *Ntmp, float *&Qxtmp, float *&Qytmp, float *&Qztmp) {
+void Q_dist(int tz, int *Ntmp, float *&Qxtmp, float *&Qytmp, float *&Qztmp, Ran* eran) {
 
 	Qxtmp = new float[tz];
 	Qytmp = new float[tz];
 	Qztmp = new float[tz];
 	if (tz > 2) {    //dangling ends is not part of distribution
 		for (int i = 1; i < tz - 1; i++) {
-			Qxtmp[i] = eran.gauss_distr() * sqrt(float(Ntmp[i]) / 3.0); //using gaussian distribution
-			Qytmp[i] = eran.gauss_distr() * sqrt(float(Ntmp[i]) / 3.0); //gaussian distribution is defined in math_module
-			Qztmp[i] = eran.gauss_distr() * sqrt(float(Ntmp[i]) / 3.0);
+			Qxtmp[i] = eran->gauss_distr() * sqrt(float(Ntmp[i]) / 3.0); //using gaussian distribution
+			Qytmp[i] = eran->gauss_distr() * sqrt(float(Ntmp[i]) / 3.0); //gaussian distribution is defined in math_module
+			Qztmp[i] = eran->gauss_distr() * sqrt(float(Ntmp[i]) / 3.0);
 		}
 	}
 }
@@ -123,33 +123,33 @@ __host__ __device__ float tau_dist(float p,float Be, int Nk) {
 }
 
 
-void chain_init(chain_head *chain_head, sstrentp data, int tnk, bool PD_flag) {
+void chain_init(chain_head *chain_head, sstrentp data, int tnk, bool PD_flag, Ran* eran) {
 	//chain conformation generated should be identical to CPU program(valid only for 1 chain)
-	int tz = z_dist(tnk);   //z distribution
+	int tz = z_dist(tnk, eran);   //z distribution
 // 	tz=1;
 	float *tent_tau = new float[tz - 1];   //temporaly arrays
 	if (CD_flag != 0) {
 		for (int k = 0; k < tz - 1; k++)   //1-SD entanglement lifetime
 			if(PD_flag) {
 				//Random molecular weight of entangled background chain (from GEX)
-				float x = gamma_new_table_x[(int)(eran.flt()/step)];
+				float x = gamma_new_table_x[(int)(eran->flt()/step)];
 
 				//Number of Cuhn steps in background chain
 				int Nk__= (int)(x*mp/Mk);
 
 				//Lifetime of entanglement
-				tent_tau[k] = tau_dist(eran.flt(),Be, Nk__);
+				tent_tau[k] = tau_dist(eran->flt(),Be, Nk__);
 			}
 			else
-				tent_tau[k] = tau_dist(eran.flt(),Be, tnk);
+				tent_tau[k] = tau_dist(eran->flt(),Be, tnk);
 	} else
 		for (int k = 0; k < tz - 1; tent_tau[k++] = 0.0);
 
 	int *tN;
 	float * Qxtmp, *Qytmp, *Qztmp;
-	N_dist(tz, tN, tnk);   //N distribution
+	N_dist(tz, tN, tnk, eran);   //N distribution
 // 	for(int i=0;i<tz;cout<<tN[i++]<<'\t');cout<<'\n';
-	Q_dist(tz, tN, Qxtmp, Qytmp, Qztmp); //Q distributions //realization Free_Energy_module(Gauss)
+	Q_dist(tz, tN, Qxtmp, Qytmp, Qztmp, eran); //Q distributions //realization Free_Energy_module(Gauss)
 	memset(data.QN, 0, sizeof(float) * tnk * 4);
 	// creating entanglements according to distributions
 	for (int k = 0; k < tz; k++) {
@@ -175,29 +175,29 @@ void chain_init(chain_head *chain_head, sstrentp data, int tnk, bool PD_flag) {
 
 }
 
-void chain_init(chain_head *chain_head, sstrentp data, int tnk, int z_max, bool PD_flag) {
-	int tz = z_dist_truncated(tnk, z_max);   //z distribution
+void chain_init(chain_head *chain_head, sstrentp data, int tnk, int z_max, bool PD_flag, Ran* eran) {
+	int tz = z_dist_truncated(tnk, z_max, eran);   //z distribution
 	float *tent_tau = new float[tz - 1];   //temporaly arrays
 	if (CD_flag != 0)
 		for (int k = 0; k < tz - 1; k++)   //1-SD entanglement lifetime
 			if (PD_flag) {
 				//Random molecular weight of entangled background chain (from GEX)
-				float x = gamma_new_table_x[(int) (eran.flt() / step)];
+				float x = gamma_new_table_x[(int) (eran->flt() / step)];
 
 				//Number of Cuhn steps in background chain
 				int Nk__ = (int) (x * mp / Mk);
 
 				//Lifetime of entanglement
-				tent_tau[k] = tau_dist(eran.flt(),Be, Nk__);
+				tent_tau[k] = tau_dist(eran->flt(),Be, Nk__);
 			} else
-				tent_tau[k] = tau_dist(eran.flt(),Be, tnk);
+				tent_tau[k] = tau_dist(eran->flt(),Be, tnk);
 	else
 		for (int k = 0; k < tz - 1; tent_tau[k++] = 0.0);
 
 	int *tN;
 	float * Qxtmp, *Qytmp, *Qztmp;
-	N_dist(tz, tN, tnk);   //N distribution
-	Q_dist(tz, tN, Qxtmp, Qytmp, Qztmp); //Q distributions //realization Free_Energy_module(Gauss)
+	N_dist(tz, tN, tnk, eran);   //N distribution
+	Q_dist(tz, tN, Qxtmp, Qytmp, Qztmp, eran); //Q distributions //realization Free_Energy_module(Gauss)
 	memset(data.QN, 0, sizeof(float) * z_max * 4);
 	// creating entanglements according to distributions
 	for (int k = 0; k < tz; k++) {

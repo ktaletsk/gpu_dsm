@@ -19,12 +19,13 @@
 #define gpu_random
 #include <curand_kernel.h>
 #include <math.h>
+#include "pcd_tau.h"
 
 //Curand random number generators
 //creates array of random number generator on device
 //fills array with random numbers
 //designed to provide texture random number supply for DSM dynamics
-void gpu_ran_init();    //initializes device random number
+void gpu_ran_init(p_cd* pcd);    //initializes device random number
 
 #define gpu_Ran curandState_t
 void gr_array_seed(gpu_Ran *gr, int sz, int seed_offest); // seeds array of device random number generators

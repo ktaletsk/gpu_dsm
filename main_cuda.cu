@@ -30,20 +30,13 @@ extern void make_gamma_table (float a, float b);
 
 using namespace std;
 
-Ran eran(1);
-p_cd *pcd;
-
-//synonyms:
-//GPU - device
-//CPU - host
-
 int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int device_ID, bool distr) {
+	Ran eran(1);
+	p_cd *pcd;
+
 	int G_flag = 0;
 	double simulation_time;
 	double t_step_size;
-	cout << '\n';
-
-
 
 	//Print device_ID information
 	if (job_ID != 0) {
@@ -116,10 +109,10 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 		load_from_file(loadfile);
 		cout << "done.\n";
 	} else
-		host_chains_init();	// or generate equilibrium conformations
+		host_chains_init(&eran);	// or generate equilibrium conformations
 
-	gpu_ran_init();	//init gpu random module
-	gpu_init(job_ID);	//prepare GPU to run DSM calculation
+	gpu_ran_init(pcd);	//init gpu random module
+	gpu_init(job_ID, pcd);	//prepare GPU to run DSM calculation
 
 	ctimer timer;
 	if (flow) {	//Flow calculations

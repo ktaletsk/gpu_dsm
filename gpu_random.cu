@@ -51,7 +51,7 @@ __constant__ float d_Mk, d_mp;
 __device__ float d_p_At, d_p_Ct, d_p_Dt, d_p_g, d_p_Adt, d_p_Bdt, d_p_Cdt, d_p_Ddt, d_p_tau_d_inv; //Dynamic fdt parameters for given Nk in polydisperse solution
 __constant__ float d_Be;
 
-void gpu_ran_init () {
+void gpu_ran_init (p_cd* pcd) {
 	cout << "preparing GPU random number generator parameters..\n";
 
 	if(PD_flag){

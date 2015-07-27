@@ -22,10 +22,8 @@
 using namespace std;
 //here are functions for generating initial chain conformation on CPU
 
-extern Ran eran;
 extern float Be;
 extern int CD_flag;
-extern p_cd *pcd;
 
 //DSM chain conformation consist from a following variables: {Q_i},{N_i},{tau_CD_i},Z
 //additionally in this code following chain variables used: time,stall_flag
@@ -57,8 +55,8 @@ extern double universal_time;
 
 
 //init chain conformation
-void chain_init(chain_head *chain_head, sstrentp data, int tnk, bool PD_flag);
-void chain_init(chain_head *chain_head, sstrentp data, int tnk, int z_max, bool PD_flag);	//z_max is maximum number of entaglements. purpose - truncate z distribution for optimization. NOTE: not tested
+void chain_init(chain_head *chain_head, sstrentp data, int tnk, bool PD_flag, Ran* eran);
+void chain_init(chain_head *chain_head, sstrentp data, int tnk, int z_max, bool PD_flag, Ran* eran);	//z_max is maximum number of entaglements. purpose - truncate z distribution for optimization. NOTE: not tested
 
 //outputs chain conformation
 void print(ostream& stream, const sstrentp c, const chain_head chead);

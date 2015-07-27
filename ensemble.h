@@ -51,8 +51,8 @@ extern float kxx, kxy, kxz, kyx, kyy, kyz, kzx, kzy, kzz;	//deformation tensor
 extern bool PD_flag;
 
 //public functions
-void host_chains_init();	//prepares chain conformations on host
-void gpu_init(int seed);// prepares GPU kernels,random number generators and copies chains to host memory
+void host_chains_init(Ran* eran);	//prepares chain conformations on host
+void gpu_init(int seed, p_cd* pcd);// prepares GPU kernels,random number generators and copies chains to host memory
 void get_chains_from_device();	//Copies chains back to host memory
 void save_to_file(char *filename);	//saves chain conformations to a file
 void save_Z_distribution_to_file(string filename, bool cumulative); //saves Z distrubution to file
