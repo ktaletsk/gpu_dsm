@@ -91,19 +91,19 @@ void chains_malloc() {
 	chains.tau_CD = new float[N_cha * z_max];
 }
 
-void host_chains_init() {
+void host_chains_init(Ran* eran) {
 	chains_malloc();
 	cout << "generating chain conformations on host..";
 	universal_time=0.0;
 	for (int i = 0; i < N_cha; i++) {
 		sstrentp ptr = chain_index(i);
-		chain_init(&(chain_heads[i]), ptr, NK, z_max, PD_flag);
+		chain_init(&(chain_heads[i]), ptr, NK, z_max, PD_flag, eran);
 	}
 	cout << "done\n";
 }
 
 //preparation of constants/arrays/etc
-void gpu_init(int seed) {
+void gpu_init(int seed, p_cd* pcd) {
 	cout << "preparing GPU chain conformations..\n";
 
 	//Copy host constants from host to device
