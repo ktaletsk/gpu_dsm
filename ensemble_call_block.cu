@@ -227,8 +227,9 @@ int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, bool* ru
 	dim3 dimBlock(tpb_strent_kernel, tpb_strent_kernel);
 	dim3 dimGrid((z_max + dimBlock.x - 1) / dimBlock.x,(cb->nc + dimBlock.y - 1) / dimBlock.y);
 
-	activate_block(cb);
 	steps_count = 0;
+	activate_block(cb);
+
 	float time_step_interval=reach_time-cb->block_time;
 	int number_of_syncs=int(floor((time_step_interval-0.5)/max_sync_interval))+1;
 
@@ -428,6 +429,13 @@ stress_plus calc_stress_call_block(ensemble_call_block *cb, int *r_chain_count) 
 }
 
 void free_block(ensemble_call_block *cb) {    //free memory
+//	delete cb->nc;
+//	delete cb->block_time;
+	delete[] cb->chains.QN;
+	delete[] cb->chains.tau_CD;
+
+	delete[] cb->chain_heads;
+
 	cudaFree(cb->gpu_chain_heads);
 	cudaFreeArray(cb->d_QN);
 	cudaFreeArray(cb->d_tCD);
@@ -436,6 +444,7 @@ void free_block(ensemble_call_block *cb) {    //free memory
 	cudaFree(cb->reach_flag);
 	cudaFree(cb->d_offset);
 	cudaFree(cb->d_new_strent);
+	cudaFree(cb->d_new_tau_CD);
 
 	if (cb->corr != NULL) {
 		cudaFree(cb->d_correlator_time);

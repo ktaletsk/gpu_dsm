@@ -152,7 +152,6 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 
 	get_chains_from_device();
 	//     z_plot(chain_heads,Be, NK,N_cha);
-
 	if (savefile != NULL) {
 		cout << "saving chain conformations to " << savefile << "..";
 		save_to_file(savefile);

@@ -48,7 +48,29 @@ typedef struct ensemble_call_block {
 	//G(t) calculations
 	c_correlator *corr;     //correlator
 	int *d_correlator_time; //index of next cell to fill
-
+//	~ensemble_call_block() {
+////		delete nc;
+////		delete block_time;
+//		cout << "\nTest Destructor 1";
+//		delete[] chains.QN;
+//		delete[] chains.tau_CD;
+//		delete[] chain_heads;
+//
+//		cudaFree(gpu_chain_heads);
+//		cudaFreeArray(d_QN);
+//		cudaFreeArray(d_tCD);
+//
+//		cudaFree(d_dt);
+//		cudaFree(reach_flag);
+//		cudaFree(d_offset);
+//		cudaFree(d_new_strent);
+//		cudaFree(d_new_tau_CD);
+//
+//		if (corr != NULL) {
+//			cudaFree(d_correlator_time);
+//			delete corr;
+//		}
+//	}
 } ensemble_call_block;
 
 void init_call_block(ensemble_call_block *cb, int nc, sstrentp chains,

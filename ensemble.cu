@@ -64,7 +64,6 @@ float kxx, kxy, kxz, kyx, kyy, kyz, kzx, kzy, kzz;
 bool PD_flag=0;
 
 bool dbug = false;	//true;
-//bool *reach_time_flag=NULL;
 
 //navigation
 sstrentp chain_index(const int i) { //absolute navigation i - is a global index of chains i:[0..N_cha-1]
@@ -212,35 +211,14 @@ void get_chains_from_device()    //Copies chains back to host memory
 }
 
 void gpu_clean() {
-
-	//debug checks
-	// 	for(int i=0; i<chain_blocks_number;i++){
-	// 	     get_chain_from_device_call_block(&(chain_blocks[i]));
-	// 	}
-	// 	float *dtbuffer=new float[N_cha];
-	// 	cudaMemcpy(dtbuffer,chain_blocks[0].d_dt,sizeof(float)*(chain_blocks[0].nc),cudaMemcpyDeviceToHost);
-
-	// 	for(int i=0;i<1+0*N_cha;i++){
-	// 	    cout<<"chain "<<'\t'<<i<<" dt "<<dtbuffer[i]<<'\n';
-	// 	    cout<<NK<<'\n';
-	// 
-	// 	    print(cout,chain_index(i),chain_heads[i]);
-	// 	    
-	// // 	    cout<<"W_sd\n";
-	// // 	    cout<<chain_heads[i].W_SD_c_1<<'\t'<<chain_heads[i].W_SD_d_1<<'\n';
-	// // 	    cout<<chain_heads[i].W_SD_c_z<<'\t'<<chain_heads[i].W_SD_d_z<<'\n';
-	// 
-	// 	cout<<"\n";
-	// 	cout<<"\n";
-	// 	}
-	// 	delete[] dtbuffer;
-
 	cout << "Memory cleanup.. ";
-	for (int i = 0; i < chain_blocks_number; i++) {
-		free_block(&(chain_blocks[i]));
-	}
+//	for (int i = 0; i < chain_blocks_number; i++) {
+//		free_block(&(chain_blocks[i]));
+//	}
 	delete[] chain_blocks;
-	//free chains chain_heads?
+	delete[] chain_heads;
+	delete[] (chains.QN);
+	delete[] (chains.tau_CD);
 
 	cudaFreeArray(d_a_QN);
 	cudaFreeArray(d_a_tCD);
@@ -255,11 +233,12 @@ void gpu_clean() {
 
 	cudaFree(d_tau_CD_used_SD);
 	cudaFree(d_tau_CD_used_CD);
-
+	cudaFree(d_rand_used);
 	cudaFree(d_random_gens);
 	cudaFree(d_random_gens2);
 
 	cudaFree(d_gamma_table);
+	cudaDeviceReset();
 	cout << "done.\n";
 
 }
