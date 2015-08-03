@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with gpu_dsm.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "main_cuda.cu"
+#include "../common/main_cuda.cu"
 
 int main(int narg, char** arg) {
 	bool run_flag = true;

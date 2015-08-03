@@ -1,0 +1,12 @@
+<RCC>
+    <qresource prefix="/">
+        <file>icons/1396473432_plus_16.png</file>
+        <file>icons/1396473552_cross.png</file>
+        <file>icons/1396473880_edit_remove.png</file>
+        <file>icons/1396475885_layer-raster-analyze.png</file>
+        <file>icons/1396477966_Blue_pin.png</file>
+        <file>icons/1396515307_document-open.png</file>
+        <file>icons/1396515958_save.png</file>
+        <file>icons/dsm.png</file>
+    </qresource>
+</RCC>

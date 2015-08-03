@@ -1,0 +1,4 @@
+Inception 0 1 0 0 0 0 0 0 0
+Uniaxial -0.5 0 0 0 -0.5 0 0 0 1
+Biaxial 0.5 0 0 0 0.5 0 0 0 -1
+Planar -1 0 0 0 0 0 0 0 1
