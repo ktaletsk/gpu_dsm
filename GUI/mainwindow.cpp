@@ -132,7 +132,6 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->lineEdit_19->setValidator(validator2);
     ui->lineEdit_20->setValidator(validator2);
     ui->edit_strain->setValidator(validator);
-    ui->lineEdit_11->setValidator(validator);
     ui->edit_n_cha->setValidator(validatorInt);
 
     //loading saved settings
@@ -356,7 +355,7 @@ void MainWindow::on_combo_flow_type_currentIndexChanged(int) {
 	        QString current = ui->combo_flow_type->currentText();
 	        QStringList fields = line.split(' ', QString::SkipEmptyParts);
 	        if (fields.at(0)==current.split(' ', QString::SkipEmptyParts).at(0)) {
-	            float rate=ui->edit_rate->text().toDouble();
+                float rate=ui->edit_rate->text().toFloat();
 	            float xx=fields.at(1).toDouble()*rate;
 	            QString xxs=QString::number(xx);
 	            ui->lineEdit_11->setText(xxs);
@@ -551,7 +550,14 @@ void MainWindow::setuRealtimeData()
                 line2.replace('\t',' ');
                 QStringList fields2 = line2.split(' ', QString::SkipEmptyParts);
                 t[i] = fields2.at(0).toDouble();
-                s[i] = -fields2.at(4).toDouble()/ui->edit_rate->text().toDouble();
+                if(ui->combo_flow_type->currentIndex()==0) //Inception Shear
+                    s[i] = -fields2.at(4).toDouble() / ui->edit_rate->text().toDouble();
+                else if (ui->combo_flow_type->currentIndex()==1) //Uniaxial Elongation
+                    s[i] = -(fields2.at(3).toDouble() - fields2.at(1).toDouble()) / ui->edit_rate->text().toDouble(); //Uniaxail elongation viscosity
+                else if (ui->combo_flow_type->currentIndex()==2) //Biaxial Elongation
+                    s[i] = (fields2.at(3).toDouble() - fields2.at(1).toDouble()) / ui->edit_rate->text().toDouble(); //Biaxial elongational viscosity
+                else if (ui->combo_flow_type->currentIndex()==3) //Planar Elongation
+                    s[i] = -(fields2.at(3).toDouble() - fields2.at(1).toDouble()) / ui->edit_rate->text().toDouble(); //First planar elongation viscosity
                 i++;
             }
             if (i==result_line_count) {
@@ -625,9 +631,9 @@ void MainWindow::on_MainWindow_destroyed()
     save_settings();
 }
 
-void MainWindow::on_edit_rate_textChanged(const QString &arg1)
+void MainWindow::on_edit_rate_editingFinished()
 {
-
+    on_combo_flow_type_currentIndexChanged(ui->combo_flow_type->currentIndex());
 }
 
 void MainWindow::on_edit_rate_returnPressed()
