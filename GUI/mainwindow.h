@@ -57,8 +57,8 @@ private slots:
     void setuRealtimeData();
     void on_combo_arch_probe_activated(const QString);
     void on_MainWindow_destroyed();
-    void on_edit_rate_textChanged(const QString &arg1);
     void on_edit_rate_returnPressed();
+    void on_edit_rate_editingFinished();
     void on_pushButton_save_pdf_clicked();
     void on_pushButton_save_jpg_clicked();
     void on_radio_flow_clicked();
