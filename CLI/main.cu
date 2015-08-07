@@ -23,6 +23,7 @@ int main(int narg, char** arg) {
 	char *loadfile = NULL;
 	bool distr = 0;
 	int device_ID = 0;
+	int progress_bar = 0;
 	//Processing command line parameters
 	int k = 1;
 	while (k < narg) {
@@ -50,6 +51,6 @@ int main(int narg, char** arg) {
 		}
 		k++;
 	}
-	main_cuda(&run_flag, job_ID, savefile, loadfile, device_ID, distr);
+	main_cuda(&run_flag, job_ID, savefile, loadfile, device_ID, distr, &progress_bar);
 	return 0;
 }

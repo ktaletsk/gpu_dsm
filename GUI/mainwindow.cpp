@@ -1,3 +1,19 @@
+// Copyright 2015 Marat Andreev, Konstantin Taletskiy, Maria Katzarova
+//
+// This file is part of gpu_dsm.
+//
+// gpu_dsm is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// at your option) any later version.
+//
+// gpu_dsm is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with gpu_dsm.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
@@ -15,11 +31,12 @@
 #include <QtConcurrent>
 
 #include <iostream>
-extern int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int device_ID, bool distr);
+extern int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int device_ID, bool distr, int* progress_bar);
 bool first_time = true;
 int sim_length;
 int sync_time;
 int nc;
+int progress_bar = 0;
 
 int time_counter=0;
 int result_line_count=0;
@@ -51,7 +68,7 @@ void Worker::abort() {
 void Worker::doWork()
 {
     qDebug()<<"Starting worker process in Thread "<<thread()->currentThreadId();
-    main_cuda(&_run,0,NULL,NULL,0,0);
+    main_cuda(&_run,0,NULL,NULL,0,0,&progress_bar);
 
     // Set _working to false, meaning the process can't be aborted anymore.
     mutex.lock();
@@ -90,54 +107,59 @@ MainWindow::MainWindow(QWidget *parent) :
                      << "Planar Elongation"
                    //<< "Step Elongation"
                      << "Custom"  ;
-    //def row
-    int last_row = ui->tableWidget_2->rowCount();
-    ui->tableWidget_2->insertRow(0);
-    QPointer<QCheckBox> Delete = new QCheckBox(this);
-    QPointer<QComboBox> Architecture = new QComboBox(this);
-    Architecture->addItems(Architecturelistfull);
-    for (int i=1; i<Architecture->count();++i)
-        Architecture->setItemData(i,"DISABLE",Qt::UserRole-1); //disable architectures other than linear
+        //def row
+        int last_row = ui->tableWidget_2->rowCount();
+        ui->tableWidget_2->insertRow(0);
+        QPointer<QCheckBox> Delete = new QCheckBox(this);
+        QPointer<QComboBox> Architecture = new QComboBox(this);
+        Architecture->addItems(Architecturelistfull);
+        for (int i=1; i<Architecture->count();++i)
+            Architecture->setItemData(i,"DISABLE",Qt::UserRole-1); //disable architectures other than linear
 
-    ui->tableWidget_2->setCellWidget(last_row,0,Delete);
-    ui->tableWidget_2->setCellWidget(last_row,2,Architecture);
-    Architecturelist.append(Architecture);
-    Deletelist.append(Delete);
+        ui->tableWidget_2->setCellWidget(last_row,0,Delete);
+        ui->tableWidget_2->setCellWidget(last_row,2,Architecture);
+        Architecturelist.append(Architecture);
+        Deletelist.append(Delete);
 
-    ui->label_15->setText(QString::fromUtf8("\u2207v:"));
-    //ui->combo_chemistry_probe->setItemData(5,"DISABLE",Qt::UserRole-1); //disable custom parameters option
+        ui->label_15->setText(QString::fromUtf8("\u2207v:"));
+        //ui->combo_chemistry_probe->setItemData(5,"DISABLE",Qt::UserRole-1); //disable custom parameters option
 
-    for (int i=1; i<ui->combo_arch_probe->count();++i)
-      ui->combo_arch_probe->setItemData(i,"DISABLE",Qt::UserRole-1); //disable architectures other than linear
+        for (int i=1; i<ui->combo_arch_probe->count();++i)
+            ui->combo_arch_probe->setItemData(i,"DISABLE",Qt::UserRole-1); //disable architectures other than linear
 
-    ui->checkBox_9->setEnabled(false);
+        ui->checkBox_9->setEnabled(false);
 
-    QDoubleValidator* validator = new QDoubleValidator();
-    validator->setBottom(0);
-    QDoubleValidator* validator2 = new QDoubleValidator();
-    QIntValidator* validatorInt = new QIntValidator();
-    validatorInt->setBottom(0);
-    ui->lineEdit_4->setValidator(validator);
-    ui->lineEdit_3->setValidator(validator);
-    ui->edit_beta_FSM->setValidator(validator);
-    ui->edit_mw_probe->setValidator(validator);
-    ui->edit_rate->setValidator(validator);
-    ui->lineEdit_11->setValidator(validator2);
-    ui->lineEdit_12->setValidator(validator2);
-    ui->lineEdit_14->setValidator(validator2);
-    ui->lineEdit_15->setValidator(validator2);
-    ui->lineEdit_16->setValidator(validator2);
-    ui->lineEdit_17->setValidator(validator2);
-    ui->lineEdit_18->setValidator(validator2);
-    ui->lineEdit_19->setValidator(validator2);
-    ui->lineEdit_20->setValidator(validator2);
-    ui->edit_strain->setValidator(validator);
-    ui->edit_n_cha->setValidator(validatorInt);
+        QDoubleValidator* validator = new QDoubleValidator();
+        validator->setBottom(0);
+        QDoubleValidator* validator2 = new QDoubleValidator();
+        QIntValidator* validatorInt = new QIntValidator();
+        validatorInt->setBottom(0);
+        ui->lineEdit_4->setValidator(validator);
+        ui->lineEdit_3->setValidator(validator);
+        ui->edit_beta_FSM->setValidator(validator);
+        ui->edit_mw_probe->setValidator(validator);
+        ui->edit_rate->setValidator(validator);
+        ui->lineEdit_11->setValidator(validator2);
+        ui->lineEdit_12->setValidator(validator2);
+        ui->lineEdit_14->setValidator(validator2);
+        ui->lineEdit_15->setValidator(validator2);
+        ui->lineEdit_16->setValidator(validator2);
+        ui->lineEdit_17->setValidator(validator2);
+        ui->lineEdit_18->setValidator(validator2);
+        ui->lineEdit_19->setValidator(validator2);
+        ui->lineEdit_20->setValidator(validator2);
+        ui->edit_strain->setValidator(validator);
+        ui->edit_n_cha->setValidator(validatorInt);
 
-    //loading saved settings
-    setting_file_name="def_setting.dat";
-    load_settings();
-}
+        ui->Wi->setReadOnly(true);
+        ui->progressBar_1->setVisible(false);
+        ui->progressBar_2->setVisible(false);
+
+        ui->label_19->setText(QString::fromUtf8("Simulation time / \u03C4<sub>k</sub> :"));
+        //loading saved settings
+        setting_file_name="def_setting.dat";
+        load_settings();
+    }
 
 MainWindow::~MainWindow()
 {
@@ -228,8 +250,8 @@ void MainWindow::load_settings()
         QMessageBox::information(0,"info",file.errorString());
     QTextStream in(&file);
     int tint;
-    in>>tint;
-    ui->combo_chemistry_probe->setCurrentIndex(tint);
+    int c_c_p;
+    in>>c_c_p;
     in>>tint;
     ui->combo_arch_probe->setCurrentIndex(tint);
     double td;
@@ -237,6 +259,7 @@ void MainWindow::load_settings()
     QString ts;
     ts=QString::number(td);
     ui->edit_mw_probe->setText(ts);
+    MainWindow::on_edit_mw_probe_editingFinished();
 
     in>>tint;
     if (tint){
@@ -264,9 +287,10 @@ void MainWindow::load_settings()
     ui->edit_strain->setText(ts);
     in>>tint;
     ui->combo_flow_type->setCurrentIndex(tint);
-   // on_edit_rate_probe_editingFinished();
-     //out<<ui->combo_chemistry_probe->currentIndex()<<'\n';
-     file.close();
+
+    ui->combo_chemistry_probe->setCurrentIndex(c_c_p);
+    file.close();
+    MainWindow::on_edit_rate_editingFinished();
 }
 
 void MainWindow::save_settings()
@@ -313,6 +337,9 @@ void MainWindow::on_combo_chemistry_probe_currentIndexChanged(int index)
                     ui->lineEdit_3->setReadOnly(true);
             }
         }
+        MainWindow::on_edit_mw_probe_editingFinished();
+        //Update Wi
+        MainWindow::on_edit_rate_editingFinished();
     }
 }
 
@@ -342,6 +369,29 @@ void MainWindow::on_lineEdit_4_editingFinished() {
     //recalculate beta
     float beta= ui->lineEdit_4->text().toFloat() / (0.56 * ui->lineEdit_3->text().toFloat()) - 1;
     ui->edit_beta_FSM->setText(QString::number(beta));
+}
+
+void MainWindow::on_edit_mw_probe_editingFinished() {
+    //Update <Z>
+    float Zaver;
+
+    float mw=ui->edit_mw_probe->text().toFloat();
+    int nk=(mw*1000)/ui->lineEdit_3->text().toFloat();
+    float beta=ui->edit_beta_FSM->text().toFloat();
+    int nc=ceil(nk/(0.56*beta));
+    if (ui->radio_CFSM->isChecked()) //beta=1
+        Zaver = (nc + 1)/2;
+    else //FSM
+        Zaver = (nk + beta)/(beta + 1);
+    ui->Zaver->setText(QString::number(Zaver));
+
+    //Update sim_length
+    if (ui->radio_eq->isChecked()){
+        if (ui->radio_CFSM->isChecked())
+            ui->sim_length->setText(QString::number((int)(10* 0.0740131f * powf(nc, 3.18363f))));
+        else
+            ui->sim_length->setText(QString::number((int)(10* 0.036f * powf(beta + 2.0f, 3.07f) * powf((ceil(nk)+beta)/(beta+1) - 1.0f, 3.02f))));
+    }
 }
 
 void MainWindow::on_combo_flow_type_currentIndexChanged(int) {
@@ -385,7 +435,8 @@ void MainWindow::on_combo_flow_type_currentIndexChanged(int) {
 	            ui->lineEdit_20->setText(zzs);
 	        }
 		}
-		file.close();
+        file.close();
+
 	}
 }
 
@@ -397,6 +448,9 @@ void MainWindow::on_pushButton_clicked() {
         ui->radio_flow->setEnabled(true);
         ui->radio_eq->setEnabled(true);
         ui->pushButton->setText("Run");
+        ui->progressBar_1->setVisible(false);
+        ui->progressBar_2->setVisible(false);
+        ui->label_status->setText(QString(""));
         ui->label_8->clear();
     }
     else {
@@ -416,11 +470,15 @@ void MainWindow::on_pushButton_clicked() {
         //calculation length
         if (ui->radio_eq->isChecked()){
             sync_time=1;
-            sim_length=10.0*(0.074*pow(nc,3.2));
+            if (ui->radio_CFSM->isChecked())
+                sim_length=0.0740131f * powf(nc, 3.18363f);
+            else
+                sim_length=0.036f * powf(beta + 2.0f, 3.07f) * powf((ceil(nk)+beta)/(beta+1) - 1.0f, 3.02f);
+            sim_length = sim_length * 10;
         }
         else {
             sim_length=ceil(ui->edit_strain->text().toFloat()/ui->edit_rate->text().toFloat());
-            sync_time=sim_length/400;
+            sync_time=sim_length/1000;
             if (sync_time<10)
                 sync_time=1;
         }
@@ -528,6 +586,8 @@ void MainWindow::on_pushButton_clicked() {
         if (timer2==NULL) timer2 = new QTimer(this);
         connect(timer2, SIGNAL(timeout()), this, SLOT(setuRealtimeData()));
 
+        ui->progressBar_1->setVisible(true);
+        ui->progressBar_2->setVisible(true);
 
         //Switch to graph tab
         ui->tabWidget->setCurrentIndex(3);
@@ -560,10 +620,12 @@ void MainWindow::setuRealtimeData()
                     s[i] = -(fields2.at(3).toDouble() - fields2.at(1).toDouble()) / ui->edit_rate->text().toDouble(); //First planar elongation viscosity
                 i++;
             }
+            ui->progressBar_1->setValue((double)i*(double)sync_time/(double)sim_length*100.0);
+            ui->progressBar_2->setValue((double)i*(double)sync_time/(double)sim_length*100.0);
+            ui->label_status->setText(QString("Running simulation..."));
             if (i==result_line_count) {
                 worker->abort();
             }
-
             // create graph and assign data to it:
             ui->stress->graph(0)->setData(t, s);
             ui->stress->graph(0)->removeData(0);
@@ -584,7 +646,7 @@ void MainWindow::setuRealtimeData()
         QFile file2("G.dat");
         if(file2.open(QIODevice::ReadOnly)) {
             QTextStream in2(&file2);
-            QVector<double> t(2000,0.0), s(2000, 0.0);
+            QVector<double> t(2000, 0.0), s(2000, 0.0);
             int i=0;
             while (!in2.atEnd()) {
 
@@ -595,6 +657,12 @@ void MainWindow::setuRealtimeData()
                 s[i] = fields2.at(1).toDouble();
                 i++;
             }
+            ui->progressBar_1->setValue(progress_bar);
+            ui->progressBar_2->setValue(progress_bar);
+            if (progress_bar <=50)
+                ui->label_status->setText(QString("Running simulation..."));
+            else
+                ui->label_status->setText(QString("Calculating correlation function..."));
             file2.close();
             if (i>result_line_count)
                 ui->label_8->clear();
@@ -614,6 +682,11 @@ void MainWindow::setuRealtimeData()
     }
 
     if (worker->get_working()==false) {
+        ui->progressBar_1->setVisible(false);
+        ui->progressBar_2->setVisible(false);
+        ui->progressBar_1->setValue(0);
+        ui->progressBar_2->setValue(0);
+        ui->label_status->setText(QString(""));
         ui->pushButton->setText("Run");
         ui->radio_flow->setEnabled(true);
         ui->radio_eq->setEnabled(true);
@@ -634,6 +707,23 @@ void MainWindow::on_MainWindow_destroyed()
 void MainWindow::on_edit_rate_editingFinished()
 {
     on_combo_flow_type_currentIndexChanged(ui->combo_flow_type->currentIndex());
+    //Update Wi estimation
+
+    float Wi;
+    float rate=ui->edit_rate->text().toFloat();
+
+    float mw=ui->edit_mw_probe->text().toFloat();
+    int nk=(mw*1000)/ui->lineEdit_3->text().toFloat();
+    float beta=ui->edit_beta_FSM->text().toFloat();
+    int nc=ceil(nk/(0.56*beta));
+    if (ui->radio_CFSM->isChecked()) //beta=1
+        Wi = rate * 0.0740131f * powf(float(nc), 3.18363f);
+    else //FSM
+        Wi = rate * 0.036f * powf(beta + 2.0f, 3.07f) * powf((nk + beta) / (beta + 1.0) - 1.0f, 3.02f);
+    ui->Wi->setText(QString::number(Wi));
+    if (!(ui->radio_eq->isChecked()))
+        ui->sim_length->setText(QString::number(ceil(ui->edit_strain->text().toFloat()/ui->edit_rate->text().toFloat())));
+
 }
 
 void MainWindow::on_edit_rate_returnPressed()
@@ -663,8 +753,21 @@ void MainWindow::on_pushButton_save_jpg_clicked()
 
 void MainWindow::on_radio_flow_clicked() {
     ui->edit_n_cha->setText(QString::number(2000));
+    ui->sim_length->setText(QString::number(ceil(ui->edit_strain->text().toFloat()/ui->edit_rate->text().toFloat())));
+
 }
 
 void MainWindow::on_radio_eq_clicked() {
     ui->edit_n_cha->setText(QString::number(100));
+    //Update sim_length
+    float mw=ui->edit_mw_probe->text().toFloat();
+    float nk=(mw*1000)/ui->lineEdit_3->text().toFloat();
+    float beta=ui->edit_beta_FSM->text().toFloat();
+    nc=ceil(nk/(0.56*beta));
+
+    //calculation length
+    if (ui->radio_CFSM->isChecked())
+        ui->sim_length->setText(QString::number((int)(10* 0.0740131f * powf(nc, 3.18363f))));
+    else
+        ui->sim_length->setText(QString::number((int)(10* 0.036f * powf(beta + 2.0f, 3.07f) * powf((ceil(nk)+beta)/(beta+1) - 1.0f, 3.02f))));
 }

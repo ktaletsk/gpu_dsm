@@ -453,7 +453,7 @@ void load_from_file(char *filename) {
 		cout << "file error\n";
 }
 
-int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* run_flag) {
+int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* run_flag, int *progress_bar) {
 	//Start simulation
 	//Save as much stress as posssible on GPU memory
 	//Sync with stress file
@@ -493,6 +493,7 @@ int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* ru
 			for (int j=0; j< n_steps * (chain_blocks+i)->nc ; j++)
 				file.write( (char *)((chain_blocks[i].corr->stress)+j),sizeof(float4));
 		}
+        *progress_bar = 0.5 * k * 100 / split;
 	}
 	file.close();
 
@@ -509,7 +510,7 @@ int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* ru
 		}
 		n++;
 	}
-	np = n;
+    np = n;
 	//full run
 	t = new float[n];
 	int *tint = new int[n];
@@ -528,8 +529,8 @@ int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* ru
 		tint[n] = t1;
 		n++;
 	}
-	float *x_buf = new float[np];
-	for (int j = 0; j < np; j++) {
+    float *x_buf = new float[np];
+    for (int j = 0; j < np; j++) {
 		x[j] = 0.0f;
 		xx[j] = 0.0f;
 	}
@@ -557,7 +558,7 @@ int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* ru
 		}
 
 		//Calculate autocorrelation for particular chain
-		for (int l = 0; l < np; l++) {//iterate time lag
+        for (int l = 0; l < np; l++) {//iterate time lag
 			for (int time = 0; time < ((int)(length/res) - tint[l]); time++) {//iterate time
 				xx[l] += (stress_1chain[time].x * stress_1chain[time + tint[l]].x +
 						 stress_1chain[time].y * stress_1chain[time + tint[l]].y +
@@ -565,13 +566,14 @@ int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* ru
 						 (3 * ((int)(length/res) - tint[l]) * N_cha );
 			}
 		}
+        *progress_bar = 50 + 0.5 * i * 100 / N_cha;
 	}
-	for (int l = 0; l < np; l++)
+    for (int l = 0; l < np; l++)
 		x[l] = (float)xx[l];
 	file2.close();
 	std::remove("stress.dat");
 
-	for (int j = 0; j < np; j++) {
+    for (int j = 0; j < np; j++) {
 		cout << t[j] << '\t' << x[j] << '\n';
 		G_file << t[j] << '\t' << x[j] << '\n';
 	}

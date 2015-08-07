@@ -30,7 +30,7 @@ extern void make_gamma_table (float a, float b);
 
 using namespace std;
 
-int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int device_ID, bool distr) {
+int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int device_ID, bool distr, int* progress_bar) {
 	Ran eran(1);
 	p_cd *pcd;
 
@@ -139,10 +139,10 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 			cout << "G(t) calc...\n";
 			cout.flush();
 			float *t, *x;
-			int np;
+            int np;
 			timer.start();
 			//if(gpu_Gt_calc(t_step_size, simulation_time, t, x, np, &run_flag)==-1) return -1;
-			if(Gt_brutforce(t_step_size, simulation_time, t, x, np, run_flag)==-1) return -1;
+            if(Gt_brutforce(t_step_size, simulation_time, t, x, np, run_flag,progress_bar)==-1) return -1;
 			cout << "G(t) calc done\n";
 			timer.stop();
 		} else {

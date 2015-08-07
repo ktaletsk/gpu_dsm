@@ -62,7 +62,7 @@ void load_from_file(char *filename);  //loads chain conformations from a file
 
 int gpu_time_step(double reach_time, bool* run_flag);  // performs time evolution of ensemble
 
-int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* run_flag);
+int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* run_flag, int *progress_bar);
 int gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np, bool* run_flag); //G(t) relaxation spectrum calculation
 
 void gpu_clean();  //free memory used by ensemble
