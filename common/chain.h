@@ -37,11 +37,12 @@ extern int CD_flag;
 typedef struct sstrentp {//actually there are only Z-1 tau_CD and only Z-2 Q_i(i:[2,Z-1])
 	//but we are ignoring this fact here
 	float4 *QN;	//number of chain segments in the strand and the strand connector vector
-	float *tau_CD;				//CD lifetime
+	float *tau_CD; //CD lifetime
+	float *tlife;
 } sstrentp;
 
 //this structure contains scalar variables of chain conformation
-typedef struct chain_head {//chain header
+typedef struct chain_head { //chain header
 	int Z;//n strands
 	float time;//time since last ensemble synchronization/time_step.
 		   //Single precision float works only up to time~=1E7.

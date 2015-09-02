@@ -30,7 +30,7 @@ typedef struct ensemble_call_block {
 	//chain conformation on device (GPU)
 	cudaArray* d_QN;  //device arrays for vector part of chain conformations
 	cudaArray* d_tCD; //these arrays used to store conformations
-
+	cudaArray* d_tLife; //lifetime of entanglement for fd_t calculation
 	//regular device arrays
 	chain_head* gpu_chain_heads;
 
@@ -44,33 +44,14 @@ typedef struct ensemble_call_block {
 	int *d_offset;        //coded array shifting parameters
 	float4 *d_new_strent; //new strent which should be inserted in the middle of the chain//TODO two new_strents will allow do all the updates at once
 	float *d_new_tau_CD;  //new life time
+	float *d_new_tlife; //new lifetime
 
 	//G(t) calculations
 	c_correlator *corr;     //correlator
 	int *d_correlator_time; //index of next cell to fill
-//	~ensemble_call_block() {
-////		delete nc;
-////		delete block_time;
-//		cout << "\nTest Destructor 1";
-//		delete[] chains.QN;
-//		delete[] chains.tau_CD;
-//		delete[] chain_heads;
-//
-//		cudaFree(gpu_chain_heads);
-//		cudaFreeArray(d_QN);
-//		cudaFreeArray(d_tCD);
-//
-//		cudaFree(d_dt);
-//		cudaFree(reach_flag);
-//		cudaFree(d_offset);
-//		cudaFree(d_new_strent);
-//		cudaFree(d_new_tau_CD);
-//
-//		if (corr != NULL) {
-//			cudaFree(d_correlator_time);
-//			delete corr;
-//		}
-//	}
+
+	//Current split
+	int split;
 } ensemble_call_block;
 
 void init_call_block(ensemble_call_block *cb, int nc, sstrentp chains,

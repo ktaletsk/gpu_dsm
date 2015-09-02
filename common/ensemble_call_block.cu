@@ -19,6 +19,8 @@
 #include "gpu_random.h"
 #include "ensemble_kernel.cu"
 #include "ensemble_call_block.h"
+#include <vector>
+
 #define max_sync_interval 1E5
 //variable arrays, that are common for all the blocks
 gpu_Ran *d_random_gens; // device random number generators
@@ -31,11 +33,16 @@ int steps_count = 0;    //time step count
 int *d_tau_CD_used_SD;
 int *d_tau_CD_used_CD;
 int *d_rand_used;
+float *d_t_l; //For lifetime of destroyed entanglement
+int *bin_weight;
+std::vector< std::vector<float> > surv_time;
 
 cudaArray* d_a_QN; //device arrays for vector part of chain conformations
 cudaArray* d_a_tCD; // these arrays used by time evolution kernels
+cudaArray* d_a_tLife;
 cudaArray* d_b_QN;
 cudaArray* d_b_tCD;
+cudaArray* d_b_tLife;
 
 cudaArray* d_sum_W; // sum of probabilities for each entanglement
 cudaArray* d_stress; // stress calculation temp array
@@ -67,6 +74,11 @@ void init_call_block(ensemble_call_block *cb, int nc, sstrentp chains,
 
 	cudaMallocArray(&(cb->d_QN), &channelDesc4, z_max, cb->nc, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&(cb->d_tCD), &channelDesc1, z_max, cb->nc, cudaArraySurfaceLoadStore);
+	cudaMallocArray(&(cb->d_tLife), &channelDesc1, z_max, cb->nc, cudaArraySurfaceLoadStore);
+	float* tlife_init = new float [z_max * cb->nc];
+	for (int i=0;i< z_max * cb->nc; i++)
+		tlife_init[i]=0;
+	cudaMemcpy2DToArray(cb->d_tLife, 0, 0, tlife_init, z_max * sizeof(float), z_max * sizeof(float), cb->nc, cudaMemcpyHostToDevice);
 
 	//blank dynamics probabalities
 	float *buffer = new float[z_max * cb->nc];
@@ -87,6 +99,7 @@ void init_call_block(ensemble_call_block *cb, int nc, sstrentp chains,
 	cudaMalloc(&(cb->d_offset), sizeof(int) * cb->nc);
 	cudaMalloc(&(cb->d_new_strent), sizeof(float) * 4 * cb->nc);
 	cudaMalloc(&(cb->d_new_tau_CD), sizeof(float) * cb->nc);
+	cudaMalloc(&(cb->d_new_tlife), sizeof(float) * cb->nc);
 
 	cudaMemset((cb->d_offset), 0xff, sizeof(float) * cb->nc);
 
@@ -234,7 +247,7 @@ int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, bool* ru
 	int number_of_syncs=int(floor((time_step_interval-0.5)/max_sync_interval))+1;
 
 	float *rtbuffer = new float[cb->nc];
-
+	float *tlbuffer = new float[cb->nc];
 	//Loop begins
 
 	for(int i_sync=0;i_sync<number_of_syncs;i_sync++){
@@ -250,16 +263,16 @@ int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, bool* ru
 		
 		while (!reach_flag_all) {
 			if (!(steps_count & 0x00000001)) {//For odd number of steps
-
 				cudaBindTextureToArray(t_a_QN, d_a_QN, channelDesc4);
 				cudaBindSurfaceToArray(s_b_QN, d_b_QN);
 				cudaBindTextureToArray(t_a_tCD, d_a_tCD, channelDesc1);
 				cudaBindSurfaceToArray(s_b_tCD, d_b_tCD);
+				cudaBindTextureToArray(t_a_tLife, d_a_tLife, channelDesc1);
+				cudaBindSurfaceToArray(s_b_tLife, d_b_tLife);
 
-				EQ_strent_kernel<<<dimGrid, dimBlock>>>(cb->gpu_chain_heads,cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD);
+				EQ_strent_kernel<<<dimGrid, dimBlock>>>(cb->gpu_chain_heads,cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD, cb->d_new_tlife, cb->split);
 				CUT_CHECK_ERROR("kernel execution failed");
-
-				EQ_chain_kernel<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel,tpb_chain_kernel>>>(cb->gpu_chain_heads, cb->d_dt,cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent,cb->d_new_tau_CD, cb->d_correlator_time, d_rand_used,d_tau_CD_used_CD,d_tau_CD_used_SD);
+				EQ_chain_kernel<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel,tpb_chain_kernel>>>(cb->gpu_chain_heads, cb->d_dt,cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent,cb->d_new_tau_CD, cb->d_new_tlife, cb->d_correlator_time, d_rand_used,d_tau_CD_used_CD,d_tau_CD_used_SD,d_t_l, cb->split);
 				CUT_CHECK_ERROR("kernel execution failed");
 
 				cudaUnbindTexture(t_a_QN);
@@ -270,10 +283,13 @@ int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, bool* ru
 				cudaBindSurfaceToArray(s_b_QN, d_a_QN);
 				cudaBindTextureToArray(t_a_tCD, d_b_tCD, channelDesc1);
 				cudaBindSurfaceToArray(s_b_tCD, d_a_tCD);
-				EQ_strent_kernel<<<dimGrid, dimBlock>>>(cb->gpu_chain_heads,cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD);
+				cudaBindTextureToArray(t_a_tLife, d_b_tLife, channelDesc1);
+				cudaBindSurfaceToArray(s_b_tLife, d_a_tLife);
+
+				EQ_strent_kernel<<<dimGrid, dimBlock>>>(cb->gpu_chain_heads,cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD, cb->d_new_tlife, cb->split);
 				CUT_CHECK_ERROR("kernel execution failed");
 
-				EQ_chain_kernel<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel,tpb_chain_kernel>>>(cb->gpu_chain_heads, cb->d_dt,cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent,cb->d_new_tau_CD, cb->d_correlator_time, d_rand_used,d_tau_CD_used_CD,d_tau_CD_used_SD);
+				EQ_chain_kernel<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel,tpb_chain_kernel>>>(cb->gpu_chain_heads, cb->d_dt,cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent,cb->d_new_tau_CD, cb->d_new_tlife, cb->d_correlator_time, d_rand_used,d_tau_CD_used_CD,d_tau_CD_used_SD,d_t_l, cb->split);
 				CUT_CHECK_ERROR("kernel execution failed");
 
 				cudaUnbindTexture(t_a_QN);
@@ -288,6 +304,22 @@ int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, bool* ru
 				random_textures_refill(cb->nc);
 				steps_count = 0;
 			}
+
+			// sync d_t_l (lifetime of destroyed entanglements
+			cudaMemcpy(tlbuffer, d_t_l, sizeof(float) * cb->nc, cudaMemcpyDeviceToHost);
+			for (int i = 0; i < cb->nc; i++){
+				if(tlbuffer[i]!=0.0){
+					int bin = ceil(log10(tlbuffer[i]));
+					if (bin<-1)
+						bin = -1;
+					if(bin >20)
+						bin =20;
+					bin_weight[bin+1]++;
+					if (surv_time[bin+1].size()<5000)
+						surv_time[bin+1].push_back(tlbuffer[i]);
+				}
+			}
+			cudaMemset(d_t_l, 0.0, sizeof(float) * cb->nc); //clear variable
 
 			// check for reached time
 			cudaMemcpy(rtbuffer, cb->reach_flag, sizeof(float) * cb->nc, cudaMemcpyDeviceToHost);
@@ -350,9 +382,11 @@ void get_chain_from_device_call_block(ensemble_call_block *cb) { //copy chains b
 	int *h_offset = new int[cb->nc];
 	float4 *h_new_strent = new float4[cb->nc];
 	float *h_new_tau_CD = new float[cb->nc];
+	float *h_new_tlife = new float[cb->nc];
 	cudaMemcpy(h_offset, cb->d_offset, sizeof(int) * cb->nc, cudaMemcpyDeviceToHost);
 	cudaMemcpy(h_new_strent, cb->d_new_strent, sizeof(float4) * cb->nc, cudaMemcpyDeviceToHost);
 	cudaMemcpy(h_new_tau_CD, cb->d_new_tau_CD, sizeof(float) * cb->nc, cudaMemcpyDeviceToHost);
+	cudaMemcpy(h_new_tlife, cb->d_new_tlife, sizeof(float) * cb->nc, cudaMemcpyDeviceToHost);
 	for (int i = 0; i < cb->nc; i++) {
 		if (hoffset_dir(h_offset[i]) == -1) {
 			for (int j = z_max - 1; j > 0; j--) {
@@ -361,6 +395,7 @@ void get_chain_from_device_call_block(ensemble_call_block *cb) { //copy chains b
 			}
 			chains.QN[i * z_max + hoffset_index(h_offset[i])] = h_new_strent[i];
 			chains.tau_CD[i * z_max + hoffset_index(h_offset[i])] = h_new_tau_CD[i];
+			chains.tlife[i * z_max + hoffset_index(h_offset[i])] = h_new_tlife[i];
 		} else {
 			for (int j = 0; j < z_max - 2; j++) {
 				chains.QN[i * z_max + j] = chains.QN[i * z_max + hmake_offset(j, h_offset[i])];
@@ -372,6 +407,7 @@ void get_chain_from_device_call_block(ensemble_call_block *cb) { //copy chains b
 	delete[] h_offset;
 	delete[] h_new_strent;
 	delete[] h_new_tau_CD;
+	delete[] h_new_tlife;
 }
 
 stress_plus calc_stress_call_block(ensemble_call_block *cb, int *r_chain_count) {
@@ -445,6 +481,7 @@ void free_block(ensemble_call_block *cb) {    //free memory
 	cudaFree(cb->d_offset);
 	cudaFree(cb->d_new_strent);
 	cudaFree(cb->d_new_tau_CD);
+	cudaFree(cb->d_new_tlife);
 
 	if (cb->corr != NULL) {
 		cudaFree(cb->d_correlator_time);
@@ -465,9 +502,11 @@ void activate_block(ensemble_call_block *cb) {
 	if (!(steps_count & 0x00000001)) {
 		cudaMemcpyArrayToArray(d_a_QN, 0, 0, cb->d_QN, 0, 0, z_max * sizeof(float) * 4 * cb->nc, cudaMemcpyDeviceToDevice);
 		cudaMemcpyArrayToArray(d_a_tCD, 0, 0, cb->d_tCD, 0, 0, z_max * sizeof(float) * cb->nc, cudaMemcpyDeviceToDevice);
+		cudaMemcpyArrayToArray(d_a_tLife, 0, 0, cb->d_tLife, 0, 0, z_max * sizeof(float) * cb->nc, cudaMemcpyDeviceToDevice);
 	} else {
 		cudaMemcpyArrayToArray(d_b_QN, 0, 0, cb->d_QN, 0, 0, z_max * sizeof(float) * 4 * cb->nc, cudaMemcpyDeviceToDevice);
 		cudaMemcpyArrayToArray(d_b_tCD, 0, 0, cb->d_tCD, 0, 0, z_max * sizeof(float) * cb->nc, cudaMemcpyDeviceToDevice);
+		cudaMemcpyArrayToArray(d_b_tLife, 0, 0, cb->d_tLife, 0, 0, z_max * sizeof(float) * cb->nc, cudaMemcpyDeviceToDevice);
 	}
 
 	//correlator binding
@@ -482,9 +521,11 @@ void deactivate_block(ensemble_call_block *cb) {
 	if (!(steps_count & 0x00000001)) {
 		cudaMemcpyArrayToArray(cb->d_QN, 0, 0, d_a_QN, 0, 0, z_max * sizeof(float) * 4 * cb->nc, cudaMemcpyDeviceToDevice);
 		cudaMemcpyArrayToArray(cb->d_tCD, 0, 0, d_a_tCD, 0, 0, z_max * sizeof(float) * cb->nc, cudaMemcpyDeviceToDevice);
+		cudaMemcpyArrayToArray(cb->d_tLife, 0, 0, d_a_tLife, 0, 0, z_max * sizeof(float) * cb->nc, cudaMemcpyDeviceToDevice);
 	} else {
 		cudaMemcpyArrayToArray(cb->d_QN, 0, 0, d_b_QN, 0, 0, z_max * sizeof(float) * 4 * cb->nc, cudaMemcpyDeviceToDevice);
 		cudaMemcpyArrayToArray(cb->d_tCD, 0, 0, d_b_tCD, 0, 0, z_max * sizeof(float) * cb->nc, cudaMemcpyDeviceToDevice);
+		cudaMemcpyArrayToArray(cb->d_tLife, 0, 0, d_b_tLife, 0, 0, z_max * sizeof(float) * cb->nc, cudaMemcpyDeviceToDevice);
 	}
 }
 

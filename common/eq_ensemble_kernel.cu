@@ -24,10 +24,10 @@ __constant__ int d_correlator_res;
 
 //entanglement parallel part of the code
 //2D kernel: i- entanglement index j - chain index
-__global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent_kernel(chain_head* gpu_chain_heads, int *d_offset, float4 *d_new_strent,float *d_new_tau_CD) {
+__global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent_kernel(chain_head* gpu_chain_heads, int *d_offset, float4 *d_new_strent,float *d_new_tau_CD, float* d_new_tlife, int split) {
 	//Calculate kernel index
-	int i = blockIdx.x * blockDim.x + threadIdx.x;
-	int j = blockIdx.y * blockDim.y + threadIdx.y;
+	int i = blockIdx.x * blockDim.x + threadIdx.x; //Strent index
+	int j = blockIdx.y * blockDim.y + threadIdx.y; //Chain index
 
 	//Check if kernel index is outside boundaries
 	if ((j >= dn_cha_per_call) || (i >= d_z_max))
@@ -55,9 +55,16 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent
 	} else
 		tcd = 0;
 
+	float tlife;
+	if (fetch_new_strent(i, oft))
+		tlife = d_new_tlife[j];
+	else
+		tlife = tex2D(t_a_tLife, make_offset(i,oft),j);
+
 	//write
 	surf2Dwrite(QN, s_b_QN, 16 * i, j);
 	surf2Dwrite(tcd, s_b_tCD, 4 * i, j);
+	surf2Dwrite(tlife, s_b_tLife, 4 * i, j);
 
 	//fetch next strent (if strent is not the last)
 	if (i < tz - 1) {
@@ -96,13 +103,11 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent
 			float friction = __fdividef(2.0f, f1 + f2);
 			wsh.y = friction * __powf(prefact1 * prefact2, 0.75f)* __expf(-Q * sig1 + Q2 * sig2);
 		}
-// 	    surf2Dwrite(wsh.x,s_W_SD_pm,8*i,j);//TODO funny bug i have no idea but doesn't work other way
-// 	    surf2Dwrite(wsh.y,s_W_SD_pm,8*i+4,j);//seems to work with float4 below
 		surf2Dwrite(wsh.x + wsh.y + d_CD_flag * (tcd + d_CD_create_prefact * (QN.w - 1.0f)), s_sum_W, 4 * i, j);
 	}
 }
 
-__global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag, float next_sync_time, int *d_offset, float4 *d_new_strent, float *d_new_tau_CD, int *d_correlator_time, int *rand_used, int *tau_CD_used_CD, int *tau_CD_used_SD) {
+__global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag, float next_sync_time, int *d_offset, float4 *d_new_strent, float *d_new_tau_CD, float *d_new_tlife, int *d_correlator_time, int *rand_used, int *tau_CD_used_CD, int *tau_CD_used_SD, float* t_l, int split) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x; //Chain index
 
 	if (i >= dn_cha_per_call)
@@ -142,6 +147,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 		}
 
 		surf2Dwrite(sum_stress, s_correlator, 16 * d_correlator_time[i], i);
+
 		d_correlator_time[i]++;
 		if (d_universal_time+gpu_chain_heads[i].time > d_correlator_time[i] * d_correlator_res){
 		  return;
@@ -235,7 +241,6 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 		pr -= tpr;
 		j++;
 		surf2Dread(&tpr, s_sum_W, 4 * j, i);
-
 	}
 
 // 	  for (int j=0;j<tz-1;j++)
@@ -254,29 +259,30 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 		// 1. CDd (destruction by constraint dynamics)
 
 		float wcdd;
-		if (d_CD_flag) {
-			wcdd = tex2D(t_a_tCD, make_offset(j, oft), i); //Read tau_CD
+		if (d_CD_flag==1) {
 			if (fetch_new_strent(j, oft))
 				wcdd = new_tCD;
-		} else
-			wcdd = 0;
-		if (pr < wcdd) {
-			float4 temp = make_float4(QN1.x + QN2.x, QN1.y + QN2.y, QN1.z + QN2.z, QN1.w + QN2.w);
-			if ((j == tz - 2) || (j == 0))
-				temp = make_float4(0.0f, 0.0f, 0.0f, QN1.w + QN2.w);
-			surf2Dwrite(temp, s_b_QN, 16 * (j + 1), i);
-			d_offset[i] = offset_code(j, +1);
-			gpu_chain_heads[i].Z--;
-			return;
-		} else
-			pr -= wcdd;
+			else
+				wcdd = tex2D(t_a_tCD, make_offset(j, oft), i); //Read tau_CD
+
+			if (pr < wcdd) {
+				float4 temp = make_float4(QN1.x + QN2.x, QN1.y + QN2.y, QN1.z + QN2.z, QN1.w + QN2.w);
+				if ((j == tz - 2) || (j == 0))
+					temp = make_float4(0.0f, 0.0f, 0.0f, QN1.w + QN2.w);
+				surf2Dwrite(temp, s_b_QN, 16 * (j + 1), i);
+				d_offset[i] = offset_code(j, +1);
+				gpu_chain_heads[i].Z--;
+				return;
+			} else
+				pr -= wcdd;
+		}
 
 		// 2. SD shift
 
 		// SD shift probs are not saved from entanglement parallel part
-		// so we need to recalculate it
+		// so we need to recalculate them
 		float2 twsh = make_float2(0.0f, 0.0f);
-		float Q = QN1.x * QN1.x + QN1.y * QN1.y + QN1.z * QN1.z;
+		float Q  = QN1.x * QN1.x + QN1.y * QN1.y + QN1.z * QN1.z;
 		float Q2 = QN2.x * QN2.x + QN2.y * QN2.y + QN2.z * QN2.z;
 
 		if (QN2.w > 1.0f) {	//N=1 mean that shift is not possible, also ot will lead to dividing on zero error
@@ -321,43 +327,43 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 
 		// 3. CDc (creation by constraint dynamics in the middle)
 
-		float wcdc = d_CD_flag * d_CD_create_prefact * (QN1.w - 1.0f); //
-		if (pr < wcdc) {
-			if (tz == d_z_max)
-				return;		// possible detail balance issue
-			float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used_CD[i], i);
-			tau_CD_used_CD[i]++;
-			gpu_chain_heads[i].Z++;
-			d_new_tau_CD[i] = temp.w;//__fdividef(1.0f,d_tau_d);
-			float newn = floorf(0.5f + __fdividef(pr * (QN1.w - 2.0f), wcdc)) + 1.0f;
-			if (j == 0) {
-				temp.w = QN1.w - newn;
-				float sigma = __fsqrt_rn(__fdividef(temp.w, 3.0f));
+		if (d_CD_flag==1){
+			float wcdc =  d_CD_create_prefact * (QN1.w - 1.0f); //
+			if (pr < wcdc) {
+				if (tz == d_z_max)
+					return;		// possible detail balance issue
+				float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used_CD[i], i);
+				tau_CD_used_CD[i]++;
+				gpu_chain_heads[i].Z++;
+				d_new_tau_CD[i] = temp.w;//__fdividef(1.0f,d_tau_d);
+				float newn = floorf(0.5f + __fdividef(pr * (QN1.w - 2.0f), wcdc)) + 1.0f;
+				if (j == 0) {
+					temp.w = QN1.w - newn;
+					float sigma = __fsqrt_rn(__fdividef(temp.w, 3.0f));
+					temp.x *= sigma;
+					temp.y *= sigma;
+					temp.z *= sigma;
+					surf2Dwrite(temp, s_b_QN, 16 * 0, i);
+					d_offset[i] = offset_code(0, -1);
+					d_new_strent[i] = make_float4(0.0f, 0.0f, 0.0f, newn);
+					return;
+				}
+				temp.w = newn;
+				float sigma = __fsqrt_rn(__fdividef(newn * (QN1.w - newn), 3.0f * QN1.w));
+				float ration = __fdividef(newn, QN1.w);
 				temp.x *= sigma;
 				temp.y *= sigma;
 				temp.z *= sigma;
-				surf2Dwrite(temp, s_b_QN, 16 * 0, i);
-				d_offset[i] = offset_code(0, -1);
-				d_new_strent[i] = make_float4(0.0f, 0.0f, 0.0f, newn);
+				temp.x += QN1.x * ration;
+				temp.y += QN1.y * ration;
+				temp.z += QN1.z * ration;
+				surf2Dwrite(make_float4(QN1.x - temp.x, QN1.y - temp.y, QN1.z - temp.z, QN1.w - newn), s_b_QN, 16 * j, i);
+				d_offset[i] = offset_code(j, -1);
+				d_new_strent[i] = temp;
 				return;
+			} else {
+				pr -= wcdc;
 			}
-			temp.w = newn;
-			float sigma = __fsqrt_rn(__fdividef(newn * (QN1.w - newn), 3.0f * QN1.w));
-			float ration = __fdividef(newn, QN1.w);
-			temp.x *= sigma;
-			temp.y *= sigma;
-			temp.z *= sigma;
-			temp.x += QN1.x * ration;
-			temp.y += QN1.y * ration;
-			temp.z += QN1.z * ration;
-			surf2Dwrite(
-					make_float4(QN1.x - temp.x, QN1.y - temp.y, QN1.z - temp.z,
-							QN1.w - newn), s_b_QN, 16 * j, i);
-			d_offset[i] = offset_code(j, -1);
-			d_new_strent[i] = temp;
-			return;
-		} else {
-			pr -= wcdc;
 		}
 	} else
 		pr -= tpr;
@@ -400,6 +406,8 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 //		d_new_tau_CD[i]=__fdividef(1.0f,d_tau_d);
 		d_new_tau_CD[i] = temp.w;
 
+		d_new_tlife[i] = split * 1024.0 + d_universal_time+gpu_chain_heads[i].time;
+
 		if (pr < W_SD_c_1) {
 			temp.w = QNhead.w - 1.0f;
 			float sigma = (tz == 1) ? 0.0f : __fsqrt_rn(__fdividef(temp.w, 3.0f));
@@ -433,11 +441,24 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(chain_head* 
 	// clear W_sd
 	// form a list of free cell
 		gpu_chain_heads[i].Z--;
+		float cr_time;
 		if (pr < W_SD_d_1) {
 			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNheadn.w + 1.0f), s_b_QN, 16 * 1, i);
+			if (fetch_new_strent(0, oft))
+				cr_time = d_new_tlife[i];
+			else
+				cr_time = tex2D(t_a_tLife, make_offset(0,oft),i);
+			if (cr_time>0)
+				t_l[i] = split * 1024.0 + d_universal_time+gpu_chain_heads[i].time - cr_time;
 			d_offset[i] = offset_code(0, +1);
 		} else {
 			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNtailp.w + 1.0f), s_b_QN, 16 * (tz - 2), i);
+			if (fetch_new_strent(tz-2, oft))
+				cr_time = d_new_tlife[i];
+			else
+				cr_time = tex2D(t_a_tLife, make_offset(tz-2,oft),i);
+			if (cr_time>0)
+				t_l[i] = split * 1024.0 + d_universal_time+gpu_chain_heads[i].time - cr_time;
 			d_offset[i] = offset_code(tz, +1);
 		}
 		return;

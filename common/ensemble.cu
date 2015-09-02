@@ -19,6 +19,8 @@
 #include <iostream>
 #include <stdlib.h>
 #include <fstream>
+#include <vector>
+#include <algorithm>
 #include "ensemble.h"
 #include "cudautil.h"
 #include "cuda_call.h"
@@ -33,8 +35,9 @@ void random_textures_fill(int n_cha);
 using namespace std;
 
 extern cudaArray* d_gamma_table;
-
+extern int *bin_weight;
 #define chains_per_call 32000
+#define bin_size 5000
 //MAX surface size is 32768
 
 sstrentp chains; // host chain conformations
@@ -133,9 +136,11 @@ void gpu_init(int seed, p_cd* pcd) {
 
 	cudaMallocArray(&d_a_QN, &channelDesc4, z_max, rsz, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_a_tCD, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
+	cudaMallocArray(&d_a_tLife, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
 
 	cudaMallocArray(&d_b_QN, &channelDesc4, z_max, rsz, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_b_tCD, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
+	cudaMallocArray(&d_b_tLife, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
 
 	cudaMallocArray(&d_sum_W, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_stress, &channelDesc4, rsz * 2, 0, cudaArraySurfaceLoadStore);
@@ -233,6 +238,7 @@ void gpu_clean() {
 
 	cudaFree(d_tau_CD_used_SD);
 	cudaFree(d_tau_CD_used_CD);
+	cudaFree(d_t_l);
 	cudaFree(d_rand_used);
 	cudaFree(d_random_gens);
 	cudaFree(d_random_gens2);
@@ -255,8 +261,10 @@ void random_textures_fill(int n_cha) {
 	cudaMemset(d_rand_used, 0, sizeof(int) * n_cha);
 	cudaMalloc((void**) &d_tau_CD_used_CD, sizeof(int) * n_cha);
 	cudaMalloc((void**) &d_tau_CD_used_SD, sizeof(int) * n_cha);
+	cudaMalloc((void**) &d_t_l, sizeof(float) * n_cha);
 	cudaMemset(d_tau_CD_used_CD, 0, sizeof(int) * n_cha);
 	cudaMemset(d_tau_CD_used_SD, 0, sizeof(int) * n_cha);
+	cudaMemset(d_t_l, 0, sizeof(int) * n_cha);
 
 	gr_fill_surface_uniformrand(d_random_gens, n_cha, uniformrandom_count, d_uniformrand);
 	cudaDeviceSynchronize();
@@ -473,7 +481,14 @@ int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* ru
 	int split = (length/res - 1) / correlator_size + 1;
 	int cur_length, n_steps;
 
-	ofstream file("stress.dat", ios::out /*| ios::binary*/ | ios::app);
+	bin_weight = new int[21];
+	for (int i=0;i<21;i++){
+		bin_weight[i]=0;
+		std::vector<float> emptyVector;
+		surv_time.push_back(emptyVector);
+	}
+
+	ofstream file("stress.dat", ios::out | ios::binary | ios::app);
 	for (int k = 0; k < split; k++) {
 		cout << "\nCalculating split " << k+1 << "...";
 		if (k == split - 1)
@@ -484,101 +499,126 @@ int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* ru
 		for (int i = 0; i < chain_blocks_number; i++) {
 			get_chain_to_device_call_block(&(chain_blocks[i]));
 			chain_blocks[i].block_time = 0;
+			chain_blocks[i].split = k;
 			cudaMemset(chain_blocks[i].d_correlator_time, 0,sizeof(int) * chain_blocks[i].nc);
 			if(EQ_time_step_call_block(cur_length, &(chain_blocks[i]),run_flag)==-1) return -1;
 			get_chain_from_device_call_block(&(chain_blocks[i]));
-			cudaMemcpy2DFromArray((chain_blocks+i)->corr->stress, 16 * n_steps, (chain_blocks+i)->corr->d_correlator,0,0,16 * n_steps, (chain_blocks+i)->nc,cudaMemcpyDeviceToHost);
+			//cudaMemcpy2DFromArray((chain_blocks+i)->corr->stress, 16 * n_steps, (chain_blocks+i)->corr->d_correlator,0,0,16 * n_steps, (chain_blocks+i)->nc,cudaMemcpyDeviceToHost);
 
 			//Save stress for current block/current split in file
-			for (int j=0; j< n_steps * (chain_blocks+i)->nc ; j++)
-				file.write( (char *)((chain_blocks[i].corr->stress)+j),sizeof(float4));
+//			for (int j=0; j< n_steps * (chain_blocks+i)->nc ; j++)
+//				file.write( (char *)((chain_blocks[i].corr->stress)+j),sizeof(float4));
 		}
         *progress_bar = 0.5 * k * 100 / split;
+
 	}
 	file.close();
 
-	int counter = length / res / 2;
-	//prepare log space time marks
+//	int counter = length / res / 2;
+//	//prepare log space time marks
+//
+//	//trial run to find out how many ticks
+//	long t1 = 0;
+//	int n = 1, inc = 1, series = 4;
+//	while (t1 + inc < counter - 1) {
+//		t1 += inc;
+//		if (n % series == 0) {
+//			inc *= 2;
+//		}
+//		n++;
+//	}
+//    np = n;
+//	//full run
+//	t = new float[n];
+//	int *tint = new int[n];
+//	x = new float[n];
+//	double *xx = new double[n];
+//	t1 = 0;
+//	n = 1, inc = 1, series = 4;
+//	t[0] = 0;
+//	tint[0] = 0;
+//	while (t1 + inc < counter - 1) {
+//		t1 += inc;
+//		if (n % series == 0) {
+//			inc *= 2;
+//		}
+//		t[n] = res * float(t1);
+//		tint[n] = t1;
+//		n++;
+//	}
+//    float *x_buf = new float[np];
+//    for (int j = 0; j < np; j++) {
+//		x[j] = 0.0f;
+//		xx[j] = 0.0f;
+//	}
+//
+//	cout << "\nCalculating correlation function...\n";
+//	float4 stress_1chain[(int)(length/res)];
+//	ifstream file2("stress.dat", ios::in | ios::binary | ios::app);
+//	for (int i = 0; i < N_cha; i++) {//iterate chains
+//		for (int k = 0; k < split; k++) {//iterate time splits for particular chain
+//			if (k == split - 1)
+//				n_steps = (int)(length/res) - (split - 1) * correlator_size;
+//			else
+//				n_steps = correlator_size;
+//
+//			if (k==0)
+//				file2.seekg(16 * i * n_steps, ios::beg);
+//			else if (k==split-1)
+//				file2.seekg(16 * i * n_steps, ios::cur);
+//			for (int j = 0; j < n_steps; j++)
+//				file2.read((char *) (&stress_1chain[j + k * correlator_size]), sizeof(float4));
+//			if (k < split - 2)
+//				file2.seekg(16 * (N_cha - 1) * n_steps, ios::cur);
+//			else if (k == split - 2)
+//				file2.seekg(16 * (N_cha - 1 - i) * n_steps, ios::cur);
+//		}
+//
+//		//Calculate autocorrelation for particular chain
+//        for (int l = 0; l < np; l++) {//iterate time lag
+//			for (int time = 0; time < ((int)(length/res) - tint[l]); time++) {//iterate time
+//				xx[l] += (stress_1chain[time].x * stress_1chain[time + tint[l]].x +
+//						 stress_1chain[time].y * stress_1chain[time + tint[l]].y +
+//						 stress_1chain[time].z * stress_1chain[time + tint[l]].z) /
+//						 (3 * ((int)(length/res) - tint[l]) * N_cha );
+//			}
+//		}
+//        *progress_bar = 50 + 0.5 * i * 100 / N_cha;
+//	}
+//    for (int l = 0; l < np; l++)
+//		x[l] = (float)xx[l];
+//	file2.close();
+//	std::remove("stress.dat");
+//
+//    for (int j = 0; j < np; j++) {
+//		cout << t[j] << '\t' << x[j] << '\n';
+//		G_file << t[j] << '\t' << x[j] << '\n';
+//	}
 
-	//trial run to find out how many ticks
-	long t1 = 0;
-	int n = 1, inc = 1, series = 4;
-	while (t1 + inc < counter - 1) {
-		t1 += inc;
-		if (n % series == 0) {
-			inc *= 2;
+	ofstream fd_t("fd_t.dat", ios::out);
+	for(int i=0;i<21;i++){
+		if(surv_time[i].size()!=0)
+			std::sort (surv_time[i].begin(), surv_time[i].end());
+	}
+	int total_count=0;
+	float tdp = 1;
+	for (int i=0; i<21; i++)
+		total_count+=bin_weight[i];
+
+	for (int i=0; i<21; i++){
+		int bin_count = bin_weight[i];
+		if(bin_count!=0){
+			if (bin_count>bin_size) bin_count=bin_size;
+			for (int j=0; j<bin_count; j++)
+				fd_t <<  surv_time[i].at(j) << '\t' << tdp - (float)(j)/(float)(total_count)*(float)(bin_weight[i])/(float)bin_count << '\n';
+			tdp -= (float)(bin_weight[i])/(float)total_count;
 		}
-		n++;
 	}
-    np = n;
-	//full run
-	t = new float[n];
-	int *tint = new int[n];
-	x = new float[n];
-	double *xx = new double[n];
-	t1 = 0;
-	n = 1, inc = 1, series = 4;
-	t[0] = 0;
-	tint[0] = 0;
-	while (t1 + inc < counter - 1) {
-		t1 += inc;
-		if (n % series == 0) {
-			inc *= 2;
-		}
-		t[n] = res * float(t1);
-		tint[n] = t1;
-		n++;
-	}
-    float *x_buf = new float[np];
-    for (int j = 0; j < np; j++) {
-		x[j] = 0.0f;
-		xx[j] = 0.0f;
-	}
+	fd_t.close();
 
-	cout << "\nCalculating correlation function...\n";
-	float4 stress_1chain[(int)(length/res)];
-	ifstream file2("stress.dat", ios::in | ios::binary | ios::app);
-	for (int i = 0; i < N_cha; i++) {//iterate chains
-		for (int k = 0; k < split; k++) {//iterate time splits for particular chain
-			if (k == split - 1)
-				n_steps = (int)(length/res) - (split - 1) * correlator_size;
-			else
-				n_steps = correlator_size;
-
-			if (k==0)
-				file2.seekg(16 * i * n_steps, ios::beg);
-			else if (k==split-1)
-				file2.seekg(16 * i * n_steps, ios::cur);
-			for (int j = 0; j < n_steps; j++)
-				file2.read((char *) (&stress_1chain[j + k * correlator_size]), sizeof(float4));
-			if (k < split - 2)
-				file2.seekg(16 * (N_cha - 1) * n_steps, ios::cur);
-			else if (k == split - 2)
-				file2.seekg(16 * (N_cha - 1 - i) * n_steps, ios::cur);
-		}
-
-		//Calculate autocorrelation for particular chain
-        for (int l = 0; l < np; l++) {//iterate time lag
-			for (int time = 0; time < ((int)(length/res) - tint[l]); time++) {//iterate time
-				xx[l] += (stress_1chain[time].x * stress_1chain[time + tint[l]].x +
-						 stress_1chain[time].y * stress_1chain[time + tint[l]].y +
-						 stress_1chain[time].z * stress_1chain[time + tint[l]].z) /
-						 (3 * ((int)(length/res) - tint[l]) * N_cha );
-			}
-		}
-        *progress_bar = 50 + 0.5 * i * 100 / N_cha;
-	}
-    for (int l = 0; l < np; l++)
-		x[l] = (float)xx[l];
-	file2.close();
-	std::remove("stress.dat");
-
-    for (int j = 0; j < np; j++) {
-		cout << t[j] << '\t' << x[j] << '\n';
-		G_file << t[j] << '\t' << x[j] << '\n';
-	}
-	delete[] x_buf;
-	delete[] tint;
+//	delete[] x_buf;
+//	delete[] tint;
+	delete[] bin_weight;
 	G_file.close();
 	return 0;
 }
