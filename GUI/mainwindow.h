@@ -65,6 +65,7 @@ private slots:
     void load_settings();
     void on_actionSave_triggered();
     void save_settings();
+    void on_actionAbout_triggered();
     void on_combo_chemistry_probe_currentIndexChanged(int index);
     void on_lineEdit_5_editingFinished();
     void on_lineEdit_4_editingFinished();
