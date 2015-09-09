@@ -43,8 +43,8 @@ int z_dist(int tNk, Ran* eran) {
 
 int z_dist_truncated(int tNk, int z_max, Ran* eran) {
 	int tz = z_dist(tNk, eran);
-	while (tz > z_max)
-		tz = z_dist(tNk, eran);
+	while (tz > z_max) //In case we get z greater than z_max
+		tz = z_dist(tNk, eran); //fetch another random number to get smaller z
 	return tz;
 }
 

@@ -31,6 +31,9 @@
 #include <QtConcurrent>
 
 #include <iostream>
+
+QString version("0.9-7");
+
 extern int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int device_ID, bool distr, int* progress_bar);
 bool first_time = true;
 int sim_length;
@@ -241,6 +244,11 @@ void MainWindow::on_actionSave_triggered()
     QString filename = dialog.selectedFiles().first();
     setting_file_name=filename;
     save_settings();
+}
+
+void MainWindow::on_actionAbout_triggered()
+{
+    QMessageBox::about(this, QString("About"),QString("This is DSM\nVersion: ").append(version));
 }
 
 void MainWindow::load_settings()

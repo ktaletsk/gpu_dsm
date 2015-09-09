@@ -528,6 +528,7 @@ ${OBJECTS_DIR}cudautil.o: /usr/local/cuda-7.0/include/cuda_gl_interop.h \
 		../common/cudautil.h \
 		../common/cuda_call.h \
 		../common/cudautil.cu \
+		cudautil.o \
 		../common/cudautil.cu \
 		/usr/include/stdc-predef.h \
 		/usr/local/cuda-7.0/include/cuda_runtime.h \
@@ -1381,6 +1382,7 @@ ${OBJECTS_DIR}gpu_random.o: ../common/gpu_random.h \
 		../common/cudautil.h \
 		../common/cuda_call.h \
 		../common/gpu_random.cu \
+		gpu_random.o \
 		../common/gpu_random.cu \
 		/usr/include/stdc-predef.h \
 		/usr/local/cuda-7.0/include/cuda_runtime.h \
@@ -3785,6 +3787,7 @@ ${OBJECTS_DIR}gpu_random.o: ../common/gpu_random.h \
 
 ${OBJECTS_DIR}stress.o: ../common/stress.h \
 		../common/stress.cpp \
+		stress.o \
 		../common/stress.cpp \
 		/usr/include/stdc-predef.h \
 		../common/stress.h \
@@ -3891,6 +3894,7 @@ ${OBJECTS_DIR}chain.o: ../common/chain.h \
 		../common/random.h \
 		../common/pcd_tau.h \
 		../common/chain.cu \
+		chain.o \
 		../common/chain.cu \
 		/usr/include/stdc-predef.h \
 		/usr/local/cuda-7.0/include/cuda_runtime.h \
@@ -4716,6 +4720,7 @@ ${OBJECTS_DIR}ensemble.o: ../common/gpu_random.h \
 		../common/ensemble_kernel.cu \
 		../common/eq_ensemble_kernel.cu \
 		../common/ensemble.cu \
+		ensemble.o \
 		../common/ensemble.cu \
 		/usr/include/stdc-predef.h \
 		/usr/local/cuda-7.0/include/cuda_runtime.h \
@@ -4929,6 +4934,20 @@ ${OBJECTS_DIR}ensemble.o: ../common/gpu_random.h \
 		/usr/include/x86_64-linux-gnu/c++/4.9/bits/basic_file.h \
 		/usr/include/x86_64-linux-gnu/c++/4.9/bits/c++io.h \
 		/usr/include/c++/4.9/bits/fstream.tcc \
+		/usr/include/c++/4.9/vector \
+		/usr/include/c++/4.9/bits/stl_construct.h \
+		/usr/include/c++/4.9/ext/alloc_traits.h \
+		/usr/include/c++/4.9/bits/stl_uninitialized.h \
+		/usr/include/c++/4.9/bits/stl_vector.h \
+		/usr/include/c++/4.9/bits/stl_bvector.h \
+		/usr/include/c++/4.9/bits/vector.tcc \
+		/usr/include/c++/4.9/algorithm \
+		/usr/include/c++/4.9/utility \
+		/usr/include/c++/4.9/bits/stl_relops.h \
+		/usr/include/c++/4.9/bits/stl_algo.h \
+		/usr/include/c++/4.9/bits/algorithmfwd.h \
+		/usr/include/c++/4.9/bits/stl_heap.h \
+		/usr/include/c++/4.9/bits/stl_tempbuf.h \
 		../common/ensemble.h \
 		../common/chain.h \
 		../common/stress.h \
@@ -7126,6 +7145,7 @@ ${OBJECTS_DIR}correlator.o: ../common/cudautil.h \
 		../common/textures_surfaces.h \
 		../common/correlator.h \
 		../common/correlator.cu \
+		correlator.o \
 		../common/correlator.cu \
 		/usr/include/stdc-predef.h \
 		/usr/local/cuda-7.0/include/cuda_runtime.h \
@@ -7946,6 +7966,7 @@ ${OBJECTS_DIR}main_cuda.o: ../common/gpu_random.h \
 		../common/detailed_balance.h \
 		../common/job_ID.h \
 		../common/main_cuda.cu \
+		main_cuda.o \
 		../common/main_cuda.cu \
 		/usr/include/stdc-predef.h \
 		/usr/local/cuda-7.0/include/cuda_runtime.h \
@@ -10365,6 +10386,7 @@ ${OBJECTS_DIR}main_cuda.o: ../common/gpu_random.h \
 
 ${OBJECTS_DIR}gamma.o: ../common/gamma.h \
 		../common/gamma.cu \
+		gamma.o \
 		../common/gamma.cu \
 		/usr/include/stdc-predef.h \
 		/usr/local/cuda-7.0/include/cuda_runtime.h \
@@ -11027,6 +11049,7 @@ ${OBJECTS_DIR}gamma.o: ../common/gamma.h \
 	/usr/local/cuda/bin/nvcc -m64 -O3 -gencode arch=compute_30,code=sm_30 -gencode arch=compute_35,code=sm_35 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_52,code=sm_52 -c -I/usr/local/cuda/include  -lcuda -lcudart ../common/gamma.cu -o ${OBJECTS_DIR}gamma.o
 
 ${OBJECTS_DIR}gpu_check.o: gpu_check.cu \
+		gpu_check.o \
 		gpu_check.cu \
 		/usr/include/stdc-predef.h \
 		/usr/local/cuda-7.0/include/cuda_runtime.h \
@@ -14213,9 +14236,28 @@ mainwindow.o: mainwindow.cpp mainwindow.h \
 		../../../Qt/5.4/gcc_64/include/QtPrintSupport/qprintpreviewwidget.h \
 		../../../Qt/5.4/gcc_64/include/QtPrintSupport/qtprintsupportversion.h \
 		ui_mainwindow.h \
-		../../../Qt/5.4/gcc_64/include/QtWidgets/QComboBox \
+		../../../Qt/5.4/gcc_64/include/QtCore/QLocale \
+		../../../Qt/5.4/gcc_64/include/QtWidgets/QAction \
+		../../../Qt/5.4/gcc_64/include/QtWidgets/QApplication \
+		../../../Qt/5.4/gcc_64/include/QtWidgets/QButtonGroup \
 		../../../Qt/5.4/gcc_64/include/QtWidgets/QCheckBox \
+		../../../Qt/5.4/gcc_64/include/QtWidgets/QComboBox \
+		../../../Qt/5.4/gcc_64/include/QtWidgets/QGridLayout \
+		../../../Qt/5.4/gcc_64/include/QtWidgets/QGroupBox \
+		../../../Qt/5.4/gcc_64/include/QtWidgets/QHBoxLayout \
+		../../../Qt/5.4/gcc_64/include/QtWidgets/QHeaderView \
+		../../../Qt/5.4/gcc_64/include/QtWidgets/QLabel \
+		../../../Qt/5.4/gcc_64/include/QtWidgets/QLineEdit \
+		../../../Qt/5.4/gcc_64/include/QtWidgets/QMenu \
+		../../../Qt/5.4/gcc_64/include/QtWidgets/QMenuBar \
+		../../../Qt/5.4/gcc_64/include/QtWidgets/QProgressBar \
+		../../../Qt/5.4/gcc_64/include/QtWidgets/QPushButton \
+		../../../Qt/5.4/gcc_64/include/QtWidgets/QRadioButton \
+		../../../Qt/5.4/gcc_64/include/QtWidgets/QSpacerItem \
+		../../../Qt/5.4/gcc_64/include/QtWidgets/QTabWidget \
 		../../../Qt/5.4/gcc_64/include/QtWidgets/QTableWidget \
+		../../../Qt/5.4/gcc_64/include/QtWidgets/QToolBar \
+		../../../Qt/5.4/gcc_64/include/QtWidgets/QVBoxLayout \
 		../../../Qt/5.4/gcc_64/include/QtWidgets/QFileDialog \
 		../../../Qt/5.4/gcc_64/include/QtCore/QFileInfo \
 		../../../Qt/5.4/gcc_64/include/QtWidgets/QMessageBox \

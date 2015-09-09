@@ -1347,8 +1347,8 @@
    <widget class="QMenu" name="menuFile">
     <property name="geometry">
      <rect>
-      <x>0</x>
-      <y>0</y>
+      <x>2330</x>
+      <y>107</y>
       <width>192</width>
       <height>92</height>
      </rect>
@@ -1359,7 +1359,14 @@
     <addaction name="actionOpen"/>
     <addaction name="actionSave"/>
    </widget>
+   <widget class="QMenu" name="menu123">
+    <property name="title">
+     <string>Help</string>
+    </property>
+    <addaction name="actionAbout"/>
+   </widget>
    <addaction name="menuFile"/>
+   <addaction name="menu123"/>
   </widget>
   <widget class="QToolBar" name="mainToolBar">
    <property name="layoutDirection">
@@ -1399,6 +1406,11 @@
    </property>
    <property name="text">
     <string>Save</string>
+   </property>
+  </action>
+  <action name="actionAbout">
+   <property name="text">
+    <string>About</string>
    </property>
   </action>
  </widget>
