@@ -19,6 +19,7 @@
 #include "gpu_random.h"
 #include "ensemble_kernel.cu"
 #include "ensemble_call_block.h"
+#include <vector>
 #define max_sync_interval 1E5
 //variable arrays, that are common for all the blocks
 gpu_Ran *d_random_gens; // device random number generators
@@ -31,7 +32,7 @@ int steps_count = 0;    //time step count
 int *d_tau_CD_used_SD;
 int *d_tau_CD_used_CD;
 int *d_rand_used;
-
+std::vector<float> pcd_data;
 cudaArray* d_a_QN; //device arrays for vector part of chain conformations
 cudaArray* d_a_tCD; // these arrays used by time evolution kernels
 cudaArray* d_b_QN;
@@ -230,11 +231,13 @@ int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, bool* ru
 	steps_count = 0;
 	activate_block(cb);
 
+	int *pcd_count;
+	float4 *pcd_buff;
+
 	float time_step_interval=reach_time-cb->block_time;
 	int number_of_syncs=int(floor((time_step_interval-0.5)/max_sync_interval))+1;
 
 	float *rtbuffer = new float[cb->nc];
-
 	//Loop begins
 
 	for(int i_sync=0;i_sync<number_of_syncs;i_sync++){
@@ -279,12 +282,22 @@ int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, bool* ru
 				cudaUnbindTexture(t_a_QN);
 				cudaUnbindTexture(t_a_tCD);
 			}
-
 			steps_count++;
 			// check for rand refill
 			if (steps_count % uniformrandom_count == 0) {
 				if (dbug)
 					cout << "steps_count " << steps_count << ". random_textures_refill()\n";
+				//GEX check
+//				pcd_buff = new float4 [cb->nc*uniformrandom_count];
+//				pcd_count = new int [cb->nc];
+//				cudaMemcpy2DFromArray(pcd_buff, 4*sizeof(float)*uniformrandom_count, d_taucd_gauss_rand_SD, 0, 0, 4*sizeof(float)*uniformrandom_count, cb->nc, cudaMemcpyDeviceToHost);
+//				cudaMemcpy(pcd_count, d_tau_CD_used_SD, sizeof(int) * cb->nc, cudaMemcpyDeviceToHost);
+//				for (int i=0; i < cb->nc; i++){
+//					for (int j=0; j<pcd_count[i]; j++)
+//						pcd_data.push_back(1/pcd_buff[uniformrandom_count * i + j].w);
+//				}
+//				delete [] pcd_buff;
+//				delete [] pcd_count;
 				random_textures_refill(cb->nc);
 				steps_count = 0;
 			}

@@ -1179,6 +1179,13 @@
          <item>
           <widget class="QLineEdit" name="edit_n_cha"/>
          </item>
+         <item>
+          <widget class="QLabel" name="max_size">
+           <property name="text">
+            <string/>
+           </property>
+          </widget>
+         </item>
         </layout>
        </item>
       </layout>

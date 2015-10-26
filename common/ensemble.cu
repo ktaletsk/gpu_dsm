@@ -19,6 +19,8 @@
 #include <iostream>
 #include <stdlib.h>
 #include <fstream>
+#include <vector>
+#include <algorithm>
 #include "ensemble.h"
 #include "cudautil.h"
 #include "cuda_call.h"
@@ -469,7 +471,6 @@ int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* ru
 	//And evaluate for each block
 	for (int i = 0; i < chain_blocks_number; i++)
 		init_block_correlator(&(chain_blocks[i]));//Initialize correlator structure in cb
-
 	int split = (length/res - 1) / correlator_size + 1;
 	int cur_length, n_steps;
 
@@ -536,7 +537,8 @@ int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* ru
 	}
 
 	cout << "\nCalculating correlation function...\n";
-	float4 stress_1chain[(int)(length/res)];
+	std::vector<float4> stress_1chain;
+	stress_1chain.resize((int)(length/res));
 	ifstream file2("stress.dat", ios::in | ios::binary | ios::app);
 	for (int i = 0; i < N_cha; i++) {//iterate chains
 		for (int k = 0; k < split; k++) {//iterate time splits for particular chain
@@ -572,6 +574,13 @@ int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* ru
 		x[l] = (float)xx[l];
 	file2.close();
 	std::remove("stress.dat");
+
+	//GEX check
+//	std::sort (pcd_data.begin(), pcd_data.end());
+//	ofstream pcd_file("pcd.dat", ios::out);
+//	for (int i=0; i < pcd_data.size(); i++)
+//		pcd_file << "\n" << pcd_data[i];
+//	pcd_file.close();
 
     for (int j = 0; j < np; j++) {
 		cout << t[j] << '\t' << x[j] << '\n';

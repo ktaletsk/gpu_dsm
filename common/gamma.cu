@@ -42,7 +42,7 @@ float gammp(float a, float x) { //Returns the incomplete gamma function P(a, x).
 	}
 }
 
-float gammq(float a, float x) { //Returns the incomplete gamma function Q(a, x) ≡ 1 − P(a, x).
+float gammq(float a, float x) { //Returns the incomplete gamma function Q(a, x) := 1 − P(a, x).
 	void gcf(float *gammcf, float a, float x, float *gln);
 	void gser(float *gamser, float a, float x, float *gln);
 	void nrerror(char error_text[]);

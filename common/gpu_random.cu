@@ -195,8 +195,9 @@ __global__ __launch_bounds__(ran_tpd) void fill_surface_taucd_gauss_rand (gpu_Ra
 			tmp.x=curand_uniform (&localState);
 
 			if (d_PD_flag){
-
 				tmp.y=tex1D(t_gamma_table, curand_uniform(&localState)/d_step); //get molecular weight of background chain from table
+				while (tmp.y < (2*d_Be+1)*d_Mk/d_mp || tmp.y > 30)
+					tmp.y=tex1D(t_gamma_table, curand_uniform(&localState)/d_step); //fetch one more
 				p_cd_(d_Be, (int)(tmp.y*d_mp/d_Mk + 0.5)); //Calculate pcd parameters
 				if (SDCD_toggle == true)
 					tmp.w = d_tau_CD_f_t(tmp.x, d_p_At, d_p_Ct, d_p_Dt, d_p_tau_d_inv, d_p_g);
@@ -244,6 +245,8 @@ __global__ __launch_bounds__(ran_tpd) void refill_surface_taucd_gauss_rand (gpu_
 	    	tmp.x=curand_uniform (&localState);
 			if (d_PD_flag){
 				tmp.y=tex1D(t_gamma_table, curand_uniform(&localState)/d_step);
+				while (tmp.y < (2*d_Be+1)*d_Mk/d_mp || tmp.y > 30)
+					tmp.y=tex1D(t_gamma_table, curand_uniform(&localState)/d_step); //fetch one more
 				p_cd_(d_Be, (int)(tmp.y*d_mp/d_Mk + 0.5));
 				if (SDCD_toggle == true)
 					tmp.w = d_tau_CD_f_t(tmp.x, d_p_At, d_p_Ct, d_p_Dt, d_p_tau_d_inv, d_p_g);

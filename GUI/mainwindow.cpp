@@ -761,6 +761,15 @@ void MainWindow::on_pushButton_save_jpg_clicked()
 
 void MainWindow::on_radio_flow_clicked() {
     ui->edit_n_cha->setText(QString::number(2000));
+
+    float mw=ui->edit_mw_probe->text().toFloat();
+    float nk=(mw*1000)/ui->lineEdit_3->text().toFloat();
+    float beta=ui->edit_beta_FSM->text().toFloat();
+    nc=ceil(nk/(0.56*beta));
+    if (ui->radio_CFSM->isChecked())
+        ui->max_size->setText(QString("Max:").append(QString::number( pow(10,((int)log10(ceil(pow(10,7)/nk)))) )));
+    else
+        ui->max_size->setText(QString("Max:").append(QString::number( pow(10,((int)log10(ceil(pow(10,7)/nc)))) )));
     ui->sim_length->setText(QString::number(ceil(ui->edit_strain->text().toFloat()/ui->edit_rate->text().toFloat())));
 
 }
@@ -774,8 +783,12 @@ void MainWindow::on_radio_eq_clicked() {
     nc=ceil(nk/(0.56*beta));
 
     //calculation length
-    if (ui->radio_CFSM->isChecked())
+    if (ui->radio_CFSM->isChecked()){
         ui->sim_length->setText(QString::number((int)(10* 0.0740131f * powf(nc, 3.18363f))));
-    else
+        ui->max_size->setText(QString("Max:").append(QString::number( pow(10,((int)log10(ceil(pow(10,7)/nk)))) )));
+    }
+    else{
         ui->sim_length->setText(QString::number((int)(10* 0.036f * powf(beta + 2.0f, 3.07f) * powf((ceil(nk)+beta)/(beta+1) - 1.0f, 3.02f))));
+        ui->max_size->setText(QString("Max:").append(QString::number( pow(10,((int)log10(ceil(pow(10,7)/nc)))) )));
+    }
 }
