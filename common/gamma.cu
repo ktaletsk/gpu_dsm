@@ -16,6 +16,7 @@
 // along with gpu_dsm.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "gamma.h"
+#include <iostream>
 
 #define ITMAX 100 //Maximum allowed number of iterations.
 #define EPS 3.0e-7 //Relative accuracy.
@@ -121,7 +122,7 @@ void gcf(float *gammcf, float a, float x, float *gln) {
 void make_gamma_table (float a, float b) {
 	for (int i = 0; i < GAMMATABLESIZE; i++) {
 		gamma_table_x[i] = i * 1.0f * GAMMATABLECUTOFF / (GAMMATABLESIZE - 1);
-		gamma_table_s[i] = gammp((a + 2) / b, pow(gamma_table_x[i], b));
+		gamma_table_s[i] = gammp((a + 1) / b, pow(gamma_table_x[i], b));
 		if (i > 0) {
 			if (abs(gamma_table_s[i] - gamma_table_s[i - 1]) > step)
 				step = abs(gamma_table_s[i] - gamma_table_s[i - 1]);
@@ -141,7 +142,7 @@ void make_gamma_table (float a, float b) {
 	while (j<1/step) {
 		//Add new point
 		temp_gamma_table_x+=1.0f * GAMMATABLECUTOFF / (GAMMATABLESIZE - 1);
-		temp_gamma_table_s=gammp((a + 2) / b, pow(temp_gamma_table_x, b));
+		temp_gamma_table_s=gammp((a + 1) / b, pow(temp_gamma_table_x, b));
 
 		if (temp_gamma_table_s >= step * j) {
 			gamma_new_table_x[j] = temp_gamma_table_x;
@@ -150,4 +151,5 @@ void make_gamma_table (float a, float b) {
 		}
 	}
 	table_size=j;
+	std::cout << "\nTable size=" << table_size << "\n";
 }

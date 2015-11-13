@@ -231,8 +231,9 @@ int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, bool* ru
 	steps_count = 0;
 	activate_block(cb);
 
-	int *pcd_count;
-	float4 *pcd_buff;
+	//GEX check
+//	int *pcd_count;
+//	float4 *pcd_buff;
 
 	float time_step_interval=reach_time-cb->block_time;
 	int number_of_syncs=int(floor((time_step_interval-0.5)/max_sync_interval))+1;

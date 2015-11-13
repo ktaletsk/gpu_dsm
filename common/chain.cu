@@ -184,7 +184,7 @@ void chain_init(chain_head *chain_head, sstrentp data, int tnk, int z_max, bool 
 				//Random molecular weight of entangled background chain (from GEX)
 				float x = gamma_new_table_x[(int) (eran->flt() / step)];
 
-				//Number of Cuhn steps in background chain
+				//Number of Kuhn steps in background chain
 				int Nk__ = (int) (x * mp / Mk);
 
 				//Lifetime of entanglement

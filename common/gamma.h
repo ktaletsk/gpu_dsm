@@ -21,7 +21,7 @@
 #include <math.h>
 
 #define GAMMATABLESIZE 200000
-#define GAMMATABLECUTOFF 30
+#define GAMMATABLECUTOFF 16065
 
 float a, b, mp, Mk;
 float step = 0;

@@ -474,7 +474,7 @@ int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* ru
 	int split = (length/res - 1) / correlator_size + 1;
 	int cur_length, n_steps;
 
-	ofstream file("stress.dat", ios::out /*| ios::binary*/ | ios::app);
+	ofstream file(filename_ID("stress.dat"), ios::out /*| ios::binary*/ | ios::app);
 	for (int k = 0; k < split; k++) {
 		cout << "\nCalculating split " << k+1 << "...";
 		if (k == split - 1)
