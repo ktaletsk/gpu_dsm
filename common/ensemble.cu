@@ -25,7 +25,7 @@
 #include "cudautil.h"
 #include "cuda_call.h"
 #include "textures_surfaces.h"
-extern char * filename_ID(string filename);
+extern char * filename_ID(string filename, bool temp);
 
 void random_textures_refill(int n_cha);
 void random_textures_fill(int n_cha);
@@ -463,7 +463,7 @@ int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* ru
 	//At the end perform brutforce correlator calculation
 
 	ofstream G_file;
-	G_file.open(filename_ID("G"));
+	G_file.open(filename_ID("G",false));
 
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(res), sizeof(int))); //Copy timestep for calculation
 	//There is restriction on the size of any array in CUDA
@@ -474,7 +474,8 @@ int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* ru
 	int split = (length/res - 1) / correlator_size + 1;
 	int cur_length, n_steps;
 
-	ofstream file(filename_ID("stress.dat"), ios::out /*| ios::binary*/ | ios::app);
+	std::remove(filename_ID("stress",true));
+	ofstream file(filename_ID("stress",true), ios::out | ios::binary | ios::app);
 	for (int k = 0; k < split; k++) {
 		cout << "\nCalculating split " << k+1 << "...";
 		if (k == split - 1)
@@ -539,7 +540,7 @@ int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* ru
 	cout << "\nCalculating correlation function...\n";
 	std::vector<float4> stress_1chain;
 	stress_1chain.resize((int)(length/res));
-	ifstream file2("stress.dat", ios::in | ios::binary | ios::app);
+	ifstream file2(filename_ID("stress",true), ios::in | ios::binary | ios::app);
 	for (int i = 0; i < N_cha; i++) {//iterate chains
 		for (int k = 0; k < split; k++) {//iterate time splits for particular chain
 			if (k == split - 1)
@@ -573,7 +574,7 @@ int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* ru
     for (int l = 0; l < np; l++)
 		x[l] = (float)xx[l];
 	file2.close();
-	std::remove("stress.dat");
+	std::remove(filename_ID("stress",true));
 
 	//GEX check
 //	std::sort (pcd_data.begin(), pcd_data.end());
@@ -605,7 +606,7 @@ int gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np, bool* run
 	// and so on...
 	// In the end, we combine {G_i(t)} into final (G(t))
 	ofstream G_file;
-	G_file.open(filename_ID("G"));
+	G_file.open(filename_ID("G",false));
 
 	if (length / res < correlator_size) {        //if one run is enough
 		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(res),sizeof(int))); //Copy timestep for calculation

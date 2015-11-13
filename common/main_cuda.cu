@@ -118,8 +118,8 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 	if (flow) {	//Flow calculations
 		//tau file
 		ofstream tau_file;
-		tau_file.open(filename_ID("tau"));
-		cout << "output file: " << filename_ID("tau") << '\n';
+		tau_file.open(filename_ID("tau",false));
+		cout << "output file: " << filename_ID("tau",false) << '\n';
 		timer.start();
 		//main loop
 		cout << "performing time evolution for the ensemble..\n";

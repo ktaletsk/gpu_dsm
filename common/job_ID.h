@@ -30,23 +30,38 @@
 
 int job_ID = 0;
 
-char * filename_ID(string filename) { //no prior allocation needed, but dealloc is on you
+char * filename_ID(string filename, bool temp) { //no prior allocation needed, but dealloc is on you
 	if (job_ID != 0) {
 		char *st1;
 		int nn = int(ceil(log10(float(job_ID + 1))) + 1); //number of simbols need for number
 		char *stmp2;
 		stmp2 = new char[nn + 1];
 		sprintf(stmp2, "%d", job_ID);
-		st1 = new char[strlen(filename.c_str()) + 1 + nn + 4 + 1]; //filename + "_" +number +.dat + terminating 0
-		strcpy(st1, filename.c_str());
+
+		if (temp){
+			st1 = new char[strlen(9 + filename.c_str()) + 1 + nn + 4 + 1]; //filename + "_" +number +.dat + terminating 0
+			strcpy(st1, "/tmp/dsm_");
+			strcat(st1, filename.c_str());
+		}
+		else{
+			st1 = new char[strlen(filename.c_str()) + 1 + nn + 4 + 1]; //filename + "_" +number +.dat + terminating 0
+			strcpy(st1, filename.c_str());
+		}
 		strcat(st1, "_");
 		strcat(st1, stmp2);
 		strcat(st1, ".dat");
 		return st1;
 	} else {
 		char *st1;
-		st1 = new char[strlen(filename.c_str()) + 4 + 1]; //filename +.dat + terminating 0
-		strcpy(st1, filename.c_str());
+		if(temp){
+			st1 = new char[5 + strlen(filename.c_str()) + 4 + 1]; //filename +.dat + terminating 0
+			strcpy(st1, "/tmp/dsm_");
+			strcat(st1, filename.c_str());
+		}
+		else{
+			st1 = new char[strlen(filename.c_str()) + 4 + 1]; //filename +.dat + terminating 0
+			strcpy(st1, filename.c_str());
+		}
 		strcat(st1, ".dat");
 		return st1;
 	}

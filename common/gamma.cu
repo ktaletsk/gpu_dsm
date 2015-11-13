@@ -151,5 +151,4 @@ void make_gamma_table (float a, float b) {
 		}
 	}
 	table_size=j;
-	std::cout << "\nTable size=" << table_size << "\n";
 }
