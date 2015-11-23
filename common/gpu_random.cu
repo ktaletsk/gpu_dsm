@@ -46,12 +46,13 @@ __constant__ float d_At, d_Ct, d_Dt, d_Adt, d_Bdt, d_Cdt, d_Ddt;
 __constant__ float d_g, d_alpha, d_tau_0, d_tau_max, d_tau_d, d_tau_d_inv;
 __constant__ bool d_PD_flag;
 
-cudaArray* d_gamma_table;
-texture<float, cudaTextureType1D, cudaReadModeElementType> t_gamma_table;
+//Polydispersity constatnts
 __constant__ float d_step;
 __constant__ float d_Mk, d_mp;
-__device__ float d_p_At, d_p_Ct, d_p_Dt, d_p_g, d_p_Adt, d_p_Bdt, d_p_Cdt, d_p_Ddt, d_p_tau_d_inv; //Dynamic fdt parameters for given Nk in polydisperse solution
 __constant__ float d_Be;
+
+cudaArray* d_gamma_table;
+texture<float, cudaTextureType1D, cudaReadModeElementType> t_gamma_table;
 
 void gpu_ran_init (p_cd* pcd) {
 	cout << "preparing GPU random number generator parameters..\n";
@@ -139,11 +140,10 @@ __device__ __forceinline__ float d_tau_CD_f_t(float p, float d_At, float d_Ct, f
 	return p < 1.0f - d_g ? __powf(p * d_At + d_Dt, d_Ct) : d_tau_d_inv;
 }
 
-__device__ void p_cd_(float Be, int Nk) {
+__device__ void p_cd_(float Be, int Nk, float *d_p_At, float *d_p_Ct, float *d_p_Dt, float *d_p_g, float *d_p_Adt, float *d_p_Bdt, float *d_p_Cdt, float *d_p_Ddt, float *d_p_tau_d_inv) {
 	//Generates \tau_CD lifetimes
 	//uses analytical approximation to P_cd parameters
-	float At, Adt, Bdt, normdt;
-	float g, alpha, tau_0, tau_max, tau_d;
+	float At, Adt, Bdt, normdt, g, alpha, tau_0, tau_max, tau_d;
 	double z = (Nk + Be) / (Be + 1.0);
 	g = 0.667f;
 	if (Be != 1.0f) {
@@ -171,22 +171,23 @@ __device__ void p_cd_(float Be, int Nk) {
 	Bdt = Adt * (powf(tau_max, alpha - 1.0f) - powf(tau_0, alpha - 1.0f));
 	normdt = Bdt + g / tau_d;
 
-	d_p_g=g;
-	d_p_tau_d_inv = 1.0f / tau_d;
-	d_p_At = 1.0f / At;
-	d_p_Dt = powf(tau_0, alpha);
-	d_p_Ct = -1.0f / alpha;
-	d_p_Adt = normdt / Adt;
-	d_p_Bdt = Bdt / normdt;
-	d_p_Cdt = -1.0f / (alpha - 1.0f);
-	d_p_Ddt = powf(tau_0, alpha - 1.0f);
+	*d_p_g=g;
+	*d_p_tau_d_inv = __fdividef(1.0f, tau_d);
+	*d_p_At = __fdividef(1.0f, At);
+	*d_p_Dt = powf(tau_0, alpha);
+	*d_p_Ct = __fdividef(-1.0f, alpha);
+	*d_p_Adt = __fdividef(normdt, Adt);
+	*d_p_Bdt = __fdividef(Bdt, normdt);
+	*d_p_Cdt = __fdividef(-1.0f, alpha - 1.0f);
+	*d_p_Ddt = powf(tau_0, alpha - 1.0f);
 }
 
 //
 __global__ __launch_bounds__(ran_tpd) void fill_surface_taucd_gauss_rand (gpu_Ran *state, int n, int count, bool SDCD_toggle){
+	float d_p_At, d_p_Ct, d_p_Dt, d_p_g, d_p_Adt, d_p_Bdt, d_p_Cdt, d_p_Ddt, d_p_tau_d_inv; //Dynamic fdt parameters for given Nk in polydisperse solution
 	int i=blockIdx.x*blockDim.x+threadIdx.x;
 	float4 tmp;
-	float g=0.0f;
+	float h=0.0f;
 	float2 g2;
 	if (i<n){
 		curandState localState = state[i];
@@ -200,7 +201,7 @@ __global__ __launch_bounds__(ran_tpd) void fill_surface_taucd_gauss_rand (gpu_Ra
 				tmp.y=tex1D(t_gamma_table, curand_uniform(&localState)/d_step); //get molecular weight of background chain from table
 				while (tmp.y < (2*d_Be+1)*d_Mk/d_mp || tmp.y > GAMMATABLECUTOFF)
 					tmp.y=tex1D(t_gamma_table, curand_uniform(&localState)/d_step); //fetch one more
-				p_cd_(d_Be, (int)(tmp.y*d_mp/d_Mk + 0.5)); //Calculate pcd parameters
+				p_cd_(d_Be, (int)(tmp.y*d_mp/d_Mk + 0.5), &d_p_At, &d_p_Ct, &d_p_Dt, &d_p_g, &d_p_Adt, &d_p_Bdt, &d_p_Cdt, &d_p_Ddt, &d_p_tau_d_inv); //Calculate pcd parameters
 				if (SDCD_toggle == true)
 					tmp.w = d_tau_CD_f_t(tmp.x, d_p_At, d_p_Ct, d_p_Dt, d_p_tau_d_inv, d_p_g);
 				else
@@ -214,19 +215,19 @@ __global__ __launch_bounds__(ran_tpd) void fill_surface_taucd_gauss_rand (gpu_Ra
 			}
 
 			//Q vector generation for new entanglements
-			if (g==0.0f){
+			if (h==0.0f){
 				g2=curand_normal2(&localState);
 				tmp.x=g2.x;
 				tmp.y=g2.y;
 				g2=curand_normal2(&localState);
 				tmp.z=g2.x;
-				g=g2.y;
+				h=g2.y;
 			}else{
-				tmp.x=g;
+				tmp.x=h;
 				g2=curand_normal2(&localState);
 				tmp.y=g2.x;
 				tmp.z=g2.y;
-				g=0.0f;
+				h=0.0f;
 			}
 			surf2Dwrite(tmp,rand_buffer,16*j,i);
 	    }
@@ -236,6 +237,7 @@ __global__ __launch_bounds__(ran_tpd) void fill_surface_taucd_gauss_rand (gpu_Ra
 
 //
 __global__ __launch_bounds__(ran_tpd) void refill_surface_taucd_gauss_rand (gpu_Ran *state, int n, int *count, bool SDCD_toggle){
+	float d_p_At, d_p_Ct, d_p_Dt, d_p_g, d_p_Adt, d_p_Bdt, d_p_Cdt, d_p_Ddt, d_p_tau_d_inv; //Dynamic fdt parameters for given Nk in polydisperse solution
 	int i=blockIdx.x*blockDim.x+threadIdx.x;
 	float4 tmp;
 	float g=0.0f;
@@ -249,7 +251,7 @@ __global__ __launch_bounds__(ran_tpd) void refill_surface_taucd_gauss_rand (gpu_
 				tmp.y=tex1D(t_gamma_table, curand_uniform(&localState)/d_step);
 				while (tmp.y < (2*d_Be+1)*d_Mk/d_mp || tmp.y > GAMMATABLECUTOFF)
 					tmp.y=tex1D(t_gamma_table, curand_uniform(&localState)/d_step); //fetch one more
-				p_cd_(d_Be, (int)(tmp.y*d_mp/d_Mk + 0.5));
+				p_cd_(d_Be, (int)(tmp.y*d_mp/d_Mk + 0.5), &d_p_At, &d_p_Ct, &d_p_Dt, &d_p_g, &d_p_Adt, &d_p_Bdt, &d_p_Cdt, &d_p_Ddt, &d_p_tau_d_inv);
 				if (SDCD_toggle == true)
 					tmp.w = d_tau_CD_f_t(tmp.x, d_p_At, d_p_Ct, d_p_Dt, d_p_tau_d_inv, d_p_g);
 				else
