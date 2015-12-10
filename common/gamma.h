@@ -19,16 +19,17 @@
 #define GAMMA_
 
 #include <math.h>
+#include <stdlib.h>
 
 #define GAMMATABLESIZE 200000
-#define GAMMATABLECUTOFF 16065
 
-float a, b, mp, Mk;
-float step = 0;
-int table_size=0;
-
+float a, b, mp, Mk; //GEX parameters
+float step = 0; //equidistant step in y-direction of P(m)
+int table_size=0; //size of resulting table of m values
+float gamma_table_cutoff; //calculated MWD cutoff value
 void make_gamma_table (float a, float b);
 
 float gamma_new_table_x[GAMMATABLESIZE];
+double LambertW1(const double z);
 
 #endif

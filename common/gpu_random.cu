@@ -22,12 +22,11 @@
 #include "ensemble.h"
 #include <fstream>
 
-#define GAMMATABLECUTOFF 16065
-
 extern float step;
 extern float mp,Mk;
 extern int table_size;
 extern float gamma_new_table_x[200000];
+extern float gamma_table_cutoff;
 
 extern p_cd *pcd;
 extern bool PD_flag;
@@ -50,6 +49,7 @@ __constant__ bool d_PD_flag;
 __constant__ float d_step;
 __constant__ float d_Mk, d_mp;
 __constant__ float d_Be;
+__constant__ float d_gamma_table_cutoff;
 
 cudaArray* d_gamma_table;
 texture<float, cudaTextureType1D, cudaReadModeElementType> t_gamma_table;
@@ -66,6 +66,7 @@ void gpu_ran_init (p_cd* pcd) {
 		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_mp, &mp, sizeof(float)));
 		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Mk, &Mk, sizeof(float)));
 		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Be, &Be, sizeof(float)));
+		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_gamma_table_cutoff, &gamma_table_cutoff, sizeof(float)));
 	}
 	else {
 		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_g, &(pcd->g), sizeof(float)));
@@ -199,7 +200,7 @@ __global__ __launch_bounds__(ran_tpd) void fill_surface_taucd_gauss_rand (gpu_Ra
 
 			if (d_PD_flag){
 				tmp.y=tex1D(t_gamma_table, curand_uniform(&localState)/d_step); //get molecular weight of background chain from table
-				while (tmp.y < (2*d_Be+1)*d_Mk/d_mp || tmp.y > GAMMATABLECUTOFF)
+				while (tmp.y < (2*d_Be+1)*d_Mk/d_mp || tmp.y > d_gamma_table_cutoff)
 					tmp.y=tex1D(t_gamma_table, curand_uniform(&localState)/d_step); //fetch one more
 				p_cd_(d_Be, (int)(tmp.y*d_mp/d_Mk + 0.5), &d_p_At, &d_p_Ct, &d_p_Dt, &d_p_g, &d_p_Adt, &d_p_Bdt, &d_p_Cdt, &d_p_Ddt, &d_p_tau_d_inv); //Calculate pcd parameters
 				if (SDCD_toggle == true)
@@ -249,7 +250,7 @@ __global__ __launch_bounds__(ran_tpd) void refill_surface_taucd_gauss_rand (gpu_
 	    	tmp.x=curand_uniform (&localState);
 			if (d_PD_flag){
 				tmp.y=tex1D(t_gamma_table, curand_uniform(&localState)/d_step);
-				while (tmp.y < (2*d_Be+1)*d_Mk/d_mp || tmp.y > GAMMATABLECUTOFF)
+				while (tmp.y < (2*d_Be+1)*d_Mk/d_mp || tmp.y > d_gamma_table_cutoff)
 					tmp.y=tex1D(t_gamma_table, curand_uniform(&localState)/d_step); //fetch one more
 				p_cd_(d_Be, (int)(tmp.y*d_mp/d_Mk + 0.5), &d_p_At, &d_p_Ct, &d_p_Dt, &d_p_g, &d_p_Adt, &d_p_Bdt, &d_p_Cdt, &d_p_Ddt, &d_p_tau_d_inv);
 				if (SDCD_toggle == true)
