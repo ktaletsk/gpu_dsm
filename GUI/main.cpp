@@ -63,7 +63,7 @@ int main(int argc, char *argv[])
             k++;
         }
 
-        main_cuda(run_flag,job_ID,savefile,loadfile,device_ID,distr,&progress_bar);
+        main_cuda(run_flag,job_ID,savefile,loadfile,device_ID,distr,&progress_bar, NULL);
         return 0;
     }
     else { //GUI mode

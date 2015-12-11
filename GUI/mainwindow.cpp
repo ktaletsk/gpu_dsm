@@ -34,7 +34,7 @@
 
 QString version("0.9-7");
 
-extern int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int device_ID, bool distr, int* progress_bar);
+extern int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int device_ID, bool distr, int* progress_bar, void * result_data);
 bool first_time = true;
 int sim_length;
 int sync_time;
@@ -71,7 +71,7 @@ void Worker::abort() {
 void Worker::doWork()
 {
     qDebug()<<"Starting worker process in Thread "<<thread()->currentThreadId();
-    main_cuda(&_run,0,NULL,NULL,0,0,&progress_bar);
+    main_cuda(&_run,0,NULL,NULL,0,0,&progress_bar,NULL);
 
     // Set _working to false, meaning the process can't be aborted anymore.
     mutex.lock();

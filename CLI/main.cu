@@ -51,6 +51,6 @@ int main(int narg, char** arg) {
 		}
 		k++;
 	}
-	main_cuda(&run_flag, job_ID, savefile, loadfile, device_ID, distr, &progress_bar);
+	main_cuda(&run_flag, job_ID, savefile, loadfile, device_ID, distr, &progress_bar, NULL);
 	return 0;
 }

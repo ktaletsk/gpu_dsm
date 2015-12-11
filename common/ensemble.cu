@@ -455,7 +455,7 @@ void load_from_file(char *filename) {
 		cout << "file error\n";
 }
 
-int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* run_flag, int *progress_bar) {
+int Gt_brutforce(int res, double length, g_t * g_, bool* run_flag, int *progress_bar) {
 	//Start simulation
 	//Save as much stress as posssible on GPU memory
 	//Sync with stress file
@@ -512,28 +512,29 @@ int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* ru
 		}
 		n++;
 	}
-    np = n;
+    int np = n;
+    g_->np=np;
 	//full run
-	t = new float[n];
+	g_->t = new float[n];
 	int *tint = new int[n];
-	x = new float[n];
+	g_->x = new float[n];
 	double *xx = new double[n];
 	t1 = 0;
 	n = 1, inc = 1, series = 4;
-	t[0] = 0;
+	g_->t[0] = 0;
 	tint[0] = 0;
 	while (t1 + inc < counter - 1) {
 		t1 += inc;
 		if (n % series == 0) {
 			inc *= 2;
 		}
-		t[n] = res * float(t1);
+		g_->t[n] = res * float(t1);
 		tint[n] = t1;
 		n++;
 	}
     float *x_buf = new float[np];
     for (int j = 0; j < np; j++) {
-		x[j] = 0.0f;
+		g_->x[j] = 0.0f;
 		xx[j] = 0.0f;
 	}
 
@@ -572,20 +573,13 @@ int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* ru
         *progress_bar = 50 + 0.5 * i * 100 / N_cha;
 	}
     for (int l = 0; l < np; l++)
-		x[l] = (float)xx[l];
+		g_->x[l] = (float)xx[l];
 	file2.close();
 	std::remove(filename_ID("stress",true));
 
-	//GEX check
-//	std::sort (pcd_data.begin(), pcd_data.end());
-//	ofstream pcd_file("pcd.dat", ios::out);
-//	for (int i=0; i < pcd_data.size(); i++)
-//		pcd_file << "\n" << pcd_data[i];
-//	pcd_file.close();
-
     for (int j = 0; j < np; j++) {
-		cout << t[j] << '\t' << x[j] << '\n';
-		G_file << t[j] << '\t' << x[j] << '\n';
+		cout << g_->t[j] << '\t' << g_->x[j] << '\n';
+		G_file << g_->t[j] << '\t' << g_->x[j] << '\n';
 	}
 	delete[] x_buf;
 	delete[] tint;

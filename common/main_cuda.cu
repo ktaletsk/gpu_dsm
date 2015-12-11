@@ -29,8 +29,9 @@ extern float a,b,mp,Mk;
 extern void make_gamma_table (float a, float b);
 
 using namespace std;
+g_t g_;
 
-int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int device_ID, bool distr, int* progress_bar) {
+int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int device_ID, bool distr, int* progress_bar, g_t * result_data) {
 	Ran eran(1);
 	p_cd *pcd;
 
@@ -138,12 +139,10 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 		if (G_flag) {
 			cout << "G(t) calc...\n";
 			cout.flush();
-			float *t, *x;
-            int np;
 			timer.start();
 			//if(gpu_Gt_calc(t_step_size, simulation_time, t, x, np, &run_flag)==-1) return -1;
-            if(Gt_brutforce(t_step_size, simulation_time, t, x, np, run_flag,progress_bar)==-1) return -1;
 			cout << "G(t) calc done\n";
+            if(Gt_brutforce(t_step_size, simulation_time, result_data, run_flag, progress_bar)==-1) return -1;
 			timer.stop();
 		} else {
 			cout<< "There are no flow and no equilibrium quantity to calculate. Exiting... \n";
@@ -170,6 +169,7 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 			save_Q_distribution_to_file("distr_Q_.dat", 1);
 		}
 	}
+
 	gpu_clean();
 
 	cout << "Calculation time: " << timer.elapsedTime() << " milliseconds\n";

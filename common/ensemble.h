@@ -24,6 +24,7 @@
 
 #include "chain.h"// chain conformations
 #include "stress.h"// chain stress
+#include "g_t.h"// autocorrelation of stress
 #include "pcd_tau.h"// CD lifetime distribution
 #include "ensemble_call_block.h" //GPU can process only 32K chains simulataneously
 //we split ensemble in call_blocks and feed them to GPU one by one
@@ -62,7 +63,7 @@ void load_from_file(char *filename);  //loads chain conformations from a file
 
 int gpu_time_step(double reach_time, bool* run_flag);  // performs time evolution of ensemble
 
-int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* run_flag, int *progress_bar);
+int Gt_brutforce(int res, double length, g_t * g_, bool* run_flag, int *progress_bar);
 int gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np, bool* run_flag); //G(t) relaxation spectrum calculation
 
 void gpu_clean();  //free memory used by ensemble
