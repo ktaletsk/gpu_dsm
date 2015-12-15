@@ -42,10 +42,10 @@ debug: gpu_DSM_cluster
 all: gpu_DSM_cluster
 
 gpu_DSM_cluster:  main.o $(OBJS) 
-	$(CC) main.o $(OBJS) -o gpu_DSM_cluster
+	$(CC) --compiler-bindir mpic++ main.o $(OBJS) -o gpu_DSM_cluster
 %.o: %.cpp $(DEPS)
-	$(CC) -c $<  $(GENCODE_FLAGS) $(DEBUGFLAGS) -o $@
+	$(CC) --compiler-bindir mpic++ -c $<  $(GENCODE_FLAGS) $(DEBUGFLAGS) -o $@
 %.o: %.cu $(DEPS)
-	$(CC) -c $<  $(GENCODE_FLAGS) $(DEBUGFLAGS) -o $@
+	$(CC) --compiler-bindir mpic++ -c $<  $(GENCODE_FLAGS) $(DEBUGFLAGS) -o $@
 clean:
 	rm -f *.o *~ *.cubin *.ptx *.ii *.i *module_id *.hash *fatbin* *cudafe*

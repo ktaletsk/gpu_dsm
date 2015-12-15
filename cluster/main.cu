@@ -16,30 +16,38 @@
 // along with gpu_dsm.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "../common/main_cuda.cu"
-//#include <mpi.h>
+#include <mpi.h>
 
 int main(int narg, char** arg) {
-//    // Initialize the MPI environment
-//    MPI_Init(&argc, &argv);
-//
-//    // Get the number of processes
-//    int world_size;
-//    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-//
-//    // Get the rank of the process
-//    int world_rank;
-//    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
-//
-//    // Get the name of the processor
-//    char processor_name[MPI_MAX_PROCESSOR_NAME];
-//    int name_len;
-//    MPI_Get_processor_name(processor_name, &name_len);
-//
-//    // Print off a hello world message
-//    if(world_rank == 0)
-//        printf("\nMaster node");
-//    else{
-//        printf("Computation node %s, rank %d out of %d processors\n", processor_name, world_rank, world_size);
+    // Initialize the MPI environment
+    MPI_Init(&narg, &arg);
+
+    // Get the number of processes
+    int world_size;
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+    // Get the rank of the process
+    int world_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+
+    // Get the name of the processor
+    char processor_name[MPI_MAX_PROCESSOR_NAME];
+    int name_len;
+    MPI_Get_processor_name(processor_name, &name_len);
+
+    // Print off a hello world message
+
+    int *rbuf;
+    float *rbuf2;
+    int np=0;
+    float *t;
+    float *x;
+    if(world_rank == 0){
+        printf("\nMaster node");
+	rbuf = (int *)malloc((world_size)*sizeof(int));
+    } 
+    else{
+        printf("Computation node %s, rank %d out of %d processors\n", processor_name, world_rank, world_size);
 
 		bool run_flag = true;
 		char *savefile = NULL;
@@ -76,13 +84,33 @@ int main(int narg, char** arg) {
 		}
 		g_t* dp = new g_t;
 		main_cuda(&run_flag, job_ID, savefile, loadfile, device_ID, distr, &progress_bar, dp);
-	    cout << "Test cating g_t->void->g_t\t" << dp->np;
 		for (int j = 0; j < dp->np; j++) {
 			cout << dp->t[j] << '\t' << dp->x[j] << '\n';
 		}
-		//Send to master node
-//    }
-//    // Finalize the MPI environment.
-//    MPI_Finalize();
+		np = dp->np;
+                t = dp->t;
+                x = dp->x;
+    }
+    MPI_Gather(&np, 1, MPI_INT, rbuf, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    cout << "\nWorld rank" << world_rank;
+    if(world_rank == 0){
+        np = rbuf[1]; //Get the size of correlator
+        cout << "\nnp=" << np;
+        free(rbuf); //Clear buffer memory
+        rbuf2 = (float *)malloc(world_size*np*sizeof(float));
+    }
+    MPI_Gather(t, np, MPI_FLOAT, rbuf, np, MPI_FLOAT, 0, MPI_COMM_WORLD);
+    if(world_rank == 0){
+        for (int i=0; i<world_size-1; i++){
+            t[i]=rbuf2[i];
+            cout << "\n" << t[i];
+        }
+    }
+    free (rbuf);
+    //alloc memory for data
+    //gather
+    
+    // Finalize the MPI environment.
+    MPI_Finalize();
 	return 0;
 }
