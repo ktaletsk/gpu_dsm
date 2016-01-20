@@ -133,7 +133,7 @@ void chain_init(chain_head *chain_head, sstrentp data, int tnk, bool PD_flag, Ra
 			if(PD_flag) {
 				//Random molecular weight of entangled background chain (from GEX)
 				float x = gamma_new_table_x[(int)(eran->flt()/step)];
-				while (x < (3*Be+4)*Mk/mp || x > gamma_table_cutoff)
+				while (x < (Be+2)*Mk/mp || x > gamma_table_cutoff)
 					x = gamma_new_table_x[(int)(eran->flt()/step)];//fetch one more
 				//Number of Cuhn steps in background chain
 				int Nk__= (int)(x*mp/Mk);
@@ -184,7 +184,7 @@ void chain_init(chain_head *chain_head, sstrentp data, int tnk, int z_max, bool 
 			if (PD_flag) {
 				//Random molecular weight of entangled background chain (from GEX)
 				float x = gamma_new_table_x[(int)(eran->flt()/step)];
-				while (x < (3*Be+4)*Mk/mp || x > gamma_table_cutoff)
+				while (x < (Be+2)*Mk/mp || x > gamma_table_cutoff)
 					x = gamma_new_table_x[(int)(eran->flt()/step)];//fetch one more
 
 				//Number of Kuhn steps in background chain
