@@ -159,9 +159,9 @@ double LambertW1(const double z) {
 void make_gamma_table (float a, float b) {
 	//ofstream file("table", ios::out);
 	//TODO: check if we need double or float
-	double lgam, g_1, g_0;
-	lgam = lgamma(a/b);
-	g_0  = signgam*exp(lgam);
+	double lgam, g_1;
+//	lgam = lgamma(a/b);
+//	g_0  = signgam*exp(lgam);
 	lgam = lgamma((a+1)/b);
 	g_1  = signgam*exp(lgam);
 	double m_max = pow(a/b,1/b);

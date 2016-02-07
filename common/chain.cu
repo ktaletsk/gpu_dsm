@@ -93,7 +93,7 @@ void Q_dist(int tz, int *Ntmp, float *&Qxtmp, float *&Qytmp, float *&Qztmp, Ran*
 }
 
 __host__ __device__ float tau_dist(float p,float Be, int Nk) {
-	float g, alpha, tau_0, tau_max, tau_d, At;
+	float g, alpha, tau_0, tau_max, tau_d;
 	double z = (Nk + Be) / (Be + 1.0);
 	g = 0.667f;
 	if (Be != 1.0f) {
@@ -101,22 +101,20 @@ __host__ __device__ float tau_dist(float p,float Be, int Nk) {
 		//Unpublished Pilyugina E. (2012)
 		alpha = (0.053f * logf(Be) + 0.31f) * powf(z, -0.012f * logf(Be) - 0.024f);
 		tau_0 = 0.285f * powf(Be + 2.0f, 0.515f);
-		tau_max = 0.025f * powf(Be + 2.0f, 2.6f) * powf(z, 2.83f);
-		tau_d = 0.036f * powf(Be + 2.0f, 3.07f) * powf(z - 1.0f, 3.02f);
+		tau_max = ((Nk<2) ? tau_0 : 0.025f * powf(Be + 2.0f, 2.6f) * powf(z, 2.83f));
+		tau_d = ((Nk<2) ? tau_0 : 0.036f * powf(Be + 2.0f, 3.07f) * powf(z - 1.0f, 3.02f));
 	} else {
 		//Analytical approximation to P_cd parameters CFSM
 		//Andreev, M., Feng, H., Yang, L., and Schieber, J. D.,J. Rheol. 58, 723 (2014).
 		//DOI:10.1122/1.4869252
 		alpha = 0.267096f - 0.375571f * expf(-0.0838237f * Nk);
 		tau_0 = 0.460277f + 0.298913f * expf(-0.0705314f * Nk);
-		tau_max = 0.0156137f * powf(float(Nk), 3.18849f);
-		tau_d = 0.0740131f * powf(float(Nk), 3.18363f);
+		tau_max = ((Nk<4) ? tau_0 : 0.0156137f * powf(float(Nk), 3.18849f));
+		tau_d = ((Nk<4) ? tau_0 : 0.0740131f * powf(float(Nk), 3.18363f));
 	}
-	//init vars
-	At = (1.0f - g) / (powf(tau_max, alpha) - powf(tau_0, alpha));
 
 	if (p < (1.0f - g)) {
-		return powf(p / At + powf(tau_0, alpha), 1.0f / alpha);
+		return powf(p / (1.0f - g) * (powf(tau_max, alpha) - powf(tau_0, alpha)) + powf(tau_0, alpha), 1.0f / alpha);
 	} else {
 		return tau_d;
 	}
@@ -133,8 +131,7 @@ void chain_init(chain_head *chain_head, sstrentp data, int tnk, bool PD_flag, Ra
 			if(PD_flag) {
 				//Random molecular weight of entangled background chain (from GEX)
 				float x = gamma_new_table_x[(int)(eran->flt()/step)];
-				while (x < (Be+2)*Mk/mp || x > gamma_table_cutoff)
-					x = gamma_new_table_x[(int)(eran->flt()/step)];//fetch one more
+
 				//Number of Cuhn steps in background chain
 				int Nk__= (int)(x*mp/Mk);
 
@@ -157,7 +154,6 @@ void chain_init(chain_head *chain_head, sstrentp data, int tnk, bool PD_flag, Ra
 // 	    data[k]=new_strent(tN[k],Qxtmp[k],Qytmp[k],Qztmp[k],0.0,0.0,k+1);
 		data.QN[k] = make_float4(Qxtmp[k], Qytmp[k], Qztmp[k], float(tN[k]));
 		data.tau_CD[k] = 1.0f / tent_tau[k];
-
 	}
 
 	//set_dangling_ends
@@ -184,8 +180,6 @@ void chain_init(chain_head *chain_head, sstrentp data, int tnk, int z_max, bool 
 			if (PD_flag) {
 				//Random molecular weight of entangled background chain (from GEX)
 				float x = gamma_new_table_x[(int)(eran->flt()/step)];
-				while (x < (Be+2)*Mk/mp || x > gamma_table_cutoff)
-					x = gamma_new_table_x[(int)(eran->flt()/step)];//fetch one more
 
 				//Number of Kuhn steps in background chain
 				int Nk__ = (int) (x * mp / Mk);

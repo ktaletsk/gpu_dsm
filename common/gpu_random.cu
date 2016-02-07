@@ -144,7 +144,7 @@ __device__ __forceinline__ float d_tau_CD_f_t(float p, float d_At, float d_Ct, f
 __device__ void p_cd_(float Be, int Nk, float *d_p_At, float *d_p_Ct, float *d_p_Dt, float *d_p_g, float *d_p_Adt, float *d_p_Bdt, float *d_p_Cdt, float *d_p_Ddt, float *d_p_tau_d_inv) {
 	//Generates \tau_CD lifetimes
 	//uses analytical approximation to P_cd parameters
-	float At, Adt, Bdt, normdt, g, alpha, tau_0, tau_max, tau_d;
+	float c1, cm1, rcm1c1, At, Adt, Bdt, normdt, g, alpha, tau_0, tau_max, tau_d;
 	double z = (Nk + Be) / (Be + 1.0);
 	g = 0.667f;
 	if (Be != 1.0f) {
@@ -153,8 +153,8 @@ __device__ void p_cd_(float Be, int Nk, float *d_p_At, float *d_p_Ct, float *d_p
 
 		alpha = (0.053f * logf(Be) + 0.31f) * powf(z, -0.012f * logf(Be) - 0.024f);
 		tau_0 = 0.285f * powf(Be + 2.0f, 0.515f);
-		tau_max = 0.025f * powf(Be + 2.0f, 2.6f) * powf(z, 2.83f);
-		tau_d = 0.036f * powf(Be + 2.0f, 3.07f) * powf(z - 1.0f, 3.02f);
+		tau_max = ((Nk<2) ? tau_0 : 0.025f * powf(Be + 2.0f, 2.6f) * powf(z, 2.83f));
+		tau_d = ((Nk<2) ? tau_0 : 0.036f * powf(Be + 2.0f, 3.07f) * powf(z - 1.0f, 3.02f));
 	} else {
 		//Analytical approximation to P_cd parameters CFSM
 		//Andreev, M., Feng, H., Yang, L., and Schieber, J. D.,J. Rheol. 58, 723 (2014).
@@ -162,22 +162,30 @@ __device__ void p_cd_(float Be, int Nk, float *d_p_At, float *d_p_Ct, float *d_p
 
 		alpha = 0.267096f - 0.375571f * expf(-0.0838237f * Nk);
 		tau_0 = 0.460277f + 0.298913f * expf(-0.0705314f * Nk);
-		tau_max = 0.0156137f * powf(float(Nk), 3.18849f);
-		tau_d = 0.0740131f * powf(float(Nk), 3.18363f);
+		tau_max = ((Nk<4) ? tau_0 : 0.0156137f * powf(float(Nk), 3.18849f));
+		tau_d = ((Nk<4) ? tau_0 : 0.0740131f * powf(float(Nk), 3.18363f));
 	}
+	//Workaround for short chains
+	//Previous fits of parameters {alpha,tau_0,tau_max,tau_d) did not include short chains <Z> < 3
+	//And expression for power law part of p^CD stop working there
+	//So we set tau_max=tau_0 if Nk<4 and apply analytically found limit of (tau_max^(alpha-1)-tau_0^(alpha-1))/(tau_max^alpha-tau_0^alpha) -> alpha/(alpha-1)
+	//And the code doesn't break here
+
 	//init vars
-	At = (1.0f - g) / (powf(tau_max, alpha) - powf(tau_0, alpha));
-	Adt = (1.0f - g) * alpha / (alpha - 1.0f)
-			/ (powf(tau_max, alpha) - powf(tau_0, alpha));
-	Bdt = Adt * (powf(tau_max, alpha - 1.0f) - powf(tau_0, alpha - 1.0f));
+	c1 = powf(tau_max, alpha) - powf(tau_0, alpha);
+	cm1 = powf(tau_max, alpha - 1.0f) - powf(tau_0, alpha - 1.0f);
+	rcm1c1 = ((c1==0.0f) ? (alpha - 1.0f)/alpha : (cm1/c1));//ratio beween c1 and c-1
+	At = (1.0f - g);
+	Adt = At * alpha / (alpha - 1.0f);
+	Bdt = Adt * rcm1c1;
 	normdt = Bdt + g / tau_d;
 
 	*d_p_g=g;
 	*d_p_tau_d_inv = __fdividef(1.0f, tau_d);
-	*d_p_At = __fdividef(1.0f, At);
+	*d_p_At = __fdividef(c1, At);
 	*d_p_Dt = powf(tau_0, alpha);
 	*d_p_Ct = __fdividef(-1.0f, alpha);
-	*d_p_Adt = __fdividef(normdt, Adt);
+	*d_p_Adt = __fdividef(normdt*c1, Adt);
 	*d_p_Bdt = __fdividef(Bdt, normdt);
 	*d_p_Cdt = __fdividef(-1.0f, alpha - 1.0f);
 	*d_p_Ddt = powf(tau_0, alpha - 1.0f);
@@ -194,14 +202,9 @@ __global__ __launch_bounds__(ran_tpd) void fill_surface_taucd_gauss_rand (gpu_Ra
 		curandState localState = state[i];
 		for (int j=0; j<count;j++){
 			//Pcd generation for new entanglements
-
-			//Pick a uniform distributed random number
-			tmp.x=curand_uniform (&localState);
-
+			tmp.x=curand_uniform (&localState); //Pick a uniform distributed random number
 			if (d_PD_flag){
-				tmp.y=tex1D(t_gamma_table, curand_uniform(&localState)/d_step); //get molecular weight of background chain from table
-				while (tmp.y < (d_Be+2)*d_Mk/d_mp || tmp.y > d_gamma_table_cutoff)
-					tmp.y=tex1D(t_gamma_table, curand_uniform(&localState)/d_step); //fetch one more
+				tmp.y=tex1D(t_gamma_table, curand_uniform(&localState)/d_step); //get molecular weight (M/mp) of background chain from table
 				p_cd_(d_Be, (int)(tmp.y*d_mp/d_Mk + 0.5), &d_p_At, &d_p_Ct, &d_p_Dt, &d_p_g, &d_p_Adt, &d_p_Bdt, &d_p_Cdt, &d_p_Ddt, &d_p_tau_d_inv); //Calculate pcd parameters
 				if (SDCD_toggle == true)
 					tmp.w = d_tau_CD_f_t(tmp.x, d_p_At, d_p_Ct, d_p_Dt, d_p_tau_d_inv, d_p_g);
@@ -214,6 +217,7 @@ __global__ __launch_bounds__(ran_tpd) void fill_surface_taucd_gauss_rand (gpu_Ra
 				else
 					tmp.w = d_tau_CD_f_d_t(tmp.x, d_Adt, d_Bdt, d_Cdt, d_Ddt, d_tau_d_inv);
 			}
+			if (isinf(tmp.w)) printf("\nNk=%i",(int)(tmp.y*d_mp/d_Mk + 0.5));
 
 			//Q vector generation for new entanglements
 			if (h==0.0f){
@@ -249,9 +253,7 @@ __global__ __launch_bounds__(ran_tpd) void refill_surface_taucd_gauss_rand (gpu_
 	    for (int j=0; j<cnt;j++){
 	    	tmp.x=curand_uniform (&localState);
 			if (d_PD_flag){
-				tmp.y=tex1D(t_gamma_table, curand_uniform(&localState)/d_step);
-				while (tmp.y < (d_Be+2)*d_Mk/d_mp || tmp.y > d_gamma_table_cutoff)
-					tmp.y=tex1D(t_gamma_table, curand_uniform(&localState)/d_step); //fetch one more
+				tmp.y=tex1D(t_gamma_table, curand_uniform(&localState)/d_step); //get molecular weight (M/mp) of background chain from table
 				p_cd_(d_Be, (int)(tmp.y*d_mp/d_Mk + 0.5), &d_p_At, &d_p_Ct, &d_p_Dt, &d_p_g, &d_p_Adt, &d_p_Bdt, &d_p_Cdt, &d_p_Ddt, &d_p_tau_d_inv);
 				if (SDCD_toggle == true)
 					tmp.w = d_tau_CD_f_t(tmp.x, d_p_At, d_p_Ct, d_p_Dt, d_p_tau_d_inv, d_p_g);
