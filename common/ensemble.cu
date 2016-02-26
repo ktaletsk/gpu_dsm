@@ -593,6 +593,29 @@ int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* ru
 	return 0;
 }
 
+int gpu_Gt_PCS(int res, double length, float *&t, float *&x, int &np, bool* run_flag, int *progress_bar) {
+	//Start simulation
+	//Calculate stress with timestep specified
+	//Update correlators on the fly for each chain (on GPU)
+	//At the end copy results from each chain and average them
+
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(res), sizeof(int))); //Copy timestep for calculation
+
+	//There is restriction on the size of any array in CUDA
+	//We divide ensemble of chains into blocks if necessary
+	//And evaluate for each block
+	for (int i = 0; i < chain_blocks_number; i++){
+		init_block_correlator(&(chain_blocks[i]));//Initialize correlator structure in cb
+		EQ_time_step_call_block(length, &(chain_blocks[i]),run_flag);
+	}
+
+	//Create 3 correlators for each chain
+	//When calculating stress, call add() method to recursively update all levels of correlator
+	//When simulation is finished average data between 3 components and all chains and save final results to CPU and then to file and console output
+
+	return 0;
+}
+
 int gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np, bool* run_flag) {
 	// how does it work
 	// There is limit on memory. We cannot store stress for every timestep for each chain in the ensemble.
@@ -659,12 +682,15 @@ int gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np, bool* run
 		for (int j = 0; j < np; j++) {
 			x[j] = 0.0f;
 		}
+
+		//calculate correlator and average between blocks
 		for (int i = 0; i < chain_blocks_number; i++) {
 			chain_blocks[i].corr->calc(tint, x_buf, np);
 			for (int j = 0; j < np; j++) {
 				x[j] += x_buf[j] * chain_blocks[i].nc / N_cha;
 			}
 		}
+		//Output results
 		for (int j = 0; j < np; j++) {
 			cout << t[j] << '\t' << x[j] << '\n';
 			G_file << t[j] << '\t' << x[j] << '\n';
