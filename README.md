@@ -1,5 +1,5 @@
     +--------------------------+
-    |        GPU DSM           |
+    |        [GPU DSM](http://www.chbe.iit.edu/~schieber/dsm-software.html)           |
     |      readme file         |
     +--------------------------+
 
