@@ -66,6 +66,8 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 	in >> t_step_size;
 	in >> simulation_time;
 
+	int s = ceil(log(simulation_time/t_step_size/correlator_size)/log(correlator_res)) + 1; //number of correlator levels
+
 	//Print simulation parameters
 	cout << "\nsimulation parameters:\n";
 	cout << "NK\tBeta\tN_cha" << "\n";
@@ -77,8 +79,8 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 	else
 		cout << "G(t) calculation is off\n";
 	cout << "simulation time, sync time" << "\n";
-	cout << simulation_time << '\t' << t_step_size << '\n' << '\n';
-
+	cout << simulation_time << '\t' << t_step_size << '\n';
+	cout << "number of correlator levels" << '\t' << s << '\n' << '\n';
 	//Toy parameters
 	//     Be=1.0;
 	//     NK=46;
@@ -112,7 +114,7 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 		host_chains_init(&eran);	// or generate equilibrium conformations
 
 	gpu_ran_init(pcd);	//init gpu random module
-	gpu_init(job_ID, pcd);	//prepare GPU to run DSM calculation
+	gpu_init(job_ID, pcd, s);	//prepare GPU to run DSM calculation
 
 	ctimer timer;
 	if (flow) {	//Flow calculations
@@ -139,11 +141,9 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 			cout << "G(t) calc...\n";
 			cout.flush();
 			float *t, *x;
-            int np;
 			timer.start();
-			//if(gpu_Gt_calc(t_step_size, simulation_time, t, x, np, &run_flag)==-1) return -1;
-            if(Gt_brutforce(t_step_size, simulation_time, t, x, np, run_flag,progress_bar)==-1) return -1;
-			cout << "G(t) calc done\n";
+            if(gpu_Gt_PCS(t_step_size, simulation_time, t, x, s, run_flag,progress_bar)==-1) return -1;
+			//cout << "G(t) calc done\n";
 			timer.stop();
 		} else {
 			cout<< "There are no flow and no equilibrium quantity to calculate. Exiting... \n";
