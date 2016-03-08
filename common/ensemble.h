@@ -52,7 +52,7 @@ extern bool PD_flag;
 
 //public functions
 void host_chains_init(Ran* eran);	//prepares chain conformations on host
-void gpu_init(int seed, p_cd* pcd);// prepares GPU kernels,random number generators and copies chains to host memory
+void gpu_init(int seed, p_cd* pcd, int s);// prepares GPU kernels,random number generators and copies chains to host memory
 void get_chains_from_device();	//Copies chains back to host memory
 void save_to_file(char *filename);	//saves chain conformations to a file
 void save_Z_distribution_to_file(string filename, bool cumulative); //saves Z distrubution to file
@@ -62,8 +62,7 @@ void load_from_file(char *filename);  //loads chain conformations from a file
 
 int gpu_time_step(double reach_time, bool* run_flag);  // performs time evolution of ensemble
 
-int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* run_flag, int *progress_bar);
-int gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np, bool* run_flag); //G(t) relaxation spectrum calculation
+int gpu_Gt_PCS(int res, double length, float *&t, float *&x, int s, bool* run_flag, int *progress_bar); // (PCS correlator)
 
 void gpu_clean();  //free memory used by ensemble
 

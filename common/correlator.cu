@@ -22,103 +22,160 @@
 #include "textures_surfaces.h"
 #include "correlator.h"
 
+#define tpb_corr_kernel 32
+
 using namespace std;
 
-//correlator constant
-__constant__ int d_correlator_res;
-__constant__ int d_corr_function_length;
-__constant__ int d_correlator_counter;
-__constant__ int d_corr_nc;
+correlator::correlator(int n, int s) {//Initialize correlator
+	nc = n; //size of the ensemble
+	numcorrelators = s;
 
-void init_correlator() {
+	//Dimensions of the memory
+	int width = correlator_size;
+	int height = numcorrelators;
+	int depth = nc;
+	cudaExtent extent_f4 = make_cudaExtent(width * sizeof(float4), height, depth);
+	cudaExtent extent_i = make_cudaExtent(width * sizeof(int), height, depth);
 
-	//correlator constants
-	int corr_temp = max_corr_function_length;
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_corr_function_length, &(corr_temp),sizeof(int)));
-}
+	//Allocate device 3D memory [width X height X depth]
+	CUDA_SAFE_CALL(cudaMalloc3D(&(gpu_corr.d_shift), extent_f4));
+	CUDA_SAFE_CALL(cudaMalloc3D(&(gpu_corr.d_correlation), extent_f4));
+	CUDA_SAFE_CALL(cudaMalloc3D(&(gpu_corr.d_ncorrelation), extent_i));
 
-c_correlator::c_correlator(int na) {
-	nc = na;
-	counter = 0;
-	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
-	cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc(32, 0,  0,  0,  cudaChannelFormatKindFloat);
-	cudaMallocArray(&d_correlator,    &channelDesc4, correlator_size,          nc, cudaArraySurfaceLoadStore);
-	cudaMallocArray(&d_corr_function, &channelDesc1, max_corr_function_length, nc, cudaArraySurfaceLoadStore);
-	stress = (float4 *)malloc(sizeof(float4)*correlator_size*nc);
+	//Allocate device 2D memory [height X depth]
+	CUDA_SAFE_CALL(cudaMallocPitch((float4**)&(gpu_corr.d_accumulator), &(gpu_corr.d_accumulator_pitch), height * sizeof(float4), depth));
+	CUDA_SAFE_CALL(cudaMallocPitch((int**)&(gpu_corr.d_naccumulator), &(gpu_corr.d_naccumulator_pitch), height * sizeof(int), depth));
+	CUDA_SAFE_CALL(cudaMallocPitch((int**)&(gpu_corr.d_insertindex), &(gpu_corr.d_insertindex_pitch), height * sizeof(int), depth));
+
+	//Allocate device 1D memory [depth]
+	CUDA_SAFE_CALL(cudaMalloc((int**)&(gpu_corr.d_kmax), nc * sizeof(int)));
+	CUDA_SAFE_CALL(cudaMalloc((float4**)&(gpu_corr.d_accval), nc * sizeof(float4)));
+
+	//Allocate device variables:
+	CUDA_SAFE_CALL(cudaMalloc((int**)&(gpu_corr.d_nc), sizeof(int)));
+	CUDA_SAFE_CALL(cudaMalloc((int**)&(gpu_corr.d_numcorrelators), sizeof(int)));
+	CUDA_SAFE_CALL(cudaMalloc((int**)&(gpu_corr.d_dmin), sizeof(int)));
+	CUDA_SAFE_CALL(cudaMalloc((int**)&(gpu_corr.d_correlator_size), sizeof(int)));
+	CUDA_SAFE_CALL(cudaMalloc((int**)&(gpu_corr.d_correlator_aver_size), sizeof(int)));
+
+	//Initialize 3D memory
+	CUDA_SAFE_CALL(cudaMemset3D((gpu_corr.d_shift), 0, extent_f4));
+	CUDA_SAFE_CALL(cudaMemset3D((gpu_corr.d_correlation), 0, extent_f4));
+	CUDA_SAFE_CALL(cudaMemset3D((gpu_corr.d_ncorrelation), 0, extent_i));
+
+	//Initialize 2D memory
+	CUDA_SAFE_CALL(cudaMemset2D((void *)(gpu_corr.d_accumulator), (gpu_corr.d_accumulator_pitch), 0, height * sizeof(float4), depth)); //not sure if initialization with int works
+	CUDA_SAFE_CALL(cudaMemset2D((void *)(gpu_corr.d_naccumulator), (gpu_corr.d_naccumulator_pitch), 0, height * sizeof(float4), depth));
+	CUDA_SAFE_CALL(cudaMemset2D((void *)(gpu_corr.d_insertindex), (gpu_corr.d_insertindex_pitch), 0, height * sizeof(int), depth));
+
+	//Initialize 1D memory
+	CUDA_SAFE_CALL(cudaMemset((gpu_corr.d_kmax), 0, depth*sizeof(int)));
+	CUDA_SAFE_CALL(cudaMemset((gpu_corr.d_accval), 0, depth*sizeof(float4)));
+
+	//Initialize variables
+	CUDA_SAFE_CALL(cudaMemcpy((gpu_corr.d_nc), &nc, sizeof(int), cudaMemcpyHostToDevice));
+	CUDA_SAFE_CALL(cudaMemcpy((gpu_corr.d_numcorrelators), &numcorrelators, sizeof(int), cudaMemcpyHostToDevice));
+	int temp = correlator_size/correlator_res;
+	CUDA_SAFE_CALL(cudaMemcpy((gpu_corr.d_dmin), &temp, sizeof(int), cudaMemcpyHostToDevice));
+	temp = correlator_size;
+	CUDA_SAFE_CALL(cudaMemcpy((gpu_corr.d_correlator_size), &temp, sizeof(int), cudaMemcpyHostToDevice));
+	temp = correlator_res;
+	CUDA_SAFE_CALL(cudaMemcpy((gpu_corr.d_correlator_aver_size), &temp, sizeof(int), cudaMemcpyHostToDevice));
+
 	CUT_CHECK_ERROR("kernel execution failed");
 }
 
-c_correlator::~c_correlator() {
-	cudaFreeArray(d_correlator);
-	cudaFreeArray(d_corr_function);
-	free(stress);
+correlator::~correlator() {
+	cudaFree(gpu_corr.d_shift.ptr);
+	cudaFree(gpu_corr.d_correlation.ptr);
+	cudaFree(gpu_corr.d_ncorrelation.ptr);
+	cudaFree(gpu_corr.d_accumulator);
+	cudaFree(gpu_corr.d_naccumulator);
+	cudaFree(gpu_corr.d_insertindex);
+	cudaFree(gpu_corr.d_kmax);
+	cudaFree(gpu_corr.d_accval);
 }
 
-__global__ __launch_bounds__(ran_tpd) void corr_function_calc_kernel(int *d_time_ticks) {
-	int i = blockIdx.x * blockDim.x + threadIdx.x; //i- chain index
-	if (i >= d_corr_nc)
+__global__ void corr_function_calc_kernel(cudaPitchedPtr d_correlation, cudaPitchedPtr d_ncorrelation, float* d_lag, float* d_corr, int* d_nc, int* d_numcorrelators, int *d_dmin, int *d_correlator_size, int *d_correlator_aver_size) {
+	//Calculate kernel index
+	int k = blockIdx.y * blockDim.y + threadIdx.y; //correlator level
+	int j = blockIdx.x * blockDim.x + threadIdx.x; //lag
+
+	//Check if kernel index is outside boundaries
+	if ((k >=*d_numcorrelators) || (j >=*d_correlator_size))
 		return;
-	for (int j = 0; j < d_corr_function_length; j++) { //j-time lag index
-		int ct = d_time_ticks[j]; //time lag
-		float4 data1, data2;
-		float cf = 0.0f;
-		for (int k = 0; k < d_correlator_counter - ct; k++) {
-			data1 = tex2D(t_correlator, k, i);
-			data2 = tex2D(t_correlator, k + ct, i);
-			cf += data1.x * data2.x + data1.y * data2.y + data1.z * data2.z;
-		}
-		cf = __fdividef(cf, 3.0f * (d_correlator_counter - ct));
-		surf2Dwrite(cf, s_corr_function, 4 * j, i);
+
+	if (k>0 && j < *d_dmin)
+		return;
+
+	float lag = (float)j * powf((float)(*d_correlator_aver_size), k); // time lag
+
+	float stress = 0.0f; //local variable to accumulate correlation from all chains
+
+	char* correlation_ptr = (char *)(d_correlation.ptr);
+	size_t correlation_pitch = d_correlation.pitch;
+	size_t correlation_slicePitch = correlation_pitch * *d_numcorrelators;
+
+	char* ncorrelation_ptr = (char *)(d_ncorrelation.ptr);
+	size_t ncorrelation_pitch = d_ncorrelation.pitch;
+	size_t ncorrelation_slicePitch = ncorrelation_pitch * *d_numcorrelators;
+
+	for (int n = 0; n < *(d_nc); ++n) { //iterate chains
+		char* correlation_slice = correlation_ptr + n * correlation_slicePitch;
+		float4* correlation = (float4*) (correlation_slice + k * correlation_pitch);
+		float4 element = correlation[j];
+
+		char* ncorrelation_slice = ncorrelation_ptr + n * ncorrelation_slicePitch;
+		int* ncorrelation = (int*) (ncorrelation_slice + k * ncorrelation_pitch);
+		int weight = ncorrelation[j];
+
+		if (weight > 0)
+			stress +=__fdividef((element.x + element.y + element.z), 3.0f * float(weight));
 	}
+
+	//Write results to output array
+	d_lag[k*(*d_correlator_size)+j]=lag;
+	d_corr[k*(*d_correlator_size)+j]=stress;
 }
 
-void c_correlator::calc(int *t, float *x, int np) {
+void correlator::calc(int *t, float *x){
 
-	cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
-	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
+	//allocate and initialize d_corr (flatten 2D, correlation results)
+	CUDA_SAFE_CALL(cudaMalloc((float**)&d_lag, correlator_size * numcorrelators * sizeof(float)));
+	CUDA_SAFE_CALL(cudaMalloc((float**)&d_corr,correlator_size * numcorrelators * sizeof(float)));
 
-	cudaBindTextureToArray(t_correlator, d_correlator, channelDesc4);
+	CUDA_SAFE_CALL(cudaMemset(d_lag, 0, correlator_size * numcorrelators * sizeof(float)));
+	CUDA_SAFE_CALL(cudaMemset(d_corr, 0, correlator_size * numcorrelators * sizeof(float)));
 
-	cudaBindSurfaceToArray(s_corr_function, d_corr_function);
+	//2D grid [k X p]
+	dim3 dimBlock(tpb_corr_kernel, tpb_corr_kernel);
+	dim3 dimGrid((correlator_size + dimBlock.x - 1) / dimBlock.x,(numcorrelators + dimBlock.y - 1) / dimBlock.y);
 
-	int corr_temp = np;
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_corr_function_length, &(corr_temp), sizeof(int)));
-	corr_temp = nc;
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_corr_nc, &(corr_temp), sizeof(int)));
-	corr_temp = counter;
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_counter, &(corr_temp),sizeof(int)));
-	//correlation calculation
-// 	int *ti=new int[np];
-// 	for(int j=0;j<np;j++) {ti[j]=int (t[j]);}
+	corr_function_calc_kernel<<<dimGrid, dimBlock>>>(gpu_corr.d_correlation, gpu_corr.d_ncorrelation, d_lag, d_corr, gpu_corr.d_nc, gpu_corr.d_numcorrelators, gpu_corr.d_dmin, gpu_corr.d_correlator_size, gpu_corr.d_correlator_aver_size);
 
-	int *d_ti;
-	cudaMalloc(&d_ti, sizeof(int) * max_corr_function_length);
-	cudaMemcpy(d_ti, t, sizeof(int) * np, cudaMemcpyHostToDevice);
+	float *lag_buffer = new float[correlator_size * numcorrelators];
+	float *corr_buffer = new float[correlator_size * numcorrelators];
 
-	corr_function_calc_kernel<<<(nc + ran_tpd - 1) / ran_tpd, ran_tpd>>>(d_ti);
-	CUT_CHECK_ERROR("corr_function_calc_kernel execution failed");
-// 	delete []ti;
-	cudaFree(d_ti);
-	cudaUnbindTexture(t_correlator);
 
-	//average
+	//memcpy d_corr, d_lag back to host
+	cudaMemcpy(lag_buffer, d_lag, correlator_size * numcorrelators * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(corr_buffer,d_corr,correlator_size * numcorrelators * sizeof(float), cudaMemcpyDeviceToHost);
 
-	float *x_buf = new float[nc * max_corr_function_length];
-	cudaMemcpy2DFromArray(x_buf, sizeof(float) * max_corr_function_length,d_corr_function, 0, 0, sizeof(float) * max_corr_function_length, nc,cudaMemcpyDeviceToHost);
-
-//	int error = 0;
-
-	float *sum_x = new float[max_corr_function_length];
-	for (int j = 0; j < np; j++) {
-		sum_x[j] = 0.0;
-		for (int i = 0; i < nc; i++) {
-			sum_x[j] += x_buf[i * max_corr_function_length + j];
-//			if (x_buf[i * max_corr_function_length + j] != x_buf[i * max_corr_function_length + j])
-//				error ++;
-		}
-		x[j] = sum_x[j] / nc;
+	//output to t and x
+	int im = 0;
+	for (unsigned int i=0; i<correlator_size; ++i) {
+		t[im] = (int)(lag_buffer[i]);
+		x[im] = corr_buffer[i];
+		++im;
 	}
-	delete[] x_buf;
-	delete[] sum_x;
-//	cout << "\n" << error << " NaNs\n";
+	for (int k=1; k<numcorrelators; ++k) {
+			for (int i=correlator_size/correlator_res; i<correlator_size; ++i) {
+				t[im] = (int)(lag_buffer[k * correlator_size + i]);
+				x[im] = corr_buffer[k* correlator_size + i];
+				++im;
+			}
+	}
+	npcorr = im;
+	delete[] lag_buffer;
+	delete[] corr_buffer;
 }

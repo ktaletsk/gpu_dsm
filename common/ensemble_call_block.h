@@ -46,42 +46,16 @@ typedef struct ensemble_call_block {
 	float *d_new_tau_CD;  //new life time
 
 	//G(t) calculations
-	c_correlator *corr;     //correlator
+	correlator *corr;     //correlator
 	int *d_correlator_time; //index of next cell to fill
-//	~ensemble_call_block() {
-////		delete nc;
-////		delete block_time;
-//		cout << "\nTest Destructor 1";
-//		delete[] chains.QN;
-//		delete[] chains.tau_CD;
-//		delete[] chain_heads;
-//
-//		cudaFree(gpu_chain_heads);
-//		cudaFreeArray(d_QN);
-//		cudaFreeArray(d_tCD);
-//
-//		cudaFree(d_dt);
-//		cudaFree(reach_flag);
-//		cudaFree(d_offset);
-//		cudaFree(d_new_strent);
-//		cudaFree(d_new_tau_CD);
-//
-//		if (corr != NULL) {
-//			cudaFree(d_correlator_time);
-//			delete corr;
-//		}
-//	}
+
 } ensemble_call_block;
 
-void init_call_block(ensemble_call_block *cb, int nc, sstrentp chains,
-		chain_head* chain_heads);
+void init_call_block(ensemble_call_block *cb, int nc, sstrentp chains, chain_head* chain_heads);
 //copies chain conformations from host and prepare block variables
 
-void init_block_correlator(ensemble_call_block *cb);
-//prepares correlator if G(t) calculations needed
-
 int time_step_call_block(double reach_time, ensemble_call_block *cb, bool* run_flag);
-int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, bool* run_flag);
+int EQ_time_step_call_block(double reach_time, ensemble_call_block* cb, bool* run_flag, int *progress_bar);
 //performs time evolution
 
 void get_chain_to_device_call_block(ensemble_call_block *cb);

@@ -72,7 +72,6 @@ void Worker::doWork()
 {
     qDebug()<<"Starting worker process in Thread "<<thread()->currentThreadId();
     main_cuda(&_run,0,NULL,NULL,0,0,&progress_bar);
-
     // Set _working to false, meaning the process can't be aborted anymore.
     mutex.lock();
     _working = false;
@@ -479,10 +478,10 @@ void MainWindow::on_pushButton_clicked() {
         if (ui->radio_eq->isChecked()){
             sync_time=1;
             if (ui->radio_CFSM->isChecked())
-                sim_length=0.0740131f * powf(nc, 3.18363f);
+                sim_length=3 * 0.0740131f * powf(nc, 3.18363f);
             else
                 sim_length=0.036f * powf(beta + 2.0f, 3.07f) * powf((ceil(nk)+beta)/(beta+1) - 1.0f, 3.02f);
-            sim_length = sim_length * 10;
+            sim_length = 3 * sim_length * 10;
         }
         else {
             sim_length=ceil(ui->edit_strain->text().toFloat()/ui->edit_rate->text().toFloat());
@@ -651,6 +650,8 @@ void MainWindow::setuRealtimeData()
 //            QMessageBox::information(0,"info",file2.errorString());
 
     }else{
+    	ui->progressBar_1->setValue(progress_bar);
+    	ui->progressBar_2->setValue(progress_bar);
         QFile file2("G.dat");
         if(file2.open(QIODevice::ReadOnly)) {
             QTextStream in2(&file2);
@@ -665,12 +666,7 @@ void MainWindow::setuRealtimeData()
                 s[i] = fields2.at(1).toDouble();
                 i++;
             }
-            ui->progressBar_1->setValue(progress_bar);
-            ui->progressBar_2->setValue(progress_bar);
-            if (progress_bar <=50)
-                ui->label_status->setText(QString("Running simulation..."));
-            else
-                ui->label_status->setText(QString("Calculating correlation function..."));
+
             file2.close();
             if (i>result_line_count)
                 ui->label_8->clear();

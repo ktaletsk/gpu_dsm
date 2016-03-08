@@ -25,6 +25,7 @@
 #include "cudautil.h"
 #include "cuda_call.h"
 #include "textures_surfaces.h"
+#include "math.h"
 extern char * filename_ID(string filename, bool temp);
 
 void random_textures_refill(int n_cha);
@@ -104,7 +105,7 @@ void host_chains_init(Ran* eran) {
 }
 
 //preparation of constants/arrays/etc
-void gpu_init(int seed, p_cd* pcd) {
+void gpu_init(int seed, p_cd* pcd, int s) {
 	cout << "preparing GPU chain conformations..\n";
 
 	//Copy host constants from host to device
@@ -169,13 +170,10 @@ void gpu_init(int seed, p_cd* pcd) {
 	//chain_blocks - array of blocks
 	chain_blocks = new ensemble_call_block[chain_blocks_number];
 	for (int i = 0; i < chain_blocks_number - 1; i++) {
-		init_call_block(&(chain_blocks[i]), chains_per_call, chain_index(i, 0), &(chain_heads[i * chains_per_call]));
+		init_call_block(&(chain_blocks[i]), chains_per_call, chain_index(i, 0), &(chain_heads[i * chains_per_call]),s);
 		cout << "  copying chains to device block " << i + 1 << ". chains in the ensemble block " << chains_per_call << '\n';
 	}
-	init_call_block(&(chain_blocks[chain_blocks_number - 1]),
-			(N_cha - 1) % chains_per_call + 1,
-			chain_index(chain_blocks_number - 1, 0),
-			&(chain_heads[(chain_blocks_number - 1) * chains_per_call]));
+	init_call_block(&(chain_blocks[chain_blocks_number - 1]), (N_cha - 1) % chains_per_call + 1, chain_index(chain_blocks_number - 1, 0), &(chain_heads[(chain_blocks_number - 1) * chains_per_call]),s);
 	cout << "  copying chains to device block " << chain_blocks_number
 			<< ". chains in the ensemble block "
 			<< (N_cha - 1) % chains_per_call + 1 << '\n';
@@ -214,9 +212,7 @@ void get_chains_from_device()    //Copies chains back to host memory
 
 void gpu_clean() {
 	cout << "Memory cleanup.. ";
-//	for (int i = 0; i < chain_blocks_number; i++) {
-//		free_block(&(chain_blocks[i]));
-//	}
+
 	delete[] chain_blocks;
 	delete[] chain_heads;
 	delete[] (chains.QN);
@@ -455,415 +451,45 @@ void load_from_file(char *filename) {
 		cout << "file error\n";
 }
 
-int Gt_brutforce(int res, double length, float *&t, float *&x, int &np, bool* run_flag, int *progress_bar) {
+int gpu_Gt_PCS(int res, double length, float *&t, float *&x, int s, bool* run_flag, int *progress_bar) {
 	//Start simulation
-	//Save as much stress as posssible on GPU memory
-	//Sync with stress file
-	//Continue simulation
-	//At the end perform brutforce correlator calculation
+	//Calculate stress with timestep specified
+	//Update correlators on the fly for each chain (on GPU)
+	//At the end copy results from each chain and average them
+
+	*progress_bar = 1;
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(res), sizeof(int))); //Copy timestep for calculation
+
+	int np = correlator_size + (s-1) * (correlator_size - (float)correlator_size/(float)correlator_res);
+
+	t = new float[np];
+	x = new float[np];
+
+	for (int i = 0; i < chain_blocks_number; i++){
+		int *tint = new int[np];
+		float *x_buf = new float[np];
+
+		get_chain_to_device_call_block(&(chain_blocks[i]));
+		cudaMemset(chain_blocks[i].d_correlator_time, 0,sizeof(int) * chain_blocks[i].nc);
+		if(EQ_time_step_call_block(length, &(chain_blocks[i]),run_flag, progress_bar)==-1) return -1;
+		chain_blocks[i].corr->calc(tint, x_buf);
+
+		for (int j = 0; j < chain_blocks[i].corr->npcorr; j++) {
+			t[j] = tint[j];
+			x[j] += x_buf[j] / N_cha;
+		}
+		delete[] x_buf;
+		delete[] tint;
+	}
 
 	ofstream G_file;
 	G_file.open(filename_ID("G",false));
-
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(res), sizeof(int))); //Copy timestep for calculation
-	//There is restriction on the size of any array in CUDA
-	//We divide ensemble of chains into blocks if necessary
-	//And evaluate for each block
-	for (int i = 0; i < chain_blocks_number; i++)
-		init_block_correlator(&(chain_blocks[i]));//Initialize correlator structure in cb
-	int split = (length/res - 1) / correlator_size + 1;
-	int cur_length, n_steps;
-
-	std::remove(filename_ID("stress",true));
-	ofstream file(filename_ID("stress",true), ios::out | ios::binary | ios::app);
-	for (int k = 0; k < split; k++) {
-		cout << "\nCalculating split " << k+1 << "...";
-		if (k == split - 1)
-			n_steps = length/res - (split - 1) * correlator_size;
-		else
-			n_steps = correlator_size;
-		cur_length  = n_steps * res;
-		for (int i = 0; i < chain_blocks_number; i++) {
-			get_chain_to_device_call_block(&(chain_blocks[i]));
-			chain_blocks[i].block_time = 0;
-			cudaMemset(chain_blocks[i].d_correlator_time, 0,sizeof(int) * chain_blocks[i].nc);
-			if(EQ_time_step_call_block(cur_length, &(chain_blocks[i]),run_flag)==-1) return -1;
-			get_chain_from_device_call_block(&(chain_blocks[i]));
-			cudaMemcpy2DFromArray((chain_blocks+i)->corr->stress, 16 * n_steps, (chain_blocks+i)->corr->d_correlator,0,0,16 * n_steps, (chain_blocks+i)->nc,cudaMemcpyDeviceToHost);
-
-			//Save stress for current block/current split in file
-			for (int j=0; j< n_steps * (chain_blocks+i)->nc ; j++)
-				file.write( (char *)((chain_blocks[i].corr->stress)+j),sizeof(float4));
-		}
-        *progress_bar = 0.5 * k * 100 / split;
-	}
-	file.close();
-
-	int counter = length / res / 2;
-	//prepare log space time marks
-
-	//trial run to find out how many ticks
-	long t1 = 0;
-	int n = 1, inc = 1, series = 4;
-	while (t1 + inc < counter - 1) {
-		t1 += inc;
-		if (n % series == 0) {
-			inc *= 2;
-		}
-		n++;
-	}
-    np = n;
-	//full run
-	t = new float[n];
-	int *tint = new int[n];
-	x = new float[n];
-	double *xx = new double[n];
-	t1 = 0;
-	n = 1, inc = 1, series = 4;
-	t[0] = 0;
-	tint[0] = 0;
-	while (t1 + inc < counter - 1) {
-		t1 += inc;
-		if (n % series == 0) {
-			inc *= 2;
-		}
-		t[n] = res * float(t1);
-		tint[n] = t1;
-		n++;
-	}
-    float *x_buf = new float[np];
-    for (int j = 0; j < np; j++) {
-		x[j] = 0.0f;
-		xx[j] = 0.0f;
-	}
-
-	cout << "\nCalculating correlation function...\n";
-	std::vector<float4> stress_1chain;
-	stress_1chain.resize((int)(length/res));
-	ifstream file2(filename_ID("stress",true), ios::in | ios::binary | ios::app);
-	for (int i = 0; i < N_cha; i++) {//iterate chains
-		for (int k = 0; k < split; k++) {//iterate time splits for particular chain
-			if (k == split - 1)
-				n_steps = (int)(length/res) - (split - 1) * correlator_size;
-			else
-				n_steps = correlator_size;
-
-			if (k==0)
-				file2.seekg(16 * i * n_steps, ios::beg);
-			else if (k==split-1)
-				file2.seekg(16 * i * n_steps, ios::cur);
-			for (int j = 0; j < n_steps; j++)
-				file2.read((char *) (&stress_1chain[j + k * correlator_size]), sizeof(float4));
-			if (k < split - 2)
-				file2.seekg(16 * (N_cha - 1) * n_steps, ios::cur);
-			else if (k == split - 2)
-				file2.seekg(16 * (N_cha - 1 - i) * n_steps, ios::cur);
-		}
-
-		//Calculate autocorrelation for particular chain
-        for (int l = 0; l < np; l++) {//iterate time lag
-			for (int time = 0; time < ((int)(length/res) - tint[l]); time++) {//iterate time
-				xx[l] += (stress_1chain[time].x * stress_1chain[time + tint[l]].x +
-						 stress_1chain[time].y * stress_1chain[time + tint[l]].y +
-						 stress_1chain[time].z * stress_1chain[time + tint[l]].z) /
-						 (3 * ((int)(length/res) - tint[l]) * N_cha );
-			}
-		}
-        *progress_bar = 50 + 0.5 * i * 100 / N_cha;
-	}
-    for (int l = 0; l < np; l++)
-		x[l] = (float)xx[l];
-	file2.close();
-	std::remove(filename_ID("stress",true));
-
-	//GEX check
-//	std::sort (pcd_data.begin(), pcd_data.end());
-//	ofstream pcd_file("pcd.dat", ios::out);
-//	for (int i=0; i < pcd_data.size(); i++)
-//		pcd_file << "\n" << pcd_data[i];
-//	pcd_file.close();
-
-    for (int j = 0; j < np; j++) {
+	cout << "\n";
+	int actual_np = (np - correlator_size + floor(length/((float)res*pow((float)correlator_res,(s-1)))));
+	for (int j = 0; j < actual_np; j++) {
 		cout << t[j] << '\t' << x[j] << '\n';
 		G_file << t[j] << '\t' << x[j] << '\n';
 	}
-	delete[] x_buf;
-	delete[] tint;
 	G_file.close();
 	return 0;
 }
-
-int gpu_Gt_calc(int res, double length, float *&t, float *&x, int &np, bool* run_flag) {
-	// how does it work
-	// There is limit on memory. We cannot store stress for every timestep for each chain in the ensemble.
-	// We separate G(t) into several parts(pages), and calculate each part in a separate run
-	// Each part have a different time resolution.
-	// In other words, first we perform time evolution of the ensemeble and
-	// calculate and store stress every sync_time for each chain.
-	// After time evolution we use saved values to calculate G_1(t).
-	// Next we perform time evolution of the ensemeble and save stres every 16 sync_time.
-	// We use these saved values to calculate G_2(t)
-	// and so on...
-	// In the end, we combine {G_i(t)} into final (G(t))
-	ofstream G_file;
-	G_file.open(filename_ID("G",false));
-
-	if (length / res < correlator_size) {        //if one run is enough
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(res),sizeof(int))); //Copy timestep for calculation
-
-		//There is restriction on the size of any array in CUDA
-		//We divide ensemble of chains into blocks if necessary
-		//And evaluate for each block
-		for (int i = 0; i < chain_blocks_number; i++) {
-			init_block_correlator(&(chain_blocks[i]));//Initialize correlator structure in cb
-			if(EQ_time_step_call_block(length, &(chain_blocks[i]),run_flag)==-1) return -1;
-			chain_blocks[i].corr->counter = length / res;
-			/*		time_step_call_block(res*correlator_size,&(chain_blocks[i]));
-			 chain_blocks[i].corr->counter=correlator_size;*/
-		}
-
-		int counter = length / res / 2;
-		//prepare log space time marks
-
-		//trial run to find out how many ticks
-		long t1 = 0;
-		int n = 1, inc = 1, series = 4;
-		while (t1 + inc < counter - 1) {
-			t1 += inc;
-			if (n % series == 0) {
-				inc *= 2;
-			}
-			n++;
-			//      cout<<"n t1 "<<n<<' '<<t1<<'\n';
-		}
-		//  cout<<" n"<<n<<'\n';
-		np = n;
-		//full run
-		t = new float[n];
-		int *tint = new int[n];
-		x = new float[n];
-		t1 = 0;
-		n = 1, inc = 1, series = 4;
-		t[0] = 0;
-		tint[0] = 0;
-		while (t1 + inc < counter - 1) {
-			t1 += inc;
-			if (n % series == 0) {
-				inc *= 2;
-			}
-			t[n] = res * float(t1);
-			tint[n] = t1;
-			n++;
-		}
-		float *x_buf = new float[np];
-		for (int j = 0; j < np; j++) {
-			x[j] = 0.0f;
-		}
-		for (int i = 0; i < chain_blocks_number; i++) {
-			chain_blocks[i].corr->calc(tint, x_buf, np);
-			for (int j = 0; j < np; j++) {
-				x[j] += x_buf[j] * chain_blocks[i].nc / N_cha;
-			}
-		}
-		for (int j = 0; j < np; j++) {
-			cout << t[j] << '\t' << x[j] << '\n';
-			G_file << t[j] << '\t' << x[j] << '\n';
-		}
-
-		delete[] x_buf;
-		delete[] tint;
-	} else { //multiple runs required
-
-		//calculating number of runs
-		int page_count = 1;
-		while (correlator_size * powf(correlator_base, page_count - 1) < length / res)
-			page_count++;
-		cout << "number of correlator pages: " << page_count << '\n';
-		int last_page_counter = length / (res * powf(correlator_base, page_count - 1));
-
-		//equally spaced log scale tick marks template
-
-		//trial run to find out how many ticks
-		int np_first_page = 1, np_page = 0, np_last_page = 0; //counting number of points for all pages
-		int inc = 1, series = 4;
-		int counter = correlator_size / 2;
-		long t1 = 0;
-		inc = 1, series = 4;
-		while (t1 + inc < counter - 1) {
-			t1 += inc;
-			if (np_first_page % series == 0) {
-				inc *= 2;
-			}
-			np_first_page++;
-			if (t1 > correlator_size / 2 / correlator_base) {
-				np_page++;
-				if (t1 < last_page_counter - 1) {
-					np_last_page++;
-				}
-			}
-		}
-		np = np_first_page + (page_count - 2) * np_page + np_last_page;
-
-		//preparing time marks for each page
-		int *tick_pointer_page = new int[page_count];
-		int *tint = new int[np];
-		t = new float[np];
-		x = new float[np];
-		t[0] = 0;
-		tint[0] = 0;
-
-		//first page
-		t1 = 0;
-		int n = 1;
-		inc = 1;
-		series = 4;
-		tick_pointer_page[0] = 0;
-		while (t1 + inc < counter - 1) {
-			t1 += inc;
-			if (n % series == 0) {
-				inc *= 2;
-			}
-			tint[tick_pointer_page[0] + n] = t1;
-			t[tick_pointer_page[0] + n] = res * float(t1);
-// 		cout<<"n t1 "<<n<<' '<<t1<<'\n';   
-			n++;
-		}
-		tick_pointer_page[1] = np_first_page;
-
-		for (int ip = 2; ip < page_count; ip++) {
-			int tres = res * powf(correlator_base, ip - 1);
-			t1 = 0;
-			n = 1;
-			inc = 1;
-			series = 4;
-			int k = 0;
-			while (t1 + inc < counter - 1) {
-				t1 += inc;
-				if (n % series == 0) {
-					inc *= 2;
-				}
-				if (t1 > correlator_size / 2 / correlator_base) {
-					tint[tick_pointer_page[ip - 1] + k] = t1;
-					t[tick_pointer_page[ip - 1] + k] = tres * float(t1);
-					k++;
-// 			cout<<"k "<<k<<'\n';
-// 			cout<<"n t1 "<<n<<' '<<t1<<' '<<tres*float(t1)<<'\n';   
-				}
-				n++;
-			}
-			tick_pointer_page[ip] = tick_pointer_page[ip - 1] + np_page;
-// 		cout<<"tick_pointer_page[ip] "<<tick_pointer_page[ip]<<'\n';   
-
-		}
-		//last page
-
-		int tres = res * powf(correlator_base, page_count - 1);
-		t1 = 0;
-		n = 1;
-		inc = 1;
-		series = 4;
-		int k = 0;
-		while (t1 + inc < counter - 1) {
-			t1 += inc;
-			if (n % series == 0) {
-				inc *= 2;
-			}
-			if ((t1 > correlator_size / 2 / correlator_base)
-					&& (t1 < last_page_counter - 1)) {
-				tint[tick_pointer_page[page_count - 1] + k] = t1;
-				t[tick_pointer_page[page_count - 1] + k] = tres * float(t1);
-				k++;
-// 		    cout<<"n t1 "<<n<<' '<<t1<<' '<<tres*float(t1)<<'\n';
-			}
-			n++;
-
-		}
-
-		//run loop
-		float *x_buf = new float[np];
-
-		cout << "running page 1...";
-		cout.flush();
-		int ip = 1;
-		tres = res * powf(correlator_base, ip - 1);
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(tres), sizeof(int)));
-
-		//time evolution
-		for (int i = 0; i < chain_blocks_number; i++) {
-			init_block_correlator(&(chain_blocks[i]));
-			get_chain_to_device_call_block(&(chain_blocks[i]));
-			cudaMemset(chain_blocks[i].d_correlator_time, 0,sizeof(int) * chain_blocks[i].nc);
-			if(EQ_time_step_call_block(double(tres * correlator_size),&(chain_blocks[i]),run_flag)==-1) return -1;
-			chain_blocks[i].corr->counter = correlator_size;
-		}
-		//G_i(t) calculation
-		for (int i = 0; i < chain_blocks_number; i++) {
-			chain_blocks[i].corr->calc(tint, x_buf, np_first_page);
-			for (int j = 0; j < np_first_page; j++) {
-				x[j] += x_buf[j] * chain_blocks[i].nc / N_cha;
-			}
-		}
-		for (int j = 0; j < np_first_page; j++) {
-			cout << t[j] << '\t' << x[j] << '\n';
-			G_file << t[j] << '\t' << x[j] << '\n';
-		}
-		cout << "done\n";
-		for (int ip = 2; ip < page_count; ip++) {
-			cout << "running page " << ip << "...";
-			cout.flush();
-			tres = res * powf(correlator_base, ip - 1);
-			CUDA_SAFE_CALL(
-					cudaMemcpyToSymbol(d_correlator_res, &(tres), sizeof(int)));
-
-			for (int i = 0; i < chain_blocks_number; i++) {
-				get_chain_to_device_call_block(&(chain_blocks[i]));
-				cudaMemset(chain_blocks[i].d_correlator_time, 0, sizeof(int) * chain_blocks[i].nc);
-				if(EQ_time_step_call_block(double(tres * correlator_size), &(chain_blocks[i]),run_flag)==-1) return -1;
-				chain_blocks[i].corr->counter = correlator_size;
-			}
-
-			for (int i = 0; i < chain_blocks_number; i++) {
-				chain_blocks[i].corr->calc(&(tint[tick_pointer_page[ip - 1]]), &(x_buf[tick_pointer_page[ip - 1]]), np_page);
-				for (int j = tick_pointer_page[ip - 1]; j < tick_pointer_page[ip - 1] + np_page; j++) {
-					x[j] += x_buf[j] * chain_blocks[i].nc / N_cha;
-				}
-			}
-			for (int j = tick_pointer_page[ip - 1]; j < tick_pointer_page[ip - 1] + np_page; j++) {
-				cout << t[j] << '\t' << x[j] << '\n';
-				G_file << t[j] << '\t' << x[j] << '\n';
-			}
-			cout << "done\n";
-		}
-
-		ip = page_count;
-		cout << "running page " << ip << "...";
-		cout.flush();
-		tres = res * powf(correlator_base, ip - 1);
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(tres), sizeof(int)));
-
-		for (int i = 0; i < chain_blocks_number; i++) {
-			get_chain_to_device_call_block(&(chain_blocks[i]));
-			cudaMemset(chain_blocks[i].d_correlator_time, 0, sizeof(int) * chain_blocks[i].nc);
-			if(EQ_time_step_call_block(double(tres * correlator_size), &(chain_blocks[i]),run_flag)==-1) return -1;
-			chain_blocks[i].corr->counter = correlator_size;
-		}
-
-		for (int i = 0; i < chain_blocks_number; i++) {
-			chain_blocks[i].corr->calc(&(tint[tick_pointer_page[ip - 1]]), &(x_buf[tick_pointer_page[ip - 1]]), np_last_page);
-			for (int j = tick_pointer_page[ip - 1]; j < tick_pointer_page[ip - 1] + np_last_page; j++) {
-				x[j] += x_buf[j] * chain_blocks[i].nc / N_cha;
-			}
-		}
-		for (int j = tick_pointer_page[ip - 1]; j < tick_pointer_page[ip - 1] + np_last_page; j++) {
-			cout << t[j] << '\t' << x[j] << '\n';
-			G_file << t[j] << '\t' << x[j] << '\n';
-		}
-		cout << "done\n";
-
-		delete[] tint;
-		delete[] x_buf;
-	}
-	G_file.close();
-	return 0;
-}
-

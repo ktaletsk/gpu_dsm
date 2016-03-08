@@ -43,5 +43,4 @@
   surface<void,2> s_W_SD_pm;// SD shift probablities
   surface<void,2> s_sum_W;// SD shift probablities
   surface<void,1> s_stress;//float4 xx,yy,zz,xy
- 
 #endif

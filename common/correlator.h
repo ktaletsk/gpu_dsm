@@ -14,51 +14,55 @@
 // 
 // You should have received a copy of the GNU General Public License
 // along with gpu_dsm.  If not, see <http://www.gnu.org/licenses/>.
-
-//contains GPU brut correlation function calculator
-//to calculate correlation function required
-// 1) filled d_correlator array and properly updated counter. s_correlator surface (x(declared textures_surfaces.h)x)
-// 2) time ticks for correlation function. passed as array to calc subroutine
-// handling of these two things should be done outside this class
-
 #ifndef CORRELATOR_H_
 #define CORRELATOR_H_
 #include "textures_surfaces.h"
 
-#define correlator_size 1024// size of  correlator page
-#define max_corr_function_length 100// size of the random arrays
-surface<void, 2> s_correlator; //float4 xy,yz,xz,dummy
-texture<float4, cudaTextureType2D, cudaReadModeElementType> t_correlator;	// tauxy,tauyz,tauzx
-surface<void, 2> s_corr_function;
+#define correlator_size 64 // number of points in each correlator
+#define correlator_res 8 // number of points to calculate average
 
-//in order to calculate correlation function of arbitrary length correlator can be reused
-//with different correlator_res
-//first run : data is loaded every correlator_res timesteps
-//	      correlation function from t=0 to t=correlator_size*res/2 is calculated (G_page_1(t))
-//second run : data is loaded every correlator_res*correlator_base timesteps
-//	      correlation function from t=correlator_size*res/2 to t=correlator_size*res*correlator_base/2 is calculated (G_page_2(t))
-//third run : data is loaded every correlator_res*correlator_base^2 timesteps
-//	      correlation function from t=correlator_size*correlator_base*res/2 to t=correlator_size*res*correlator_base^2/2 is calculated (G_page_2(t))
-// and so on
-// until correlator_size*res*correlator_base^i> simulation length
-#define correlator_base 16//
-#define correlator_res 1//
+typedef struct corr_device {//chain header
+	int* d_nc; //device number of chains
+	int *d_numcorrelators; //device number of correlator levels
+	int *d_dmin;
+	int *d_correlator_size;
+	int *d_correlator_aver_size;
 
-class c_correlator {
+	//3D arrays
+	cudaPitchedPtr d_shift; //storage for incoming stress values (Dij)
+	cudaPitchedPtr d_correlation; //storage for correlation results (Cij)
+	cudaPitchedPtr d_ncorrelation; //number of values accumulated in correlator (Nij)
 
+	//2D arrays
+	float4* d_accumulator; // (Ai)
+	size_t d_accumulator_pitch;
+	int* d_naccumulator; // (Mi)
+	size_t d_naccumulator_pitch;
+	int* d_insertindex; //where to insert next data in d_correlator
+	size_t d_insertindex_pitch;
+
+	//1D arrays
+	int* d_kmax; //maximum attained correlator level during simulation
+	float4* d_accval; //accumulated result of incoming variables
+} corr_device;
+
+//Multiple tau correlator class
+class correlator {
 public:
-	cudaArray* d_correlator;		//fill this array with data
-	int counter;		// and update this var before calc()
-private:
-	int nc;
-	cudaArray* d_corr_function;		// stress calculation temp array
-public:
-	c_correlator(int nc);
-	~c_correlator();
-	void calc(int *t, float *x, int np);
-	float4* stress;
+	int nc; //number of chains
+	int numcorrelators; //number of correlator levels
+
+	corr_device gpu_corr;
+
+	correlator(int n, int s); //constructor
+	~correlator(); //destructor
+
+	void calc(int *t, float *x); //calculate resulting autocorrelation function
+
+	float* d_lag; //flattened 2D, lag of correlation
+	float* d_corr; //flattened 2D, results of correlation
+
+	int npcorr; //actual number of points in correlator
 };
-
-void init_correlator();
 
 #endif
