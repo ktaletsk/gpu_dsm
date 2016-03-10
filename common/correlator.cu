@@ -35,12 +35,12 @@ correlator::correlator(int n, int s) {//Initialize correlator
 	int height = numcorrelators;
 	int depth = nc;
 	cudaExtent extent_f4 = make_cudaExtent(width * sizeof(float4), height, depth);
-	cudaExtent extent_i = make_cudaExtent(width * sizeof(int), height, depth);
+	cudaExtent extent_f = make_cudaExtent(width * sizeof(float), height, depth);
 
 	//Allocate device 3D memory [width X height X depth]
 	CUDA_SAFE_CALL(cudaMalloc3D(&(gpu_corr.d_shift), extent_f4));
 	CUDA_SAFE_CALL(cudaMalloc3D(&(gpu_corr.d_correlation), extent_f4));
-	CUDA_SAFE_CALL(cudaMalloc3D(&(gpu_corr.d_ncorrelation), extent_i));
+	CUDA_SAFE_CALL(cudaMalloc3D(&(gpu_corr.d_ncorrelation), extent_f));
 
 	//Allocate device 2D memory [height X depth]
 	CUDA_SAFE_CALL(cudaMallocPitch((float4**)&(gpu_corr.d_accumulator), &(gpu_corr.d_accumulator_pitch), height * sizeof(float4), depth));
@@ -61,11 +61,11 @@ correlator::correlator(int n, int s) {//Initialize correlator
 	//Initialize 3D memory
 	CUDA_SAFE_CALL(cudaMemset3D((gpu_corr.d_shift), 0, extent_f4));
 	CUDA_SAFE_CALL(cudaMemset3D((gpu_corr.d_correlation), 0, extent_f4));
-	CUDA_SAFE_CALL(cudaMemset3D((gpu_corr.d_ncorrelation), 0, extent_i));
+	CUDA_SAFE_CALL(cudaMemset3D((gpu_corr.d_ncorrelation), 0, extent_f));
 
 	//Initialize 2D memory
 	CUDA_SAFE_CALL(cudaMemset2D((void *)(gpu_corr.d_accumulator), (gpu_corr.d_accumulator_pitch), 0, height * sizeof(float4), depth)); //not sure if initialization with int works
-	CUDA_SAFE_CALL(cudaMemset2D((void *)(gpu_corr.d_naccumulator), (gpu_corr.d_naccumulator_pitch), 0, height * sizeof(float4), depth));
+	CUDA_SAFE_CALL(cudaMemset2D((void *)(gpu_corr.d_naccumulator), (gpu_corr.d_naccumulator_pitch), 0, height * sizeof(int), depth));
 	CUDA_SAFE_CALL(cudaMemset2D((void *)(gpu_corr.d_insertindex), (gpu_corr.d_insertindex_pitch), 0, height * sizeof(int), depth));
 
 	//Initialize 1D memory
@@ -126,11 +126,11 @@ __global__ void corr_function_calc_kernel(cudaPitchedPtr d_correlation, cudaPitc
 		float4 element = correlation[j];
 
 		char* ncorrelation_slice = ncorrelation_ptr + n * ncorrelation_slicePitch;
-		int* ncorrelation = (int*) (ncorrelation_slice + k * ncorrelation_pitch);
-		int weight = ncorrelation[j];
+		float* ncorrelation = (float*) (ncorrelation_slice + k * ncorrelation_pitch);
+		float weight = ncorrelation[j];
 
 		if (weight > 0)
-			stress +=__fdividef((element.x + element.y + element.z), 3.0f * float(weight));
+			stress +=__fdividef((element.x + element.y + element.z), 3.0f * weight);
 	}
 
 	//Write results to output array

@@ -162,7 +162,7 @@ __device__ void corr_add(corr_device gpu_corr, float4 w, int k, int i) {
 	size_t ncorrelation_pitch = gpu_corr.d_ncorrelation.pitch;
 	size_t ncorrelation_slicePitch = ncorrelation_pitch * s;
 	char* ncorrelation_slice = ncorrelation_ptr + i * ncorrelation_slicePitch;
-	int* ncorrelation = (int*) (ncorrelation_slice + k * ncorrelation_pitch);
+	float* ncorrelation = (float*) (ncorrelation_slice + k * ncorrelation_pitch);
 
 	//Extract 2D array pointers and pitches
 	float4* accumulator = (float4*) ((char*)gpu_corr.d_accumulator + i * gpu_corr.d_accumulator_pitch);
@@ -197,7 +197,7 @@ __device__ void corr_add(corr_device gpu_corr, float4 w, int k, int i) {
 		for (int j = 0; j < p; ++j) {
 			if (shift[ind2].x!=0.0f || shift[ind2].y!=0.0f || shift[ind2].z!=0.0f){
 				correlation[j] += shift[ind1]*shift[ind2];
-				ncorrelation[j]++;
+				ncorrelation[j]+=1.0f;
 			}
 			--ind2;
 			if (ind2 < 0) ind2 += p;
@@ -208,7 +208,7 @@ __device__ void corr_add(corr_device gpu_corr, float4 w, int k, int i) {
 			if (ind2 < 0) ind2 += p;
 			if (shift[ind2].x!=0.0f || shift[ind2].y!=0.0f || shift[ind2].z!=0.0f){
 				correlation[j] += shift[ind1]*shift[ind2];
-				ncorrelation[j]++;
+				ncorrelation[j]+=1.0f;
 			}
 			--ind2;
 		}
@@ -260,7 +260,9 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 			sum_stress.z -= __fdividef(3.0f * QN1.x * QN1.z, QN1.w);
 		}
 		corr_add(gpu_corr, sum_stress, 0, i);//add new value to the correlator
-		d_correlator_time[i]++;
+		d_correlator_time[i]++; //overflowing here?
+		if (d_correlator_time[i]<0)
+			printf("\nd_correlator_time[i] overflow!\tvalue=%i\tchain_time=%f\n",d_correlator_time[i],gpu_chain_heads[i].time);
 		if (d_universal_time + gpu_chain_heads[i].time > d_correlator_time[i] * d_correlator_res) {
 			return;
 			//do nothing until next step

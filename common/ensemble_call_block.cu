@@ -282,7 +282,7 @@ int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, bool* ru
 			int sumt = 0;
 			for (int i = 0; i < cb->nc; i++)
 				sumt += tbuffer[i];
-			*progress_bar = 100*sumt/((cb->nc)*reach_time);
+			*progress_bar = 100*(sumt/(cb->nc)+tf)/reach_time;
 			cout << "\r" << *progress_bar << "%\t ";
 
 			// stop, if return_flag is chenged from outside

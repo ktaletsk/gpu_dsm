@@ -32,7 +32,7 @@
 
 #include <iostream>
 
-QString version("0.9-7");
+QString version("0.9-8");
 
 extern int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int device_ID, bool distr, int* progress_bar);
 bool first_time = true;
