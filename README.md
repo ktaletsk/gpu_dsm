@@ -14,7 +14,7 @@ g++
 
 **[Cuda Toolkit](https://developer.nvidia.com/cuda-toolkit)** (6.0, 6.5, 7.0, 7.5)
 
-**[Qt 5.5](http://www.qt.io/download-open-source/)** (for GUI)
+**[Qt](http://www.qt.io/download-open-source/)** (for GUI)
 
 optional: make
     
@@ -26,10 +26,11 @@ optional: make
 2b. To comile graphical user interface (GUI) version navigate to source directory
 `cd <path_to_repository>/gpu_dsm/GUI`
 
-3a. Run `make all`
-it creates **gpu_DSM**
+3a. Run `make all` to complie **gpu_DSM**
 
-3b. Run `<path_to_Qt>/5.4/gcc_64/bin/qmake -spec linux-g++ -o Makefile dsm.pro`
+3b. Run `<path_to_Qt>/<version_of_Qt>/gcc_64/bin/qmake -spec linux-g++ -o Makefile dsm.pro`. Current version of Qt is 5.6
+
+Run `make all` to compile **dsm**
     
 4a. You can test it by running `./gpu_DSM`
     
