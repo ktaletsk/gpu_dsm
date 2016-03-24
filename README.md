@@ -20,10 +20,10 @@ optional: make
     
 1. Open terminal.
     
-2a. Compile the command line interface (CLI) version, navigate to the directory where you extracted the zip file
+2a. Compile the command line interface (CLI) version, navigate to the directory where you extracted the zip file:
 `cd <path_to_repository>/gpu_dsm/CLI`.
     
-2b. Compile the graphical user interface (GUI) version, navigate to the directory where you extracted the zip file
+2b. Compile the graphical user interface (GUI) version, navigate to the directory where you extracted the zip file:
 `cd <path_to_repository>/gpu_dsm/GUI`.
 
 3a. Run `make all` to complie **gpu_DSM**.
