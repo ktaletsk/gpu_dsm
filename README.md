@@ -6,7 +6,36 @@
 
 Compilation instructions:
 
-1) Windows. (tested on Windows 7,10)
+1) Linux (tested on Ubuntu/Kubuntu 14.04)
+
+Requirements:
+
+g++
+
+**[Cuda Toolkit](https://developer.nvidia.com/cuda-toolkit)** (6.0, 6.5, 7.0, 7.5)
+
+**[Qt 5.4](http://www.qt.io/download-open-source/)** (for GUI)
+
+optional: make
+    
+1. Run terminal
+    
+2a. To comile command line interface (CLI) version navigate to source directory
+`cd <path_to_repository>/gpu_dsm/CLI`
+    
+2b. To comile graphical user interface (GUI) version navigate to source directory
+`cd <path_to_repository>/gpu_dsm/GUI`
+
+3a. Run `make all`
+it creates **gpu_DSM**
+
+3b. Run `<path_to_Qt>/5.4/gcc_64/bin/qmake -spec linux-g++ -o Makefile dsm.pro`
+    
+4a. You can test it by running `./gpu_DSM`
+    
+4b. You can test it by running `./dsm` or clicking to app icon in file manager
+
+1) Windows. (not tested)
 Requirements:
 Microsoft Visual Studio (2010, 2012, 2013)
 Cuda Toolkit (6.0, 6.5, 7.0)
@@ -22,40 +51,15 @@ optional: make (available in cygwin and minGW)
 you installed make, you can run make
 it should create gpu_DSM.exe 
     
-4. You can test it by running gpu_DSM.exe
-        
-2) Linux (tested on Ubuntu/Kubuntu 14.04/15.04)
-Requirements:
-g++
-Cuda Toolkit (6.0, 6.5, 7.0)
-Qt 5.4 (for GUI)
-optional: make
-    
-1. Run terminal
-    
-2a. To comile command line interface (CLI) version navigate to source directory
-(example cd C:\gpu_dsm\CLI)
-    
-2b. To comile graphical user interface (GUI) version navigate to source directory
-(example cd C:\gpu_dsm\GUI)
+4. You can test it by running `gpu_DSM.exe`
 
-3a. Run "make all"
-it creates gpu_DSM
-
-3b. Run "<path_to_Qt>/5.4/gcc_64/bin/qmake -spec linux-g++ -o Makefile dsm.pro"
-    
-4a. You can test it by running ./gpu_DSM
-    
-4b. You can test it by running ./dsm or clicking to app icon in file manager
-
-    
 Running (CLI):
     
-gpu_DSM command line parameters:
+**gpu_DSM** command line parameters:
 
 first parameter is seed/job_ID
 example: 
-./gpu_DSM 1
+`./gpu_DSM 1`
 all the files generated in this run will have "_1" in the filename.
 additionally 1 will be used as a seed number for pseudo random number generator
 
