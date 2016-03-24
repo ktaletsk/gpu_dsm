@@ -35,24 +35,6 @@ it creates **gpu_DSM**
     
 4b. You can test it by running `./dsm` or clicking to app icon in file manager
 
-<1) Windows. (not tested)
-Requirements:
-Microsoft Visual Studio (2010, 2012, 2013)
-Cuda Toolkit (6.0, 6.5, 7.0)
-optional: make (available in cygwin and minGW)
-
-1. Run microsoft visual studio developer command prompt
-(it can be found in start menu->all programs->microsoft visual studio-> visual studio tools)
-    
-2. To comile command line interface (CLI) version of code navigate to source directory 
-(example cd C:\gpu_dsm\CLI)
-    
-3. Run make.bat
-you installed make, you can run make
-it should create gpu_DSM.exe 
-    
-4. You can test it by running `gpu_DSM.exe`>
-
 ####Running (CLI):
     
 **gpu_DSM** command line parameters:
