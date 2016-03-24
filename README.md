@@ -1,12 +1,12 @@
-**Discrete Slip-Link Model (DSM)** is mathematical model that describes the dynamics of flexible entangled polymer melts.
+###**Discrete Slip-Link Model (DSM)** is mathematical model that describes the dynamics of flexible entangled polymer melts.
 
 **GPU DSM** is computational implementation of that model on CUDA/C++. GPU DSM is developed in [Center for molecular study of condensed soft matter (μCoSM)](http://www.chbe.iit.edu/~schieber/index.html). GPU DSM is free open-source software under GNU GPL v3.0 license.
 
 **[Download latest Linux GUI version](https://github.com/ktaletsk/gpu_dsm/releases)**
 
-Compilation instructions:
+####Compilation instructions:
 
-1) Linux (tested on Ubuntu/Kubuntu 14.04)
+####1) Linux (tested on Ubuntu/Kubuntu 14.04)
 
 Requirements:
 
@@ -35,7 +35,7 @@ it creates **gpu_DSM**
     
 4b. You can test it by running `./dsm` or clicking to app icon in file manager
 
-1) Windows. (not tested)
+<1) Windows. (not tested)
 Requirements:
 Microsoft Visual Studio (2010, 2012, 2013)
 Cuda Toolkit (6.0, 6.5, 7.0)
@@ -51,9 +51,9 @@ optional: make (available in cygwin and minGW)
 you installed make, you can run make
 it should create gpu_DSM.exe 
     
-4. You can test it by running `gpu_DSM.exe`
+4. You can test it by running `gpu_DSM.exe`>
 
-Running (CLI):
+####Running (CLI):
     
 **gpu_DSM** command line parameters:
 
