@@ -14,7 +14,7 @@ g++
 
 **[Cuda Toolkit](https://developer.nvidia.com/cuda-toolkit)** (6.0, 6.5, 7.0, 7.5)
 
-**[Qt 5.4](http://www.qt.io/download-open-source/)** (for GUI)
+**[Qt 5.5](http://www.qt.io/download-open-source/)** (for GUI)
 
 optional: make
     
