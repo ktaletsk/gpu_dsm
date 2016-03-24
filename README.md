@@ -6,7 +6,7 @@
 
 ####Compilation instructions:
 
-####1) Linux (tested on Ubuntu/Kubuntu 14.04)
+####Linux (tested on Ubuntu/Kubuntu 14.04)
 
 Requirements:
 
