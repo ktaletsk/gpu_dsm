@@ -25,11 +25,13 @@ using namespace std;
 
 struct p_cd { //Generates \tau_CD lifetimes
 //uses analytical approximation to P_cd parameters
-	float At, Adt, Bdt, normdt;
+	float c1, cm1, rcm1c1, At, Adt, Bdt, normdt;
 	float g, alpha, tau_0, tau_max, tau_d;
+	float Nk;
 	Ran *ran;
-	p_cd(float Be, int Nk, Ran *tran) {
+	p_cd(float Be, float NK, Ran *tran) {
 		//init parameters from analytical fits
+		Nk = NK;
 		ran = tran;
 		double z = (Nk + Be) / (Be + 1.0);
 // 	    cout<<Be<<'\t'<<Nk<<'\n';
@@ -40,8 +42,8 @@ struct p_cd { //Generates \tau_CD lifetimes
 
 			alpha = (0.053f * logf(Be) + 0.31f) * powf(z, -0.012f * logf(Be) - 0.024f);
 			tau_0 = 0.285f * powf(Be + 2.0f, 0.515f);
-			tau_max = 0.025f * powf(Be + 2.0f, 2.6f) * powf(z, 2.83f);
-			tau_d = 0.036f * powf(Be + 2.0f, 3.07f) * powf(z - 1.0f, 3.02f);
+			tau_max = ((Nk<2) ? tau_0 : 0.025f * powf(Be + 2.0f, 2.6f) * powf(z, 2.83f));
+			tau_d = ((Nk<2) ? tau_0 : 0.036f * powf(Be + 2.0f, 3.07f) * powf(z - 1.0f, 3.02f));
 		} else {
 			//Analytical approximation to P_cd parameters CFSM
 			//Andreev, M., Feng, H., Yang, L., and Schieber, J. D.,J. Rheol. 58, 723 (2014).
@@ -49,37 +51,54 @@ struct p_cd { //Generates \tau_CD lifetimes
 
 			alpha = 0.267096f - 0.375571f * expf(-0.0838237f * Nk);
 			tau_0 = 0.460277f + 0.298913f * expf(-0.0705314f * Nk);
-			tau_max = 0.0156137f * powf(float(Nk), 3.18849f);
-			tau_d = 0.0740131f * powf(float(Nk), 3.18363f);
+			tau_max = ((Nk<4) ? tau_0 : 0.0156137f * powf(float(Nk), 3.18849f));
+			tau_d = ((Nk<4) ? tau_0 : 0.0740131f * powf(float(Nk), 3.18363f));
 		}
-//init vars
-		At = (1.0f - g) / (powf(tau_max, alpha) - powf(tau_0, alpha));
-		Adt = (1.0f - g) * alpha / (alpha - 1.0f) / (powf(tau_max, alpha) - powf(tau_0, alpha));
-		Bdt = Adt * (powf(tau_max, alpha - 1.0f) - powf(tau_0, alpha - 1.0f));
+		//initialize varibles
+		c1 = powf(tau_max, alpha) - powf(tau_0, alpha);
+		cm1 = powf(tau_max, alpha - 1.0f) - powf(tau_0, alpha - 1.0f);
+		rcm1c1 = ((c1==0.0f) ? (alpha - 1.0f)/alpha/tau_0 : (cm1/c1));//ratio beween c1 and c-1
+
+		At = (1.0f - g);
+		Adt = At * alpha / (alpha - 1.0f);
+		Bdt = Adt * rcm1c1;
 		normdt = Bdt + g / tau_d;
-// 	    normdt=1.0f/tau_d;
 	}
 	float tau_CD_f_t() {
 		float p = ran->flt();
 		if (p < (1.0f - g)) {
-			return powf(p / At + powf(tau_0, alpha), 1.0f / alpha);
+			return powf(p * c1 / At + powf(tau_0, alpha), 1.0f / alpha);
 		} else {
 			return tau_d;
 		}
 	}
 	float tau_CD_f_d_t() {
 		float p = ran->flt();
-
-// 	    cout<< " p "<<p<<'\n';
 		p = p * normdt;
-		if (p < Bdt) {
-//  		cout<<"tau_CD_f_d_t "<<powf(p/Adt+powf(tau_0,alpha-1.0f),1.0f/(alpha-1.0f))<<'\n';
-			return powf(p / Adt + powf(tau_0, alpha - 1.0f), 1.0f / (alpha - 1.0f));
-// 		write(log_file%handle(),*) "p,normdt,Adt,l_tau_CD_f_d_t",p,normdt,Adt,l_tau_CD_f_d_t
-		} else {
-// 		cout<<"tau_CD_f_d_t "<<tau_d<<'\n';
+		if (p < Bdt)
+			return powf(p * c1 / Adt + powf(tau_0, alpha - 1.0f), 1.0f / (alpha - 1.0f));
+		else
 			return tau_d;
+	}
+	float pcdtauint(float tau){
+		if (tau<tau_0){
+			return 0;
 		}
+		if (Nk>4){
+			if (tau>=tau_0 && tau<tau_max){
+				return (Adt*(powf(tau, alpha-1) - powf(tau_0, alpha-1))/c1);
+			}
+			else if (tau>=tau_max && tau<tau_d){
+				return Bdt;
+			}
+			else if (tau>=tau_d){
+				return normdt;
+			}
+		}
+		else{
+			return normdt;
+		}
+		return -1;
 	}
 	inline float W_CD_destroy_aver() {
 		return normdt;

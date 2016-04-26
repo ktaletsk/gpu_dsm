@@ -199,8 +199,7 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag, fl
 	if (reach_flag[i]!=0) {
 		return;
 	}
-	if ((gpu_chain_heads[i].time >= next_sync_time)
-			|| (gpu_chain_heads[i].stall_flag != 0)) {
+	if ((gpu_chain_heads[i].time >= next_sync_time) || (gpu_chain_heads[i].stall_flag != 0)) {
 		reach_flag[i] = 1;
 		gpu_chain_heads[i].time-=next_sync_time;
 		tdt[i] = 0.0f;
@@ -260,8 +259,7 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag, fl
 		}
 	}
 	//sum all the probabilities
-	float sumW = sum_wshpm + W_SD_c_1 + W_SD_c_z + W_SD_d_1 + W_SD_d_z
-			+ W_CD_c_z;
+	float sumW = sum_wshpm + W_SD_c_1 + W_SD_c_z + W_SD_d_1 + W_SD_d_z + W_CD_c_z;
 	tdt[i] = __fdividef(1.0f, sumW);
 	// error handling
 	if (tdt[i] == 0.0f)
@@ -340,29 +338,23 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag, fl
 
 			float sig1 = __fdividef(0.75f, QN1.w * (QN1.w + 1));
 			float sig2 = __fdividef(0.75f, QN2.w * (QN2.w - 1));
-			float prefact1 =
-					(Q == 0.0f) ? 1.0f : __fdividef(QN1.w, (QN1.w + 1));
-			float prefact2 =
-					(Q2 == 0.0f) ? 1.0f : __fdividef(QN2.w, (QN2.w - 1));
+			float prefact1 = (Q == 0.0f) ? 1.0f : __fdividef(QN1.w, (QN1.w + 1));
+			float prefact2 = (Q2 == 0.0f) ? 1.0f : __fdividef(QN2.w, (QN2.w - 1));
 			float f1 = (Q == 0.0f) ? 2.0f * QN1.w + 0.5f : QN1.w;
 			float f2 = (Q2 == 0.0f) ? 2.0f * QN2.w - 0.5f : QN2.w;
 			float friction = __fdividef(2.0f, f1 + f2);
-			twsh.x = friction * __powf(prefact1 * prefact2, 0.75f)
-					* __expf(Q * sig1 - Q2 * sig2);
+			twsh.x = friction * __powf(prefact1 * prefact2, 0.75f) * __expf(Q * sig1 - Q2 * sig2);
 		}
 		if (QN1.w > 1.0f) {	//N=1 mean that shift is not possible, also ot will lead to dividing on zero error
 
 			float sig1 = __fdividef(0.75f, QN1.w * (QN1.w - 1.0f));
 			float sig2 = __fdividef(0.75f, QN2.w * (QN2.w + 1.0f));
-			float prefact1 =
-					(Q == 0.0f) ? 1.0f : __fdividef(QN1.w, (QN1.w - 1.0f));
-			float prefact2 =
-					(Q2 == 0.0f) ? 1.0f : __fdividef(QN2.w, (QN2.w + 1.0f));
+			float prefact1 = (Q == 0.0f) ? 1.0f : __fdividef(QN1.w, (QN1.w - 1.0f));
+			float prefact2 = (Q2 == 0.0f) ? 1.0f : __fdividef(QN2.w, (QN2.w + 1.0f));
 			float f1 = (Q == 0.0f) ? 2.0f * QN1.w - 0.5f : QN1.w;
 			float f2 = (Q2 == 0.0f) ? 2.0f * QN2.w + 0.5f : QN2.w;
 			float friction = __fdividef(2.0f, f1 + f2);
-			twsh.y = friction * __powf(prefact1 * prefact2, 0.75f)
-					* __expf(-Q * sig1 + Q2 * sig2);
+			twsh.y = friction * __powf(prefact1 * prefact2, 0.75f) * __expf(-Q * sig1 + Q2 * sig2);
 		}
 
 		if (pr < twsh.x + twsh.y) {

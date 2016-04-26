@@ -28,6 +28,11 @@
 #include "math.h"
 extern char * filename_ID(string filename, bool temp);
 
+extern float mp,Mk;
+extern float step;
+extern float GEX_table[200000];
+extern bool PD_flag;
+
 void random_textures_refill(int n_cha);
 void random_textures_fill(int n_cha);
 
@@ -36,6 +41,7 @@ void random_textures_fill(int n_cha);
 using namespace std;
 
 extern cudaArray* d_gamma_table;
+extern cudaArray* d_gamma_table_d;
 
 #define chains_per_call 32000
 //MAX surface size is 32768
@@ -121,11 +127,23 @@ void gpu_init(int seed, p_cd* pcd, int s) {
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_kappa_zx, &kzx, sizeof(float)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_kappa_zy, &kzy, sizeof(float)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_kappa_zz, &kzz, sizeof(float)));
-
-	float cdtemp = pcd->W_CD_destroy_aver() / Be;
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_CD_flag, &CD_flag, sizeof(int)));
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_CD_create_prefact, &cdtemp, sizeof(float)));
 
+	float cdtemp;
+	if(PD_flag){
+		//calculate probability prefactor for polydisperse simulations
+		double tem = 0.0f;
+		for (int i=0; i+1<1/step; i++){
+			p_cd* t_pcd = new p_cd(Be, GEX_table[i]*mp/Mk, NULL);
+			tem += (t_pcd->W_CD_destroy_aver());
+			delete[] t_pcd;
+		}
+		cdtemp = step * tem / Be;
+	}
+	else
+		cdtemp = pcd->W_CD_destroy_aver() / Be;
+
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_CD_create_prefact, &cdtemp, sizeof(float)));
 	cout << " device constants done\n";
 
 	int rsz = chains_per_call;
@@ -210,37 +228,6 @@ void get_chains_from_device()    //Copies chains back to host memory
 	}
 }
 
-void gpu_clean() {
-	cout << "Memory cleanup.. ";
-
-	delete[] chain_blocks;
-	delete[] chain_heads;
-	delete[] (chains.QN);
-	delete[] (chains.tau_CD);
-
-	cudaFreeArray(d_a_QN);
-	cudaFreeArray(d_a_tCD);
-	cudaFreeArray(d_b_QN);
-	cudaFreeArray(d_b_tCD);
-	cudaFreeArray(d_sum_W);
-	cudaFreeArray(d_stress);
-
-	cudaFreeArray(d_uniformrand);
-	cudaFreeArray(d_taucd_gauss_rand_CD);
-	cudaFreeArray(d_taucd_gauss_rand_SD);
-
-	cudaFree(d_tau_CD_used_SD);
-	cudaFree(d_tau_CD_used_CD);
-	cudaFree(d_rand_used);
-	cudaFree(d_random_gens);
-	cudaFree(d_random_gens2);
-
-	cudaFree(d_gamma_table);
-	cudaDeviceReset();
-	cout << "done.\n";
-
-}
-
 void random_textures_fill(int n_cha) {
 	cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
 	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
@@ -292,8 +279,54 @@ void random_textures_refill(int n_cha) {
 	cudaDeviceSynchronize();
 }
 
+
+int gpu_Gt_PCS(int res, double length, float *&t, float *&x, int s, bool* run_flag, int *progress_bar) {
+	//Start simulation
+	//Calculate stress with timestep specified
+	//Update correlators on the fly for each chain (on GPU)
+	//At the end copy results from each chain and average them
+
+	*progress_bar = 1;
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(res), sizeof(int))); //Copy timestep for calculation
+
+	int np = correlator_size + (s-1) * (correlator_size - (float)correlator_size/(float)correlator_res);
+
+	t = new float[np];
+	x = new float[np];
+
+	for (int i = 0; i < chain_blocks_number; i++){
+		int *tint = new int[np];
+		float *x_buf = new float[np];
+
+		get_chain_to_device_call_block(&(chain_blocks[i]));
+		cudaMemset(chain_blocks[i].d_correlator_time, 0,sizeof(int) * chain_blocks[i].nc);
+		if(EQ_time_step_call_block(length, &(chain_blocks[i]),run_flag, progress_bar)==-1) return -1;
+		chain_blocks[i].corr->calc(tint, x_buf);
+
+		for (int j = 0; j < chain_blocks[i].corr->npcorr; j++) {
+			t[j] = tint[j];
+			x[j] += x_buf[j] / N_cha;
+		}
+		delete[] x_buf;
+		delete[] tint;
+	}
+
+	ofstream G_file;
+	G_file.open(filename_ID("G",false));
+	cout << "\n";
+	int actual_np = (np - correlator_size + floor(length/((float)res*pow((float)correlator_res,(s-1)))));
+	for (int j = 0; j < actual_np; j++) {
+		cout << t[j] << '\t' << x[j] << '\n';
+		G_file << t[j] << '\t' << x[j] << '\n';
+	}
+	G_file.close();
+	return 0;
+}
+
+
 void save_to_file(char *filename) {
 	ofstream file(filename, ios::out | ios::binary);
+//	ofstream file(filename, ios::out);
 	if (file.is_open()) {
 		file.write((char*) &N_cha, sizeof(int));
 
@@ -451,45 +484,33 @@ void load_from_file(char *filename) {
 		cout << "file error\n";
 }
 
-int gpu_Gt_PCS(int res, double length, float *&t, float *&x, int s, bool* run_flag, int *progress_bar) {
-	//Start simulation
-	//Calculate stress with timestep specified
-	//Update correlators on the fly for each chain (on GPU)
-	//At the end copy results from each chain and average them
+void gpu_clean() {
+	cout << "Memory cleanup.. ";
 
-	*progress_bar = 1;
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(res), sizeof(int))); //Copy timestep for calculation
+	delete[] chain_blocks;
+	delete[] chain_heads;
+	delete[] (chains.QN);
+	delete[] (chains.tau_CD);
 
-	int np = correlator_size + (s-1) * (correlator_size - (float)correlator_size/(float)correlator_res);
+	cudaFreeArray(d_a_QN);
+	cudaFreeArray(d_a_tCD);
+	cudaFreeArray(d_b_QN);
+	cudaFreeArray(d_b_tCD);
+	cudaFreeArray(d_sum_W);
+	cudaFreeArray(d_stress);
 
-	t = new float[np];
-	x = new float[np];
+	cudaFreeArray(d_uniformrand);
+	cudaFreeArray(d_taucd_gauss_rand_CD);
+	cudaFreeArray(d_taucd_gauss_rand_SD);
 
-	for (int i = 0; i < chain_blocks_number; i++){
-		int *tint = new int[np];
-		float *x_buf = new float[np];
+	cudaFree(d_tau_CD_used_SD);
+	cudaFree(d_tau_CD_used_CD);
+	cudaFree(d_rand_used);
+	cudaFree(d_random_gens);
+	cudaFree(d_random_gens2);
 
-		get_chain_to_device_call_block(&(chain_blocks[i]));
-		cudaMemset(chain_blocks[i].d_correlator_time, 0,sizeof(int) * chain_blocks[i].nc);
-		if(EQ_time_step_call_block(length, &(chain_blocks[i]),run_flag, progress_bar)==-1) return -1;
-		chain_blocks[i].corr->calc(tint, x_buf);
-
-		for (int j = 0; j < chain_blocks[i].corr->npcorr; j++) {
-			t[j] = tint[j];
-			x[j] += x_buf[j] / N_cha;
-		}
-		delete[] x_buf;
-		delete[] tint;
-	}
-
-	ofstream G_file;
-	G_file.open(filename_ID("G",false));
-	cout << "\n";
-	int actual_np = (np - correlator_size + floor(length/((float)res*pow((float)correlator_res,(s-1)))));
-	for (int j = 0; j < actual_np; j++) {
-		cout << t[j] << '\t' << x[j] << '\n';
-		G_file << t[j] << '\t' << x[j] << '\n';
-	}
-	G_file.close();
-	return 0;
+	cudaFree(d_gamma_table);
+	cudaFree(d_gamma_table_d);
+	cudaDeviceReset();
+	cout << "done.\n";
 }

@@ -21,14 +21,19 @@
 #include <fstream>
 using namespace std;
 
-#define ITMAX 100 //Maximum allowed number of iterations.
+#define ITMAX 300 //Maximum allowed number of iterations.
 #define EPS 3.0e-7 //Relative accuracy.
 #define FPMIN 1.0e-30 //Number near the smallest representable floating-point number.
 
-float gamma_table_s[GAMMATABLESIZE];
-float gamma_table_x[GAMMATABLESIZE];
-float temp_gamma_table_x;
-float temp_gamma_table_s;
+float GEX_table_P[GAMMATABLESIZE];
+float GEX_table_M[GAMMATABLESIZE];
+float GEXd_table_P[GAMMATABLESIZE];
+float temp_M;
+float temp_M_1;
+float temp_P;
+float temp_P_1;
+
+extern float Be;
 
 float gammp(float a, float x) { //Returns the incomplete gamma function P(a, x).
 	void gcf(float *gammcf, float a, float x, float *gln);
@@ -155,6 +160,19 @@ double LambertW1(const double z) {
   exit(1);
 }
 
+float bisection_root(float a, float b, float lb, float rb, float y, float eps){
+	float delta = (y - gammp((a + 1) / b, powf(lb, b)))/(gammp((a + 1) / b, powf(rb, b))-gammp((a + 1) / b, powf(lb, b)));
+	float c =  lb*(1-delta) + rb*delta;
+	while (abs(gammp((a+1)/b, powf(c, b))-y)>eps){
+		if(gammp((a+1)/b, powf(c, b)) > y)
+			rb = c;
+		else
+			lb = c;
+		delta = (y - gammp((a + 1) / b, powf(lb, b)))/(gammp((a + 1) / b, powf(rb, b))-gammp((a + 1) / b, powf(lb, b)));
+		c =  lb*(1-delta) + rb*delta;
+	}
+	return c;
+}
 
 void make_gamma_table (float a, float b) {
 	//ofstream file("table", ios::out);
@@ -168,35 +186,73 @@ void make_gamma_table (float a, float b) {
 	double W_max=b/g_1*pow(m_max,a)*exp(-pow(m_max,b));//max value of W(m)/m (b/Gamma((a+1)/b) cancel in expression for m_cutoff)
 	double c = 0.001*W_max; //Cutoff value for W(m)/m
 	gamma_table_cutoff = pow(-a/b*LambertW1(-b/a*pow(c*g_1/b,b/a)),1/b);
+
+	//Generate initial table for cumulative W, equidistant in M; find maximum step in P
 	for (int i = 0; i < GAMMATABLESIZE; i++) {
-		gamma_table_x[i] = i * 1.0f * gamma_table_cutoff / (GAMMATABLESIZE - 1);
-		gamma_table_s[i] = gammp((a + 1) / b, pow(gamma_table_x[i], b));
-		if (i > 0) {
-			if (abs(gamma_table_s[i] - gamma_table_s[i - 1]) > step)
-				step = abs(gamma_table_s[i] - gamma_table_s[i - 1]);
-				//Choosing maximum step (~in the middle of distribution)
+		GEX_table_M[i] = (float)i * gamma_table_cutoff / float(GAMMATABLESIZE - 1);
+		GEX_table_P[i] = gammp((a + 1) / b, powf(GEX_table_M[i], b));
+		if (i > 0 && abs(GEX_table_P[i] - GEX_table_P[i - 1]) > step) {
+			//Choosing maximum step (~in the middle of distribution)
+			step = abs(GEX_table_P[i] - GEX_table_P[i - 1]);
 		}
 	}
 	step *= 4;
+
+	//Generate inverse table, equidistant in P, for quick solving: W(M)=rand()
 	int j = 0;
 	for (int i = 0; i < GAMMATABLESIZE; i++) {
-		if (gamma_table_s[i] >= step * j) {
-			gamma_new_table_x[j] = gamma_table_x[i];
-			//file << gamma_new_table_x[j] << '\n';
+		if (GEX_table_P[i] >= step * j) {
+			if (i==0)
+				GEX_table[j] = GEX_table_M[i];//initial guess for root Mj;
+			else
+				GEX_table[j] = bisection_root(a,b,GEX_table_M[i-1],GEX_table_M[i],step*j,0.000001);
+			//file << GEX_table[j] << '\n';
 			j++;
 		}
 	}
-	temp_gamma_table_x=gamma_new_table_x[j-1];
+	temp_M=GEX_table[j-1];
+	temp_M_1=GEX_table[j-2];
 	while (j<1/step) {
-		//Add new point
-		temp_gamma_table_x+=1.0f * gamma_table_cutoff / (GAMMATABLESIZE - 1);
-		temp_gamma_table_s=gammp((a + 1) / b, pow(temp_gamma_table_x, b));
-
-		if (temp_gamma_table_s >= step * j) {
-			gamma_new_table_x[j] = temp_gamma_table_x;
-			//file << gamma_new_table_x[j] << '\n';
+		//Add new points
+		temp_M_1=temp_M;
+		temp_M+=1.0f * gamma_table_cutoff / float(GAMMATABLESIZE - 1);
+		temp_P_1 = temp_P;
+		temp_P=gammp((a + 1) / b, powf(temp_M, b));
+		if (temp_P >= step * j) {
+			GEX_table[j] = bisection_root(a,b,temp_M_1,temp_M,step*j,0.000001);
+			//file << GEX_table[j] << '\n';
 			j++;
 		}
 	}
 	table_size=j;
+
+	//Generate initial table for Wd(M)
+	float norm = 0.0f;
+	for(int k=0; k<table_size; k++){
+		p_cd* t_pcd = new p_cd(Be, GEX_table[k]*mp/Mk, NULL);
+		GEXd_table_P[k] = (t_pcd->W_CD_destroy_aver());
+		if (k>0)
+			GEXd_table_P[k] += GEXd_table_P[k-1];
+		norm += (t_pcd->W_CD_destroy_aver());
+		delete[] t_pcd;
+	}
+	for(int k=0; k<table_size; k++){
+		GEXd_table_P[k] = GEXd_table_P[k]/norm;
+		if (k>0){
+			if (GEXd_table_P[k]-GEXd_table_P[k-1] >step_d)
+				step_d = GEXd_table_P[k]-GEXd_table_P[k-1];
+		}
+	}
+	////Generate inverse table, equidistant in P, for quick solving: Wd(M)=rand()
+	int i = 0;
+	j = 0;
+	while (j<1/step_d){
+		if(GEXd_table_P[i]>=step_d*j){
+			GEXd_table[j]=GEX_table[i];
+			j++;
+		}
+		i++;
+	}
+	table_size_d=j;
 }
+

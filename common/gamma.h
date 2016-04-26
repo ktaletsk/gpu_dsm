@@ -20,16 +20,20 @@
 
 #include <math.h>
 #include <stdlib.h>
+#include "pcd_tau.h"
 
-#define GAMMATABLESIZE 200000
+#define GAMMATABLESIZE 1000000
 
 float a, b, mp, Mk; //GEX parameters
-float step = 0; //equidistant step in y-direction of P(m)
+float step = 0.0f; //equidistant step in y-direction of W(m)
+float step_d = 0.0f;
 int table_size=0; //size of resulting table of m values
+int table_size_d=0;
 float gamma_table_cutoff; //calculated MWD cutoff value
 void make_gamma_table (float a, float b);
-
-float gamma_new_table_x[GAMMATABLESIZE];
+float bisection_root(float a, float b, float lb, float rb, float y, float eps);
+float GEX_table[GAMMATABLESIZE];
+float GEXd_table[GAMMATABLESIZE];
 double LambertW1(const double z);
 
 #endif
