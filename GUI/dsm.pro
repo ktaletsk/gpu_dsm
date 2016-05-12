@@ -70,3 +70,4 @@ cuda.depend_command = $$CUDA_DIR/bin/nvcc -O3 -M $$CUDA_INC $$NVCCFLAGS   ${QMAK
 cuda.input = CUDA_SOURCES
 cuda.output = ${OBJECTS_DIR}${QMAKE_FILE_BASE}.o
 QMAKE_EXTRA_COMPILERS += cuda
+QMAKE_LFLAGS += -Wl,-rpath,"'\$$ORIGIN'"
