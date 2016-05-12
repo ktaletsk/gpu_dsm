@@ -59,7 +59,7 @@ INCLUDEPATH  += $$CUDA_DIR/include
 QMAKE_LIBDIR += $$CUDA_DIR/lib64
 # libs used in your code
 LIBS= -lcuda -lcudart
-CUDA_ARCH = 52
+CUDA_ARCH = 35
 NVCCFLAGS =
 
 CUDA_INC = $$join(INCLUDEPATH,' -I','-I',' ')
@@ -76,3 +76,4 @@ cuda.depend_command = $$CUDA_DIR/bin/nvcc -O3 -M $$CUDA_INC $$NVCCFLAGS   ${QMAK
 cuda.input = CUDA_SOURCES
 cuda.output = ${OBJECTS_DIR}${QMAKE_FILE_BASE}.o
 QMAKE_EXTRA_COMPILERS += cuda
+QMAKE_LFLAGS += -Wl,-rpath,"'\$$ORIGIN'"
