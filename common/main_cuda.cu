@@ -25,6 +25,7 @@
 #include "timer.h"
 #include "detailed_balance.h"
 #include "job_ID.h"
+
 extern float a,b,mp,Mk;
 extern void make_gamma_table (float a, float b);
 
@@ -161,12 +162,12 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 	if (distr) {		//Calculating distributions for Z,N,Q
 		cout << "Saving distribution to file...";
 		if (CD_flag) {
-			save_Z_distribution_to_file("distr_Z.dat", 1);
-			save_N_distribution_to_file("distr_N.dat", 1);
+			save_Z_distribution_to_file("distr_Z.dat", 0);
+			save_N_distribution_to_file("distr_N.dat", 0);
 			save_Q_distribution_to_file("distr_Q.dat", 1);
 		} else {
-			save_Z_distribution_to_file("distr_Z_.dat", 1);
-			save_N_distribution_to_file("distr_N_.dat", 1);
+			save_Z_distribution_to_file("distr_Z_.dat", 0);
+			save_N_distribution_to_file("distr_N_.dat", 0);
 			save_Q_distribution_to_file("distr_Q_.dat", 1);
 		}
 	}

@@ -128,7 +128,6 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent
 
 //Add new value w to k-th level of correlator corr for chain i
 __device__ void corr_add(corr_device gpu_corr, float4 w, int k, int i) {
-
 	int s = *(gpu_corr.d_numcorrelators);
 	//s is the last correlator level
 	if (k == s)
@@ -185,11 +184,14 @@ __device__ void corr_add(corr_device gpu_corr, float4 w, int k, int i) {
 
 	//Update correlation results
 	int ind1 = insertindex[k];
+	float4 temp_shift_1 = shift[ind1];//cache frequently used value in register
+	float4 temp_shift_2;
 	if (k == 0) {
 		int ind2 = ind1;
 		for (int j = 0; j < p; ++j) {
-			if (shift[ind2].x != 0.0f || shift[ind2].y != 0.0f || shift[ind2].z != 0.0f) {
-				correlation[j] += shift[ind1] * shift[ind2];
+			temp_shift_2 = shift[ind2];
+			if (temp_shift_2.x != 0.0f || temp_shift_2.y != 0.0f || temp_shift_2.z != 0.0f) {
+				correlation[j] += temp_shift_1 * temp_shift_2;
 				ncorrelation[j] += 1.0f;
 			}
 			--ind2;
@@ -202,13 +204,12 @@ __device__ void corr_add(corr_device gpu_corr, float4 w, int k, int i) {
 			if (ind2 < 0)
 				ind2 += p;
 			if (shift[ind2].x != 0.0f || shift[ind2].y != 0.0f || shift[ind2].z != 0.0f) {
-				correlation[j] += shift[ind1] * shift[ind2];
+				correlation[j] += temp_shift_1 * shift[ind2];
 				ncorrelation[j] += 1.0f;
 			}
 			--ind2;
 		}
 	}
-
 	insertindex[k]++;
 	if (insertindex[k] == p)
 		insertindex[k] = 0;
@@ -220,7 +221,6 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 		float *d_new_tau_CD, int *d_correlator_time, corr_device gpu_corr,
 		int *rand_used, int *tau_CD_used_CD, int *tau_CD_used_SD) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x; //Chain index
-
 	if (i >= dn_cha_per_call)
 		return;
 
@@ -240,12 +240,16 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 	}
 	float4 new_strent = d_new_strent[i];
 	float new_tCD = d_new_tau_CD[i];
-
 	//check for correlator
 	if (d_universal_time + gpu_chain_heads[i].time > d_correlator_time[i] * d_correlator_res) { //TODO add d_correlator_time to gpu_chain_heads
 		float4 sum_stress = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+//		float4 temp_sum = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+//		float4 center_mass = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+//		float4 prev_q = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+
 		for (int j = 0; j < tz; j++) {
 			float4 QN1;
+			float4 term = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 			if (fetch_new_strent(j, oft))
 				QN1 = new_strent;
 			else
@@ -253,15 +257,31 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 			sum_stress.x -= __fdividef(3.0f * QN1.x * QN1.y, QN1.w);
 			sum_stress.y -= __fdividef(3.0f * QN1.y * QN1.z, QN1.w);
 			sum_stress.z -= __fdividef(3.0f * QN1.x * QN1.z, QN1.w);
+
+			//center of mass calc
+//			temp_sum+=prev_q;
+//			term += temp_sum;
+//			term.x += __fdividef(QN1.x, 2);
+//			term.y += __fdividef(QN1.y, 2);
+//			term.z += __fdividef(QN1.z, 2);
+//			center_mass.x = term.x * QN1.w / dnk;
+//			center_mass.y = term.y * QN1.w / dnk;
+//			center_mass.z = term.z * QN1.w / dnk;
+//
+//			prev_q = QN1;
 		}
+		//add R1 to the center_mass
 		corr_add(gpu_corr, sum_stress, 0, i); //add new value to the correlator
+
+		//surf2Dwrite(sum_stress, s_correlator, 16 * d_correlator_time[i], i); //Write stress value to the stack
+		//Update counter
+
 		d_correlator_time[i]++;
 		if (d_universal_time + gpu_chain_heads[i].time > d_correlator_time[i] * d_correlator_res) {
 			return;
 			//do nothing until next step
 		}
 	}
-
 	// sum W_SD_shifts
 	double sum_wshpm = 0.0;
 	float tsumw;
@@ -340,7 +360,6 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 	float tpr = 0.0f;
 	if (tz != 1)
 		surf2Dread(&tpr, s_sum_W, 4 * j, i);
-
 	// picking where(which strent) jump process will happen
 	// excluding SD creation destruction
 	// perhaps one of the most time consuming parts of the code
@@ -532,7 +551,6 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 			d_offset[i] = offset_code(tz - 1, -1);
 			d_new_strent[i] = temp;
 		}
-
 		return;
 	} else {
 		pr -= W_SD_c_1 + W_SD_c_z;

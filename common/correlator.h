@@ -22,6 +22,8 @@
 #define correlator_res 8 // number of points to calculate average
 
 typedef struct corr_device {//chain header
+	cudaArray* d_stress;
+
 	int* d_nc; //device number of chains
 	int *d_numcorrelators; //device number of correlator levels
 	int *d_dmin;
@@ -61,6 +63,7 @@ public:
 
 	float* d_lag; //flattened 2D, lag of correlation
 	float* d_corr; //flattened 2D, results of correlation
+
 
 	int npcorr; //actual number of points in correlator
 };

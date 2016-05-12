@@ -302,6 +302,7 @@ int gpu_Gt_PCS(int res, double length, float *&t, float *&x, int s, bool* run_fl
 		cudaMemset(chain_blocks[i].d_correlator_time, 0,sizeof(int) * chain_blocks[i].nc);
 		if(EQ_time_step_call_block(length, &(chain_blocks[i]),run_flag, progress_bar)==-1) return -1;
 		chain_blocks[i].corr->calc(tint, x_buf);
+		get_chain_from_device_call_block(&(chain_blocks[i]));
 
 		for (int j = 0; j < chain_blocks[i].corr->npcorr; j++) {
 			t[j] = tint[j];
@@ -355,15 +356,19 @@ void save_Z_distribution_to_file(string filename /*char *filename*/, bool cumula
 			if (chain_heads[i].Z < Zmin)
 				Zmin = chain_heads[i].Z;
 		}
+
 		//Sum up coinciding Z
 		float P[N_cha];
 		for (int j = Zmin; j <= Zmax; j++) {
+			P[j]=0.0f;
+			int counter=0;
 			for (int i = 0; i < N_cha; i++) {
 				if (chain_heads[i].Z == j && !cumulative)
-					P[j] += (float) 1 / N_cha;
+					counter++;
 				if (chain_heads[i].Z <= j && cumulative)
-					P[j] += (float) 1 / N_cha;
+					counter++;
 			}
+			P[j] = (float) counter / N_cha;
 		}
 
 		for (int i = Zmin; i <= Zmax; i++)
@@ -386,8 +391,7 @@ void save_N_distribution_to_file(string filename, bool cumulative) {
 				if (chain_index(i).QN[j].w < Nmin)
 					Nmin = chain_index(i).QN[j].w;
 				if (chain_index(i).QN[j].w == 0)
-					cout << "Zero length strand in chain " << i << ", #" << j
-							<< "\n";
+					cout << "Zero length strand in chain " << i << ", #" << j << "\n";
 			}
 			Nstr += chain_heads[i].Z;
 		}
@@ -395,14 +399,17 @@ void save_N_distribution_to_file(string filename, bool cumulative) {
 		//Sum up coinciding N
 		float P[Nstr];
 		for (int n = Nmin; n <= Nmax; n++) {
+			P[n]=0.0f;
+			int counter=0;
 			for (int i = 0; i < N_cha; i++) {
 				for (int j = 0; j < chain_heads[i].Z; j++) {
 					if (chain_index(i).QN[j].w == n && !cumulative)
-						P[n] += (float) 1 / Nstr;
+						counter++;
 					if (chain_index(i).QN[j].w <= n && cumulative)
-						P[n] += (float) 1 / Nstr;
+						counter++;
 				}
 			}
+			P[n] += (float)counter / Nstr;
 			file << n << "\t" << P[n] << "\n";
 		}
 	} else
@@ -435,9 +442,7 @@ void save_Q_distribution_to_file(string filename, bool cumulative) {
 		float Q[Nstr];
 		for (int i = 0; i < N_cha; i++) {
 			for (int j = 1; j < chain_heads[i].Z - 1; j++) {
-				Q[prev[i] + j - 1] = sqrt(chain_index(i).QN[j].x * chain_index(i).QN[j].x
-										+ chain_index(i).QN[j].y * chain_index(i).QN[j].y
-										+ chain_index(i).QN[j].z * chain_index(i).QN[j].z);
+				Q[prev[i] + j - 1] = sqrt(chain_index(i).QN[j].x * chain_index(i).QN[j].x + chain_index(i).QN[j].y * chain_index(i).QN[j].y + chain_index(i).QN[j].z * chain_index(i).QN[j].z);
 				if (Q[prev[i] + j - 1] < 0)
 					cout << "NaN detected at strand " << prev[i] + j << "\n";
 			}

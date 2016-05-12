@@ -34,6 +34,11 @@
 
 QString version("0.9-8");
 
+QString exec_path;
+QString def_setting("/def_setting.dat");
+QString flow_setting("/flow.txt");
+QString chemistry_setting("/data2.txt");
+
 extern int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int device_ID, bool distr, int* progress_bar);
 bool first_time = true;
 int sim_length;
@@ -159,8 +164,12 @@ MainWindow::MainWindow(QWidget *parent) :
 
         ui->label_19->setText(QString::fromUtf8("Simulation time / \u03C4<sub>k</sub> :"));
         //loading saved settings
-        setting_file_name="def_setting.dat";
-        load_settings();
+        exec_path = QCoreApplication::applicationDirPath();
+        def_setting.prepend(exec_path);
+        flow_setting.prepend(exec_path);
+        chemistry_setting.prepend(exec_path);
+
+        load_settings(def_setting);
     }
 
 MainWindow::~MainWindow()
@@ -230,8 +239,7 @@ void MainWindow::on_actionOpen_triggered()
     dialog.setFileMode(QFileDialog::AnyFile);
     if (dialog.exec()==QDialog::Rejected){return;}
     QString filename = dialog.selectedFiles().first();
-    setting_file_name=filename;
-    load_settings();
+    load_settings(filename);
 }
 
 void MainWindow::on_actionSave_triggered()
@@ -241,8 +249,8 @@ void MainWindow::on_actionSave_triggered()
     dialog.setFileMode(QFileDialog::AnyFile);
     if (dialog.exec()==QDialog::Rejected){return;}
     QString filename = dialog.selectedFiles().first();
-    setting_file_name=filename;
-    save_settings();
+    qDebug()<<"\nCalling save settings\t"<<filename;
+    save_settings(filename);
 }
 
 void MainWindow::on_actionAbout_triggered()
@@ -250,11 +258,13 @@ void MainWindow::on_actionAbout_triggered()
     QMessageBox::about(this, QString("About"),QString("This is DSM\nVersion: ").append(version));
 }
 
-void MainWindow::load_settings()
+void MainWindow::load_settings(QString setting_file_name)
 {
     QFile file(setting_file_name);
-    if(!file.open(QIODevice::ReadOnly))
+    if(!file.open(QIODevice::ReadOnly)){
+        qDebug()<<"\nSettings load error:"<<setting_file_name;
         QMessageBox::information(0,"info",file.errorString());
+    }
     QTextStream in(&file);
     int tint;
     int c_c_p;
@@ -300,11 +310,13 @@ void MainWindow::load_settings()
     MainWindow::on_edit_rate_editingFinished();
 }
 
-void MainWindow::save_settings()
+void MainWindow::save_settings(QString setting_file_name)
 {
     QFile file(setting_file_name);
-    if(!file.open(QIODevice::WriteOnly))
-    	QMessageBox::information(0,"info",file.errorString());
+    if(!file.open(QIODevice::WriteOnly)){
+        qDebug()<<"\nSettings save error:"<<setting_file_name;
+        QMessageBox::information(0,"info",file.errorString());
+    }
     else {
     	QTextStream out(&file);
     	out<<ui->combo_chemistry_probe->currentIndex()<<'\n';
@@ -318,11 +330,13 @@ void MainWindow::save_settings()
     	out<<ui->combo_flow_type->currentIndex()<<'\n';
     	file.close();
     }
+    return;
 }
 
 void MainWindow::on_combo_chemistry_probe_currentIndexChanged(int index)
 {
-    QFile file("data2.txt"); //Read predefined parameters for different chemistries
+    exec_path = QCoreApplication::applicationDirPath();
+    QFile file(chemistry_setting); //Read predefined parameters for different chemistries
     if(!file.open(QIODevice::ReadOnly))
     	QMessageBox::information(0,"info",file.errorString());
     else {
@@ -402,9 +416,11 @@ void MainWindow::on_edit_mw_probe_editingFinished() {
 }
 
 void MainWindow::on_combo_flow_type_currentIndexChanged(int) {
-    QFile file("flow.txt");
-    if(!file.open(QIODevice::ReadOnly))
+    exec_path = QCoreApplication::applicationDirPath();
+    QFile file(flow_setting);
+    if(!file.open(QIODevice::ReadOnly)){
         QMessageBox::information(0,"info",file.errorString());
+    }
     else {
 	    QTextStream in(&file);
 	    while (!in.atEnd()) {
@@ -704,8 +720,7 @@ void MainWindow::SlotDetectFinish(int exitCode, QProcess::ExitStatus exitStatus)
 
 void MainWindow::on_MainWindow_destroyed()
 {
-    setting_file_name="def_setting.dat";
-    save_settings();
+    save_settings(def_setting);
 }
 
 void MainWindow::on_edit_rate_editingFinished()

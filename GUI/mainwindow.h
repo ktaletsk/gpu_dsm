@@ -62,9 +62,9 @@ private slots:
     void on_selectall_clicked();
     void on_deselect_clicked();
     void on_actionOpen_triggered();
-    void load_settings();
+    void load_settings(QString setting_file_name);
     void on_actionSave_triggered();
-    void save_settings();
+    void save_settings(QString setting_file_name);
     void on_actionAbout_triggered();
     void on_combo_chemistry_probe_currentIndexChanged(int index);
     void on_lineEdit_5_editingFinished();
@@ -85,7 +85,6 @@ private slots:
 
 private:
     Ui::MainWindow *ui;
-    QString setting_file_name;
 };
 
 class Worker : public QObject {

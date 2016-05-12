@@ -82,6 +82,9 @@ correlator::correlator(int n, int s) {//Initialize correlator
 	temp = correlator_res;
 	CUDA_SAFE_CALL(cudaMemcpy((gpu_corr.d_correlator_aver_size), &temp, sizeof(int), cudaMemcpyHostToDevice));
 
+	//Initialize stress array
+	//CUDA_SAFE_CALL(cudaMallocArray(&(gpu_corr.d_stress), &channelDesc4, sizeof(float4)*250, n, cudaArraySurfaceLoadStore));
+
 	CUT_CHECK_ERROR("kernel execution failed");
 }
 

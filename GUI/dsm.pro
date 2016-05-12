@@ -1,9 +1,3 @@
-#-------------------------------------------------
-#
-# Project created by QtCreator 2014-03-31T13:23:35
-#
-#-------------------------------------------------
-
 QT       += core gui
 QT       += concurrent
 
@@ -59,8 +53,8 @@ INCLUDEPATH  += $$CUDA_DIR/include
 QMAKE_LIBDIR += $$CUDA_DIR/lib64
 # libs used in your code
 LIBS= -lcuda -lcudart
-CUDA_ARCH = 52
-NVCCFLAGS =
+CUDA_ARCH = 30 35 50 52
+NVCCFLAGS = -D_FORCE_INLINES
 
 CUDA_INC = $$join(INCLUDEPATH,' -I','-I',' ')
 
