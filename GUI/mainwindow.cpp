@@ -494,10 +494,9 @@ void MainWindow::on_pushButton_clicked() {
         if (ui->radio_eq->isChecked()){
             sync_time=1;
             if (ui->radio_CFSM->isChecked())
-                sim_length=3 * 0.0740131f * powf(nc, 3.18363f);
+                sim_length=0.0740131f * powf(nc, 3.18363f);
             else
                 sim_length=0.036f * powf(beta + 2.0f, 3.07f) * powf((ceil(nk)+beta)/(beta+1) - 1.0f, 3.02f);
-            sim_length = 3 * sim_length * 10;
         }
         else {
             sim_length=ceil(ui->edit_strain->text().toFloat()/ui->edit_rate->text().toFloat());

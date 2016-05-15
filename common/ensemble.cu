@@ -294,6 +294,11 @@ int gpu_Gt_PCS(int res, double length, float *&t, float *&x, int s, bool* run_fl
 	t = new float[np];
 	x = new float[np];
 
+	for (int j = 0; j < np; j++) {
+		t[j] = 0.0f;
+		x[j] = 0.0f;
+	}
+
 	for (int i = 0; i < chain_blocks_number; i++){
 		int *tint = new int[np];
 		float *x_buf = new float[np];
@@ -321,6 +326,8 @@ int gpu_Gt_PCS(int res, double length, float *&t, float *&x, int s, bool* run_fl
 		G_file << t[j] << '\t' << x[j] << '\n';
 	}
 	G_file.close();
+	delete[] t;
+	delete[] x;
 	return 0;
 }
 
