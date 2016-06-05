@@ -26,6 +26,13 @@ extern float step;
 extern float mp,Mk;
 extern float GEX_table[GAMMATABLESIZE];
 
+inline void operator+=(float4 &a, float4 b) {
+	a.x += b.x;
+	a.y += b.y;
+	a.z += b.z;
+	a.w += b.w;
+}
+
 int CD_flag = 0;
 
 int z_dist(int tNk, Ran* eran) {
@@ -149,16 +156,39 @@ void chain_init(chain_head *chain_head, sstrentp data, int tnk, int z_max, bool 
 	N_dist(tz, tN, tnk, eran);   //N distribution
 	Q_dist(tz, tN, Qxtmp, Qytmp, Qztmp, eran); //Q distributions //realization Free_Energy_module(Gauss)
 	memset(data.QN, 0, sizeof(float) * z_max * 4);
+	memset(data.R1, 0, sizeof(float) * 4);
+
 	// creating entanglements according to distributions
 	for (int k = 1; k < tz - 1; k++) { //all except first and last ent-t
 		data.QN[k] = make_float4(Qxtmp[k], Qytmp[k], Qztmp[k], float(tN[k]));
 		data.tau_CD[k] = 1.0f / tent_tau[k];
 	}
+
 	//set first entanglement
 	data.tau_CD[0] = 1.0f / tent_tau[0];
 	//set_dangling_ends
 	data.QN[0] = make_float4(0.0f, 0.0f, 0.0f, float(tN[0]));
 	data.QN[tz - 1] = make_float4(0.0f, 0.0f, 0.0f, float(tN[tz - 1]));
+
+	float4 sum_stress = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+	float4 temp_sum = make_float4(0.0f, 0.0f, 0.0f, 0.0f); //sum_{j=1}^{i-1}Q_j
+	float4 center_mass = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+	float4 prev_q = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+	for (int k = 0; k < tz; k++) { //all except first and last ent-t
+		float4 term = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+		temp_sum+=	prev_q;
+		term.x	=	temp_sum.x;
+		term.y	=	temp_sum.y;
+		term.z	=	temp_sum.z;
+		term.x	+= 	data.QN[k].x / 2;
+		term.y	+= 	data.QN[k].y / 2;
+		term.z	+= 	data.QN[k].z / 2;
+		center_mass.x = -term.x * data.QN[k].w / tnk;
+		center_mass.y = -term.y * data.QN[k].w / tnk;
+		center_mass.z = -term.z * data.QN[k].w / tnk;
+		prev_q	=	data.QN[k];
+	}
+	data.R1[0] =  make_float4(0.0f, 0.0f, 0.0f, 0.0f) /*center_mass*/;
 	delete[] tN;
 	delete[] Qxtmp;
 	delete[] Qytmp;

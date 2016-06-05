@@ -131,10 +131,10 @@ void gr_array_seed (gpu_Ran *gr,int sz, int seed_offset){
 }
 
 //
-void gr_fill_surface_uniformrand(gpu_Ran *gr,int sz,int count , cudaArray*  d_uniformrand){
+void gr_fill_surface_uniformrand(gpu_Ran *gr,int sz,int count, cudaArray* d_uniformrand, cudaStream_t stream_calc){
 	cudaBindSurfaceToArray(rand_buffer, d_uniformrand);
 	CUT_CHECK_ERROR("kernel execution failed");
-	fill_surface_rand<<<(sz+ ran_tpd-1)/ ran_tpd, ran_tpd>>>(gr,sz,count);
+	fill_surface_rand<<<(sz+ ran_tpd-1)/ ran_tpd, ran_tpd,0,stream_calc>>>(gr,sz,count);
 	CUT_CHECK_ERROR("kernel execution failed");
 	cudaDeviceSynchronize();
 }
@@ -317,17 +317,17 @@ __global__ __launch_bounds__(ran_tpd) void refill_surface_taucd_gauss_rand (gpu_
 }
 
 //
-void gr_fill_surface_taucd_gauss_rand(gpu_Ran *gr, int sz, int count, bool SDCD_toggle, cudaArray* d_taucd_gauss_rand){
+void gr_fill_surface_taucd_gauss_rand(gpu_Ran *gr, int sz, int count, bool SDCD_toggle, cudaArray* d_taucd_gauss_rand, cudaStream_t stream_calc){
 	cudaBindSurfaceToArray(rand_buffer, d_taucd_gauss_rand);
-    fill_surface_taucd_gauss_rand<<<(sz+ ran_tpd-1)/ ran_tpd, ran_tpd>>>(gr,sz,count,SDCD_toggle);
+    fill_surface_taucd_gauss_rand<<<(sz+ ran_tpd-1)/ ran_tpd, ran_tpd,0,stream_calc>>>(gr,sz,count,SDCD_toggle);
 	CUT_CHECK_ERROR("kernel execution failed");
  	cudaDeviceSynchronize();
 }
 
 //
-void gr_refill_surface_taucd_gauss_rand(gpu_Ran *gr, int sz, int *count, bool SDCD_toggle, cudaArray* d_taucd_gauss_rand){
+void gr_refill_surface_taucd_gauss_rand(gpu_Ran *gr, int sz, int *count, bool SDCD_toggle, cudaArray* d_taucd_gauss_rand, cudaStream_t stream_calc){
 	cudaBindSurfaceToArray(rand_buffer, d_taucd_gauss_rand);
-	refill_surface_taucd_gauss_rand<<<(sz+ ran_tpd-1)/ ran_tpd, ran_tpd>>>(gr,sz,count,SDCD_toggle);
+	refill_surface_taucd_gauss_rand<<<(sz+ ran_tpd-1)/ ran_tpd, ran_tpd,0,stream_calc>>>(gr,sz,count,SDCD_toggle);
 	CUT_CHECK_ERROR("kernel execution failed");
  	cudaDeviceSynchronize();
 }

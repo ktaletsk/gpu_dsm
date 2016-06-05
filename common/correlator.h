@@ -21,8 +21,11 @@
 #define correlator_size 64 // number of points in each correlator
 #define correlator_res 8 // number of points to calculate average
 
+surface<void, 2> s_correlator;//to write stress values to d_correlator
+texture<float4, 2, cudaReadModeElementType> t_correlator;//to read stress values from d_correlator
+
 typedef struct corr_device {//chain header
-	cudaArray* d_stress;
+	cudaArray* d_correlator;
 
 	int* d_nc; //device number of chains
 	int *d_numcorrelators; //device number of correlator levels
@@ -59,7 +62,7 @@ public:
 	correlator(int n, int s); //constructor
 	~correlator(); //destructor
 
-	void calc(int *t, float *x); //calculate resulting autocorrelation function
+	void calc(int *t, float *x, int correlator_type); //calculate resulting autocorrelation function
 
 	float* d_lag; //flattened 2D, lag of correlation
 	float* d_corr; //flattened 2D, results of correlation

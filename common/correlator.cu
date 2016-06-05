@@ -83,7 +83,8 @@ correlator::correlator(int n, int s) {//Initialize correlator
 	CUDA_SAFE_CALL(cudaMemcpy((gpu_corr.d_correlator_aver_size), &temp, sizeof(int), cudaMemcpyHostToDevice));
 
 	//Initialize stress array
-	//CUDA_SAFE_CALL(cudaMallocArray(&(gpu_corr.d_stress), &channelDesc4, sizeof(float4)*250, n, cudaArraySurfaceLoadStore));
+	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
+	CUDA_SAFE_CALL(cudaMallocArray(&(gpu_corr.d_correlator), &channelDesc4, sizeof(float4)*stressarray_count, n, cudaArraySurfaceLoadStore));
 
 	CUT_CHECK_ERROR("kernel execution failed");
 }
@@ -97,6 +98,7 @@ correlator::~correlator() {
 	cudaFree(gpu_corr.d_insertindex);
 	cudaFree(gpu_corr.d_kmax);
 	cudaFree(gpu_corr.d_accval);
+	cudaFree(gpu_corr.d_correlator);
 }
 
 __global__ void corr_function_calc_kernel(cudaPitchedPtr d_correlation, cudaPitchedPtr d_ncorrelation, float* d_lag, float* d_corr, int* d_nc, int* d_numcorrelators, int *d_dmin, int *d_correlator_size, int *d_correlator_aver_size) {
@@ -133,7 +135,7 @@ __global__ void corr_function_calc_kernel(cudaPitchedPtr d_correlation, cudaPitc
 		float weight = ncorrelation[j];
 
 		if (weight > 0)
-			stress +=__fdividef((element.x + element.y + element.z), 3.0f * weight);
+			stress +=__fdividef((element.x + element.y + element.z), weight);
 	}
 
 	//Write results to output array
@@ -141,7 +143,7 @@ __global__ void corr_function_calc_kernel(cudaPitchedPtr d_correlation, cudaPitc
 	d_corr[k*(*d_correlator_size)+j]=stress;
 }
 
-void correlator::calc(int *t, float *x){
+void correlator::calc(int *t, float *x, int correlator_type){
 
 	//allocate and initialize d_corr (flatten 2D, correlation results)
 	CUDA_SAFE_CALL(cudaMalloc((float**)&d_lag, correlator_size * numcorrelators * sizeof(float)));
@@ -159,7 +161,6 @@ void correlator::calc(int *t, float *x){
 	float *lag_buffer = new float[correlator_size * numcorrelators];
 	float *corr_buffer = new float[correlator_size * numcorrelators];
 
-
 	//memcpy d_corr, d_lag back to host
 	cudaMemcpy(lag_buffer, d_lag, correlator_size * numcorrelators * sizeof(float), cudaMemcpyDeviceToHost);
 	cudaMemcpy(corr_buffer,d_corr,correlator_size * numcorrelators * sizeof(float), cudaMemcpyDeviceToHost);
@@ -168,13 +169,15 @@ void correlator::calc(int *t, float *x){
 	int im = 0;
 	for (unsigned int i=0; i<correlator_size; ++i) {
 		t[im] = (int)(lag_buffer[i]);
-		x[im] = corr_buffer[i];
+		if (correlator_type==0)	x[im] = corr_buffer[i]/3.0f;
+		if (correlator_type==1)	x[im] = corr_buffer[i];
 		++im;
 	}
 	for (int k=1; k<numcorrelators; ++k) {
 			for (int i=correlator_size/correlator_res; i<correlator_size; ++i) {
 				t[im] = (int)(lag_buffer[k * correlator_size + i]);
-				x[im] = corr_buffer[k* correlator_size + i];
+				if (correlator_type==0)	x[im] = corr_buffer[k* correlator_size + i]/3.0f;
+				if (correlator_type==1)	x[im] = corr_buffer[k* correlator_size + i];
 				++im;
 			}
 	}

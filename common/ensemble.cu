@@ -33,7 +33,7 @@ extern float step;
 extern float GEX_table[200000];
 extern bool PD_flag;
 
-void random_textures_refill(int n_cha);
+void random_textures_refill(int n_cha, cudaStream_t stream_calc);
 void random_textures_fill(int n_cha);
 
 #include "ensemble_call_block.cu"
@@ -43,7 +43,7 @@ using namespace std;
 extern cudaArray* d_gamma_table;
 extern cudaArray* d_gamma_table_d;
 
-#define chains_per_call 32000
+#define chains_per_call 5000
 //MAX surface size is 32768
 
 sstrentp chains; // host chain conformations
@@ -79,6 +79,7 @@ sstrentp chain_index(const int i) { //absolute navigation i - is a global index 
 	sstrentp ptr;
 	ptr.QN = &(chains.QN[z_max * i]);
 	ptr.tau_CD = &(chains.tau_CD[z_max * i]);
+	ptr.R1 = &(chains.R1[i]);
 	return ptr;
 }
 
@@ -88,6 +89,7 @@ sstrentp chain_index(const int bi, const int i) {    //block navigation
 	sstrentp ptr;
 	ptr.QN = &(chains.QN[z_max * (bi * chains_per_call + i)]);
 	ptr.tau_CD = &(chains.tau_CD[z_max * (bi * chains_per_call)]);
+	ptr.R1 = &(chains.R1[bi * chains_per_call + i]);
 	return ptr;
 }
 
@@ -97,6 +99,7 @@ void chains_malloc() {
 	chain_heads = new chain_head[N_cha];
 	chains.QN = new float4[N_cha * z_max];
 	chains.tau_CD = new float[N_cha * z_max];
+	chains.R1 = new float4[N_cha];
 }
 
 void host_chains_init(Ran* eran) {
@@ -154,9 +157,14 @@ void gpu_init(int seed, p_cd* pcd, int s) {
 
 	cudaMallocArray(&d_a_QN, &channelDesc4, z_max, rsz, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_a_tCD, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
+	cudaMallocArray(&d_a_R1, &channelDesc4, rsz, 1, cudaArraySurfaceLoadStore);
+	cudaMallocArray(&d_corr_a, &channelDesc4, rsz, stressarray_count, cudaArraySurfaceLoadStore);
+
 
 	cudaMallocArray(&d_b_QN, &channelDesc4, z_max, rsz, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_b_tCD, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
+	cudaMallocArray(&d_b_R1, &channelDesc4, rsz, 1, cudaArraySurfaceLoadStore);
+	cudaMallocArray(&d_corr_b, &channelDesc4, rsz, stressarray_count, cudaArraySurfaceLoadStore);
 
 	cudaMallocArray(&d_sum_W, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_stress, &channelDesc4, rsz * 2, 0, cudaArraySurfaceLoadStore);
@@ -243,19 +251,19 @@ void random_textures_fill(int n_cha) {
 	cudaMemset(d_tau_CD_used_CD, 0, sizeof(int) * n_cha);
 	cudaMemset(d_tau_CD_used_SD, 0, sizeof(int) * n_cha);
 
-	gr_fill_surface_uniformrand(d_random_gens, n_cha, uniformrandom_count, d_uniformrand);
+	gr_fill_surface_uniformrand(d_random_gens, n_cha, uniformrandom_count, d_uniformrand,0);
 	cudaDeviceSynchronize();
 
 	int taucd_gauss_count = uniformrandom_count;
-	gr_fill_surface_taucd_gauss_rand(d_random_gens2, n_cha, taucd_gauss_count, false, d_taucd_gauss_rand_CD); //Set array with random numbers
-	gr_fill_surface_taucd_gauss_rand(d_random_gens2, n_cha, taucd_gauss_count, true,  d_taucd_gauss_rand_SD);
+	gr_fill_surface_taucd_gauss_rand(d_random_gens2, n_cha, taucd_gauss_count, false, d_taucd_gauss_rand_CD,0); //Set array with random numbers
+	gr_fill_surface_taucd_gauss_rand(d_random_gens2, n_cha, taucd_gauss_count, true,  d_taucd_gauss_rand_SD,0);
 
 	cudaBindTextureToArray(t_uniformrand, d_uniformrand, channelDesc1);
 	cudaBindTextureToArray(t_taucd_gauss_rand_CD, d_taucd_gauss_rand_CD, channelDesc4);
 	cudaBindTextureToArray(t_taucd_gauss_rand_SD, d_taucd_gauss_rand_SD, channelDesc4);
 }
 
-void random_textures_refill(int n_cha) {
+void random_textures_refill(int n_cha, cudaStream_t stream_calc) {
 	if (chain_blocks_number != 1)
 		n_cha = chains_per_call;
 
@@ -263,24 +271,23 @@ void random_textures_refill(int n_cha) {
 	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
 
 	cudaUnbindTexture(t_uniformrand);
-	gr_fill_surface_uniformrand(d_random_gens, n_cha, uniformrandom_count, d_uniformrand);
-	cudaMemset(d_rand_used, 0, sizeof(int) * n_cha);
+	gr_fill_surface_uniformrand(d_random_gens, n_cha, uniformrandom_count, d_uniformrand, stream_calc);
+	cudaMemsetAsync(d_rand_used, 0, sizeof(int) * n_cha, stream_calc);
 	cudaBindTextureToArray(t_uniformrand, d_uniformrand, channelDesc);
-	cudaDeviceSynchronize();
 
 	//tau_cd gauss 3d vector
 	cudaUnbindTexture(t_taucd_gauss_rand_CD);
-	gr_refill_surface_taucd_gauss_rand(d_random_gens2, n_cha, d_tau_CD_used_CD,false, d_taucd_gauss_rand_CD);
-	gr_refill_surface_taucd_gauss_rand(d_random_gens2, n_cha, d_tau_CD_used_SD, true, d_taucd_gauss_rand_SD);
-	cudaMemset(d_tau_CD_used_CD, 0, sizeof(int) * n_cha);
-	cudaMemset(d_tau_CD_used_SD, 0, sizeof(int) * n_cha);
+	gr_refill_surface_taucd_gauss_rand(d_random_gens2, n_cha, d_tau_CD_used_CD,false, d_taucd_gauss_rand_CD,stream_calc);
+	gr_refill_surface_taucd_gauss_rand(d_random_gens2, n_cha, d_tau_CD_used_SD, true, d_taucd_gauss_rand_SD,stream_calc);
+	cudaMemsetAsync(d_tau_CD_used_CD, 0, sizeof(int) * n_cha, stream_calc);
+	cudaMemsetAsync(d_tau_CD_used_SD, 0, sizeof(int) * n_cha, stream_calc);
 	cudaBindTextureToArray(t_taucd_gauss_rand_CD, d_taucd_gauss_rand_CD, channelDesc4);
 	cudaBindTextureToArray(t_taucd_gauss_rand_SD, d_taucd_gauss_rand_SD, channelDesc4);
-	cudaDeviceSynchronize();
+//	cudaDeviceSynchronize();
 }
 
 
-int gpu_Gt_PCS(int res, double length, float *&t, float *&x, int s, bool* run_flag, int *progress_bar) {
+int gpu_Gt_PCS(int res, double length, float *&t, float *&x, int s, int correlator_type, bool* run_flag, int *progress_bar) {
 	//Start simulation
 	//Calculate stress with timestep specified
 	//Update correlators on the fly for each chain (on GPU)
@@ -305,8 +312,8 @@ int gpu_Gt_PCS(int res, double length, float *&t, float *&x, int s, bool* run_fl
 
 		get_chain_to_device_call_block(&(chain_blocks[i]));
 		cudaMemset(chain_blocks[i].d_correlator_time, 0,sizeof(int) * chain_blocks[i].nc);
-		if(EQ_time_step_call_block(length, &(chain_blocks[i]),run_flag, progress_bar)==-1) return -1;
-		chain_blocks[i].corr->calc(tint, x_buf);
+		if(EQ_time_step_call_block(length, &(chain_blocks[i]), correlator_type, run_flag, progress_bar)==-1) return -1;
+		chain_blocks[i].corr->calc(tint, x_buf,correlator_type);
 		get_chain_from_device_call_block(&(chain_blocks[i]));
 
 		for (int j = 0; j < chain_blocks[i].corr->npcorr; j++) {
@@ -317,15 +324,16 @@ int gpu_Gt_PCS(int res, double length, float *&t, float *&x, int s, bool* run_fl
 		delete[] tint;
 	}
 
-	ofstream G_file;
-	G_file.open(filename_ID("G",false));
+	ofstream correlator_file;
+	if(correlator_type==0)	correlator_file.open(filename_ID("G",false));
+	if(correlator_type==1)	correlator_file.open(filename_ID("MSD",false));
 	cout << "\n";
 	int actual_np = (np - correlator_size + floor(length/((float)res*pow((float)correlator_res,(s-1)))));
 	for (int j = 0; j < actual_np; j++) {
 		cout << t[j] << '\t' << x[j] << '\n';
-		G_file << t[j] << '\t' << x[j] << '\n';
+		correlator_file << t[j] << '\t' << x[j] << '\n';
 	}
-	G_file.close();
+	correlator_file.close();
 	delete[] t;
 	delete[] x;
 	return 0;
@@ -508,6 +516,8 @@ void gpu_clean() {
 	cudaFreeArray(d_a_tCD);
 	cudaFreeArray(d_b_QN);
 	cudaFreeArray(d_b_tCD);
+	cudaFreeArray(d_a_R1);
+	cudaFreeArray(d_b_R1);
 	cudaFreeArray(d_sum_W);
 	cudaFreeArray(d_stress);
 

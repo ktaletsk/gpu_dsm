@@ -38,6 +38,7 @@ typedef struct sstrentp {//actually there are only Z-1 tau_CD and only Z-2 Q_i(i
 	//but we are ignoring this fact here
 	float4 *QN;	//number of chain segments in the strand and the strand connector vector
 	float *tau_CD;				//CD lifetime
+	float4 *R1; //Position of the first entanglement in fixed frame
 } sstrentp;
 
 //this structure contains scalar variables of chain conformation

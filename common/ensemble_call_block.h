@@ -30,6 +30,7 @@ typedef struct ensemble_call_block {
 	//chain conformation on device (GPU)
 	cudaArray* d_QN;  //device arrays for vector part of chain conformations
 	cudaArray* d_tCD; //these arrays used to store conformations
+	cudaArray* d_R1;
 
 	//regular device arrays
 	chain_head* gpu_chain_heads;
@@ -55,7 +56,8 @@ void init_call_block(ensemble_call_block *cb, int nc, sstrentp chains, chain_hea
 //copies chain conformations from host and prepare block variables
 
 int time_step_call_block(double reach_time, ensemble_call_block *cb, bool* run_flag);
-int EQ_time_step_call_block(double reach_time, ensemble_call_block* cb, bool* run_flag, int *progress_bar);
+int EQ_time_step_call_block(double reach_time, ensemble_call_block* cb, int correlator_type, bool* run_flag, int *progress_bar);
+//int correlator_update_call_block(int n_steps, ensemble_call_block *cb, bool* run_flag);
 //performs time evolution
 
 void get_chain_to_device_call_block(ensemble_call_block *cb);

@@ -46,6 +46,6 @@ gpu_DSM:  main.o $(OBJS)
 %.o: %.cpp $(DEPS)
 	$(CC) -c $<  $(GENCODE_FLAGS) $(DEBUGFLAGS) -o $@
 %.o: %.cu $(DEPS)
-	$(CC) -c $<  $(GENCODE_FLAGS) $(DEBUGFLAGS) -o $@
+	$(CC) -c $<  $(GENCODE_FLAGS) $(DEBUGFLAGS) --maxrregcount=24 -o $@
 clean:
 	rm -f *.o *~ *.cubin *.ptx *.ii *.i *module_id *.hash *fatbin* *cudafe*

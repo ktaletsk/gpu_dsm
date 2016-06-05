@@ -35,7 +35,7 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 	Ran eran(1);
 	p_cd *pcd;
 
-	int G_flag = 0;
+	int equilibrium_type = 0;
 	double simulation_time;
 	double t_step_size;
 
@@ -61,7 +61,7 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 
 	//int int_t;
 	//in>>int_t;//TODO SD off not implemented
-	in >> G_flag;
+	in >> equilibrium_type;
 	//in>>int_t;//TODO R  not implemented
 	//in>>int_t;//TODO f_d not implemented
 	in >> t_step_size;
@@ -75,10 +75,11 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 	cout << NK << '\t' << Be << '\t' << N_cha << "\n";
 	cout << "deformation tensor:" << "\n";
 	cout << kxx << '\t' << kxy << '\t' << kxz << '\n' << kyx << '\t' << kyy << '\t' << kyz << '\n' << kzx << '\t' << kzy << '\t' << kzz << '\n';
-	if (G_flag)
+	if (equilibrium_type==1)
 		cout << "G(t) calculation is on\n";
-	else
-		cout << "G(t) calculation is off\n";
+	else if (equilibrium_type==2)
+		cout << "MSD(t) calculation is on\n";
+
 	cout << "simulation time, sync time" << "\n";
 	cout << simulation_time << '\t' << t_step_size << '\n';
 	cout << "number of correlator levels" << '\t' << s << '\n' << '\n';
@@ -138,13 +139,19 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 		tau_file.close();
 		cout << "time evolution done.\n";
 	} else {		//Equlibrium calculations
-		if (G_flag) {
+		if (equilibrium_type==1) {
 			cout << "G(t) calc...\n";
 			cout.flush();
 			float *t, *x;
 			timer.start();
-            if(gpu_Gt_PCS(t_step_size, simulation_time, t, x, s, run_flag,progress_bar)==-1) return -1;
-			//cout << "G(t) calc done\n";
+            if(gpu_Gt_PCS(t_step_size, simulation_time, t, x, s, 0, run_flag, progress_bar)==-1) return -1;
+			timer.stop();
+		} else if (equilibrium_type==2){
+			cout << "MSD(t) calc...\n";
+			cout.flush();
+			float *t, *x;
+			timer.start();
+			if(gpu_Gt_PCS(t_step_size, simulation_time, t, x, s, 1, run_flag, progress_bar)==-1) return -1;
 			timer.stop();
 		} else {
 			cout<< "There are no flow and no equilibrium quantity to calculate. Exiting... \n";

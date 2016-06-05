@@ -61,7 +61,7 @@ void save_Q_distribution_to_file(string filename, bool cumulative); //saves Q di
 void load_from_file(char *filename);  //loads chain conformations from a file
 
 int gpu_time_step(double reach_time, bool* run_flag);  // performs time evolution of ensemble
-int gpu_Gt_PCS(int res, double length, float *&t, float *&x, int s, bool* run_flag, int *progress_bar); // (PCS correlator)
+int gpu_Gt_PCS(int res, double length, float *&t, float *&x, int s, int correlator_type, bool* run_flag, int *progress_bar); // (PCS correlator)
 
 void gpu_clean();  //free memory used by ensemble
 
