@@ -251,7 +251,8 @@ int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, int corr
 	float *rtbuffer;
 	cudaMallocHost(&rtbuffer, sizeof(float)*cb->nc);
 
-//	int *tbuffer = new int[cb->nc];
+	int *tbuffer;
+	cudaMallocHost(&tbuffer, sizeof(int)*cb->nc);
 
 	bool texture_flag = true;
 
@@ -316,13 +317,17 @@ int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, int corr
 			}
 			steps_count++;
 
-			// check for reached time
-			cudaStreamSynchronize(stream_calc);
-			cudaMemcpy(rtbuffer, cb->reach_flag, sizeof(float) * cb->nc, cudaMemcpyDeviceToHost);
-			float sumrt = 0;
-			for (int i = 0; i < cb->nc; i++)
-				sumrt += rtbuffer[i];
-			reach_flag_all = (sumrt == cb->nc);
+			// update progress bar
+			if (steps_count % 50 == 0) {
+				cudaStreamSynchronize(stream_calc);
+				cudaMemcpyAsync(tbuffer, cb->d_correlator_time, sizeof(int) * cb->nc, cudaMemcpyDeviceToHost, stream_calc);
+				cudaStreamSynchronize(stream_calc);
+				int sumt = 0;
+				for (int i = 0; i < cb->nc; i++)
+					sumt += tbuffer[i];
+				*progress_bar = (int)(100.0f * sumt / (cb->nc) / reach_time);
+				cout << "\r" << *progress_bar << "%\t ";
+			}
 
 			// check for rand refill
 			if (steps_count % uniformrandom_count == 0) {
@@ -344,22 +349,21 @@ int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, int corr
 				update_correlator<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>((cb->corr)->gpu_corr, stressarray_count, correlator_type);
 			}
 
-			// update progress bar
-//			cudaMemcpy(tbuffer, cb->d_correlator_time, sizeof(int) * cb->nc, cudaMemcpyDeviceToHost);
-//			int sumt = 0;
-//			for (int i = 0; i < cb->nc; i++)
-//				sumt += tbuffer[i];
-//			*progress_bar = 100 * (sumt / (cb->nc) + tf) / reach_time;
-			//cout << "\r" << *progress_bar << "%\t ";
+			// check for reached time
+			cudaStreamSynchronize(stream_calc);
+			cudaMemcpyAsync(rtbuffer, cb->reach_flag, sizeof(float) * cb->nc, cudaMemcpyDeviceToHost, stream_calc);
+			cudaStreamSynchronize(stream_calc);
+			float sumrt = 0;
+			for (int i = 0; i < cb->nc; i++)
+				sumrt += rtbuffer[i];
+			reach_flag_all = (sumrt == cb->nc);
 
-			// stop, if return_flag is changed from outside
+			// stop, if run_flag is changed from outside
 			if (*run_flag == false)
 				return -1;
 		}
-		cudaStreamSynchronize(stream_calc);
-		cudaStreamSynchronize(stream_update);
-		cudaDeviceSynchronize();
 	} //loop ends
+
 	if (steps_count % stressarray_count != 0) {
 		cudaStreamSynchronize(stream_calc);
 		cudaStreamSynchronize(stream_update);
@@ -371,7 +375,7 @@ int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, int corr
 			cudaBindTextureToArray(t_corr, d_corr_a, channelDesc4);
 			texture_flag = true;
 		}
-		update_correlator<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>((cb->corr)->gpu_corr, steps_count % stressarray_count, correlator_type);
+		update_correlator<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>((cb->corr)->gpu_corr, steps_count, correlator_type);
 	}
 
 	cb->block_time = reach_time;
@@ -382,17 +386,6 @@ int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, int corr
 	cudaStreamDestroy(stream_calc);
 	return 0;
 }
-
-//int correlator_update_call_block(int n_steps, ensemble_call_block *cb, bool* run_flag){
-//	cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
-//	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
-//	activate_block(cb);
-//	cudaBindTextureToArray(t_correlator, cb->corr->gpu_corr.d_correlator, channelDesc4);
-//	update_correlator<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel>>>((cb->corr)->gpu_corr, n_steps);
-//	cudaUnbindTexture(t_correlator);
-//	deactivate_block(cb);
-//	return 0;
-//}
 
 // utility functions
 //h means host(cpu) declarations
