@@ -255,7 +255,6 @@ int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, int corr
 	cudaMallocHost(&tbuffer, sizeof(int)*cb->nc);
 
 	bool texture_flag = true;
-
 	//Loop begins
 	for (int i_sync = 0; i_sync < number_of_syncs; i_sync++) {
 		float sync_interval = max_sync_interval;

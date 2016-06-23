@@ -177,6 +177,7 @@ float bisection_root(float a, float b, float lb, float rb, float y, float eps){
 void make_gamma_table (float a, float b) {
 	//ofstream file("table", ios::out);
 	//TODO: check if we need double or float
+
 	double lgam, g_1;
 //	lgam = lgamma(a/b);
 //	g_0  = signgam*exp(lgam);
@@ -205,13 +206,14 @@ void make_gamma_table (float a, float b) {
 			if (i==0)
 				GEX_table[j] = GEX_table_M[i];//initial guess for root Mj;
 			else
-				GEX_table[j] = bisection_root(a,b,GEX_table_M[i-1],GEX_table_M[i],step*j,0.000001);
+				GEX_table[j] = bisection_root(a,b,GEX_table_M[i-1],GEX_table_M[i],step*j,0.00001);
 			//file << GEX_table[j] << '\n';
 			j++;
 		}
 	}
 	temp_M=GEX_table[j-1];
 	temp_M_1=GEX_table[j-2];
+
 	while (j<1/step) {
 		//Add new points
 		temp_M_1=temp_M;
@@ -219,7 +221,7 @@ void make_gamma_table (float a, float b) {
 		temp_P_1 = temp_P;
 		temp_P=gammp((a + 1) / b, powf(temp_M, b));
 		if (temp_P >= step * j) {
-			GEX_table[j] = bisection_root(a,b,temp_M_1,temp_M,step*j,0.000001);
+			GEX_table[j] = bisection_root(a,b,temp_M_1,temp_M,step*j,0.00001);
 			//file << GEX_table[j] << '\n';
 			j++;
 		}
