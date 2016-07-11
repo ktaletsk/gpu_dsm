@@ -25,9 +25,6 @@ using namespace std;
 #define EPS 3.0e-7 //Relative accuracy.
 #define FPMIN 1.0e-30 //Number near the smallest representable floating-point number.
 
-float GEX_table_P[GAMMATABLESIZE];
-float GEX_table_M[GAMMATABLESIZE];
-float GEXd_table_P[GAMMATABLESIZE];
 float temp_M;
 float temp_M_1;
 float temp_P;
@@ -176,7 +173,12 @@ float bisection_root(float a, float b, float lb, float rb, float y, float eps){
 
 void make_gamma_table (float a, float b) {
 	//ofstream file("table", ios::out);
-	//TODO: check if we need double or float
+
+	float* GEX_table_P = new float[GAMMATABLESIZE];
+	float* GEX_table_M = new float[GAMMATABLESIZE];
+	float* GEXd_table_P = new float[GAMMATABLESIZE];
+	GEX_table = new float[GAMMATABLESIZE];
+	GEXd_table = new float[GAMMATABLESIZE];
 
 	double lgam, g_1;
 	step = 0.0f;

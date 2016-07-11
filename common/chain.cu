@@ -20,11 +20,11 @@
 #include "chain.h"
 #include <fstream>
 
-#define GAMMATABLESIZE 1000000
+#define GAMMATABLESIZE 100000
 
 extern float step;
 extern float mp,Mk;
-extern float GEX_table[GAMMATABLESIZE];
+extern float* GEX_table;
 
 inline void operator+=(float4 &a, float4 b) {
 	a.x += b.x;

@@ -25,8 +25,8 @@
 extern float step, step_d;
 extern float a,b,mp,Mk;
 extern int table_size, table_size_d;
-extern float GEX_table[1000000];
-extern float GEXd_table[1000000];
+extern float* GEX_table;
+extern float* GEXd_table;
 extern float gamma_table_cutoff;
 
 extern p_cd *pcd;
@@ -63,8 +63,8 @@ void gpu_ran_init (p_cd* pcd) {
 		cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc<float>();
 		CUDA_SAFE_CALL(cudaMallocArray(&d_gamma_table, &channelDesc1, table_size));
 		CUDA_SAFE_CALL(cudaMallocArray(&d_gamma_table_d, &channelDesc1, table_size_d));
-		CUDA_SAFE_CALL(cudaMemcpyToArray(d_gamma_table, 0, 0, &GEX_table, table_size * sizeof(float), cudaMemcpyHostToDevice));
-		CUDA_SAFE_CALL(cudaMemcpyToArray(d_gamma_table_d, 0, 0, &GEXd_table, table_size_d * sizeof(float), cudaMemcpyHostToDevice));
+		CUDA_SAFE_CALL(cudaMemcpyToArray(d_gamma_table, 0, 0, GEX_table, table_size * sizeof(float), cudaMemcpyHostToDevice));
+		CUDA_SAFE_CALL(cudaMemcpyToArray(d_gamma_table_d, 0, 0, GEXd_table, table_size_d * sizeof(float), cudaMemcpyHostToDevice));
 		CUDA_SAFE_CALL(cudaBindTextureToArray(t_gamma_table, d_gamma_table, channelDesc1));
 		CUDA_SAFE_CALL(cudaBindTextureToArray(t_gamma_table_d, d_gamma_table_d, channelDesc1));
 		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_step, &step, sizeof(float)));

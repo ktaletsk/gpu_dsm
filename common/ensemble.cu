@@ -30,7 +30,8 @@ extern char * filename_ID(string filename, bool temp);
 
 extern float mp,Mk;
 extern float step;
-extern float GEX_table[200000];
+extern float* GEX_table;
+extern float* GEXd_table;
 extern bool PD_flag;
 
 void random_textures_refill(int n_cha, cudaStream_t stream_calc);
@@ -507,17 +508,23 @@ void load_from_file(char *filename) {
 void gpu_clean() {
 	cout << "Memory cleanup.. ";
 
-	delete[] chain_blocks;
-	delete[] chain_heads;
-	delete[] (chains.QN);
-	delete[] (chains.tau_CD);
-
+	for (int i = 0; i < chain_blocks_number; i++){
+		free_block(&(chain_blocks[i]));
+	}
+	if (PD_flag){
+		delete[] GEX_table;
+		delete[] GEXd_table;
+		cudaFreeArray(d_gamma_table);
+		cudaFreeArray(d_gamma_table_d);
+	}
 	cudaFreeArray(d_a_QN);
 	cudaFreeArray(d_a_tCD);
 	cudaFreeArray(d_b_QN);
 	cudaFreeArray(d_b_tCD);
 	cudaFreeArray(d_a_R1);
 	cudaFreeArray(d_b_R1);
+	cudaFreeArray(d_corr_a);
+	cudaFreeArray(d_corr_b);
 	cudaFreeArray(d_sum_W);
 	cudaFreeArray(d_stress);
 
@@ -531,8 +538,6 @@ void gpu_clean() {
 	cudaFree(d_random_gens);
 	cudaFree(d_random_gens2);
 
-	cudaFree(d_gamma_table);
-	cudaFree(d_gamma_table_d);
 	cudaDeviceReset();
 	cout << "done.\n";
 }

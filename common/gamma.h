@@ -32,8 +32,8 @@ int table_size_d=0;
 float gamma_table_cutoff; //calculated MWD cutoff value
 void make_gamma_table (float a, float b);
 float bisection_root(float a, float b, float lb, float rb, float y, float eps);
-float GEX_table[GAMMATABLESIZE];
-float GEXd_table[GAMMATABLESIZE];
+float* GEX_table;
+float* GEXd_table;
 double LambertW1(const double z);
 
 #endif

@@ -354,7 +354,6 @@ void MainWindow::save_settings(QString setting_file_name)
     	QTextStream out(&file);
         if (ui->radio_CFSM->isChecked()){
             out << "1\n";
-            qDebug() << "Saving CFSM status";
         }
         else
             out << "0\n";
