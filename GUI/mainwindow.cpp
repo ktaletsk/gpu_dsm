@@ -32,7 +32,7 @@
 
 #include <iostream>
 
-QString version("0.9-8");
+QString version("0.9-9");
 
 QString exec_path;
 QString def_setting("/def_setting.dat");
