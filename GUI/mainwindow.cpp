@@ -39,6 +39,11 @@ QString def_setting("/def_setting.dat");
 QString flow_setting("/flow.txt");
 QString chemistry_setting("/data2.txt");
 
+QDoubleValidator* validator;
+QLineEdit *edit_a;
+QLineEdit *edit_b;
+QLineEdit *edit_mp;
+
 extern int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int device_ID, bool distr, int* progress_bar);
 bool first_time = true;
 int sim_length;
@@ -115,18 +120,20 @@ MainWindow::MainWindow(QWidget *parent) :
                    //<< "Step Elongation"
                      << "Custom"  ;
         //def row
-        int last_row = ui->tableWidget_2->rowCount();
-        ui->tableWidget_2->insertRow(0);
-        QPointer<QCheckBox> Delete = new QCheckBox(this);
-        QPointer<QComboBox> Architecture = new QComboBox(this);
-        Architecture->addItems(Architecturelistfull);
-        for (int i=1; i<Architecture->count();++i)
-            Architecture->setItemData(i,"DISABLE",Qt::UserRole-1); //disable architectures other than linear
 
-        ui->tableWidget_2->setCellWidget(last_row,0,Delete);
-        ui->tableWidget_2->setCellWidget(last_row,2,Architecture);
-        Architecturelist.append(Architecture);
-        Deletelist.append(Delete);
+        //Architecture Tab
+//        int last_row = ui->tableWidget_2->rowCount();
+//        ui->tableWidget_2->insertRow(0);
+//        QPointer<QCheckBox> Delete = new QCheckBox(this);
+//        QPointer<QComboBox> Architecture = new QComboBox(this);
+//        Architecture->addItems(Architecturelistfull);
+//        for (int i=1; i<Architecture->count();++i)
+//            Architecture->setItemData(i,"DISABLE",Qt::UserRole-1); //disable architectures other than linear
+
+//        ui->tableWidget_2->setCellWidget(last_row,0,Delete);
+//        ui->tableWidget_2->setCellWidget(last_row,2,Architecture);
+//        Architecturelist.append(Architecture);
+//        Deletelist.append(Delete);
 
         ui->label_15->setText(QString::fromUtf8("\u2207v:"));
         //ui->combo_chemistry_probe->setItemData(5,"DISABLE",Qt::UserRole-1); //disable custom parameters option
@@ -136,7 +143,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
         ui->checkBox_9->setEnabled(false);
 
-        QDoubleValidator* validator = new QDoubleValidator();
+        validator = new QDoubleValidator();
         validator->setBottom(0);
         QDoubleValidator* validator2 = new QDoubleValidator();
         QIntValidator* validatorInt = new QIntValidator();
@@ -200,6 +207,18 @@ void MainWindow::on_add_clicked()
     Architecturelist.append(Architecture);
     Deletelist.append(Delete);
 
+
+    edit_a = new QLineEdit(this);
+    edit_a->setValidator(validator);
+    ui->tableWidget_2->setCellWidget(last_row,4,edit_a);
+
+    edit_b = new QLineEdit(this);
+    edit_b->setValidator(validator);
+    ui->tableWidget_2->setCellWidget(last_row,5,edit_b);
+
+    edit_mp = new QLineEdit(this);
+    edit_mp->setValidator(validator);
+    ui->tableWidget_2->setCellWidget(last_row,6,edit_mp);
 }
 
 void MainWindow::on_remove_clicked()
@@ -214,6 +233,9 @@ void MainWindow::on_remove_clicked()
             delete tarch;
             ui->tableWidget_2->removeRow(i);
             i--;
+            delete edit_a;
+            delete edit_b;
+            delete edit_mp;
         }
     }
 }
@@ -269,6 +291,17 @@ void MainWindow::load_settings(QString setting_file_name)
     int tint;
     int c_c_p;
     in>>c_c_p;
+
+    in>>tint;
+    if (tint){//if CFSM(true) / FSM(false)
+        ui->radio_CFSM->setChecked(true);
+        ui->radio_FSM->setChecked(false);
+    }
+    else{
+        ui->radio_CFSM->setChecked(false);
+        ui->radio_FSM->setChecked(true);
+    }
+
     in>>tint;
     ui->combo_arch_probe->setCurrentIndex(tint);
     double td;
@@ -319,6 +352,12 @@ void MainWindow::save_settings(QString setting_file_name)
     }
     else {
     	QTextStream out(&file);
+        if (ui->radio_CFSM->isChecked()){
+            out << "1\n";
+            qDebug() << "Saving CFSM status";
+        }
+        else
+            out << "0\n";
     	out<<ui->combo_chemistry_probe->currentIndex()<<'\n';
     	out<<ui->combo_arch_probe->currentIndex()<<'\n';
     	out<<ui->edit_mw_probe->text()<<'\n';
@@ -328,6 +367,12 @@ void MainWindow::save_settings(QString setting_file_name)
     	out<<ui->edit_n_cha->text()<<'\n';
     	out<<ui->edit_strain->text()<<'\n';
     	out<<ui->combo_flow_type->currentIndex()<<'\n';
+//        if (ui->tableWidget_2->rowCount()>0){
+//            out << "1\n";
+//            out << '\t' << edit_a->text().toFloat() << '\n';
+//            out << '\t' << edit_b->text().toFloat() << '\n';
+//            out << '\t' << edit_mp->text().toFloat() << '\n';
+//        }
     	file.close();
     }
     return;
@@ -390,6 +435,31 @@ void MainWindow::on_lineEdit_4_editingFinished() {
     //recalculate beta
     float beta= ui->lineEdit_4->text().toFloat() / (0.56 * ui->lineEdit_3->text().toFloat()) - 1;
     ui->edit_beta_FSM->setText(QString::number(beta));
+}
+
+void MainWindow::on_radio_CFSM_clicked()
+{
+    //Update <Z>
+    float Zaver;
+
+    float mw=ui->edit_mw_probe->text().toFloat();
+    int nk=(mw*1000)/ui->lineEdit_3->text().toFloat();
+    float beta=ui->edit_beta_FSM->text().toFloat();
+    int nc=ceil(nk/(0.56*beta));
+    Zaver = (nc + 1)/2;
+    ui->Zaver->setText(QString::number(Zaver));
+}
+void MainWindow::on_radio_FSM_clicked()
+{
+    //Update <Z>
+    float Zaver;
+
+    float mw=ui->edit_mw_probe->text().toFloat();
+    int nk=(mw*1000)/ui->lineEdit_3->text().toFloat();
+    float beta=ui->edit_beta_FSM->text().toFloat();
+    int nc=ceil(nk/(0.56*beta));
+    Zaver = (nk + beta)/(beta + 1);
+    ui->Zaver->setText(QString::number(Zaver));
 }
 
 void MainWindow::on_edit_mw_probe_editingFinished() {
@@ -482,8 +552,9 @@ void MainWindow::on_pushButton_clicked() {
         QFile::remove(QString("G.dat"));
         QFile::remove(QString("tau.dat"));
 
-        //Read input parameters from interface
-        ui->tableWidget_2->setItem(0,5,new QTableWidgetItem(ui->edit_mw_probe->displayText()));
+
+
+
         float mw=ui->edit_mw_probe->text().toFloat();
         float nk=(mw*1000)/ui->lineEdit_3->text().toFloat();
         float beta=ui->edit_beta_FSM->text().toFloat();
@@ -539,7 +610,30 @@ void MainWindow::on_pushButton_clicked() {
         else
             out << "\t0\n";
 
-        out << "\t0\n"; //polydispersity is disabled for now
+        if (ui->tableWidget_2->rowCount()>0){
+            out << "\t1\n"; //polydispersity is enabled
+            //create "polydisp.dat"
+            //read parameters from table
+            QFile file_PD("polydisp.dat");
+            if(!file_PD.open(QIODevice::WriteOnly))
+                QMessageBox::information(0,"info",file.errorString());
+            QTextStream out_PD(&file_PD);
+
+            out_PD << '\t' << edit_a->text().toFloat() << '\n';
+            out_PD << '\t' << edit_b->text().toFloat() << '\n';
+            out_PD << '\t' << edit_mp->text().toFloat() << '\n';
+            if (ui->radio_CFSM->isChecked()){
+                out_PD << '\t' << ui->lineEdit_4->text().toFloat() << '\n';
+            }
+            else{
+                out_PD << '\t' << ui->lineEdit_3->text().toFloat() << '\n';
+            }
+
+            file_PD.close();
+        }
+        else{
+            out << "\t0\n"; //polydispersity is not enabled
+        }
 
         if (ui->check_Gt->isChecked()&&ui->radio_eq->isChecked())
             out << "\t1\n";
@@ -608,6 +702,10 @@ void MainWindow::on_pushButton_clicked() {
         if (timer2==NULL) timer2 = new QTimer(this);
         connect(timer2, SIGNAL(timeout()), this, SLOT(setuRealtimeData()));
 
+        ui->progressBar_1->setValue(0);
+        ui->progressBar_2->setValue(0);
+        ui->label_status->setText(QString("Preparing chains..."));
+
         ui->progressBar_1->setVisible(true);
         ui->progressBar_2->setVisible(true);
 
@@ -667,6 +765,7 @@ void MainWindow::setuRealtimeData()
     }else{
     	ui->progressBar_1->setValue(progress_bar);
     	ui->progressBar_2->setValue(progress_bar);
+        ui->label_status->setText(QString("Running simulation..."));
         QFile file2("G.dat");
         if(file2.open(QIODevice::ReadOnly)) {
             QTextStream in2(&file2);
@@ -795,10 +894,9 @@ void MainWindow::on_radio_eq_clicked() {
     //calculation length
     if (ui->radio_CFSM->isChecked()){
         ui->sim_length->setText(QString::number((int)(10* 0.0740131f * powf(nc, 3.18363f))));
-        ui->max_size->setText(QString("Max:").append(QString::number( pow(10,((int)log10(ceil(pow(10,7)/nk)))) )));
     }
     else{
         ui->sim_length->setText(QString::number((int)(10* 0.036f * powf(beta + 2.0f, 3.07f) * powf((ceil(nk)+beta)/(beta+1) - 1.0f, 3.02f))));
-        ui->max_size->setText(QString("Max:").append(QString::number( pow(10,((int)log10(ceil(pow(10,7)/nc)))) )));
     }
+    ui->max_size->setText(QString("Max: 5000"));
 }

@@ -75,7 +75,7 @@
      <enum>QTabWidget::Rounded</enum>
     </property>
     <property name="currentIndex">
-     <number>2</number>
+     <number>0</number>
     </property>
     <property name="elideMode">
      <enum>Qt::ElideNone</enum>
@@ -617,13 +617,13 @@
          <item>
           <widget class="QPushButton" name="add">
            <property name="enabled">
-            <bool>false</bool>
+            <bool>true</bool>
            </property>
            <property name="text">
             <string/>
            </property>
            <property name="icon">
-            <iconset resource="icons.qrc">
+            <iconset>
              <normaloff>:/icons/1396473432_plus_16.png</normaloff>:/icons/1396473432_plus_16.png</iconset>
            </property>
           </widget>
@@ -631,13 +631,13 @@
          <item>
           <widget class="QPushButton" name="remove">
            <property name="enabled">
-            <bool>false</bool>
+            <bool>true</bool>
            </property>
            <property name="text">
             <string/>
            </property>
            <property name="icon">
-            <iconset resource="icons.qrc">
+            <iconset>
              <normaloff>:/icons/1396473880_edit_remove.png</normaloff>:/icons/1396473880_edit_remove.png</iconset>
            </property>
           </widget>
@@ -664,7 +664,7 @@
             <string>Select All</string>
            </property>
            <property name="icon">
-            <iconset resource="icons.qrc">
+            <iconset>
              <normaloff>:/icons/1396477966_Blue_pin.png</normaloff>:/icons/1396477966_Blue_pin.png</iconset>
            </property>
           </widget>
@@ -678,7 +678,7 @@
             <string>Deselect All</string>
            </property>
            <property name="icon">
-            <iconset resource="icons.qrc">
+            <iconset>
              <normaloff>:/icons/1396473552_cross.png</normaloff>:/icons/1396473552_cross.png</iconset>
            </property>
           </widget>
@@ -688,7 +688,7 @@
        <item>
         <widget class="QTableWidget" name="tableWidget_2">
          <property name="enabled">
-          <bool>false</bool>
+          <bool>true</bool>
          </property>
          <column>
           <property name="text">
@@ -712,7 +712,7 @@
          </column>
          <column>
           <property name="text">
-           <string>Mn (kDa)</string>
+           <string>a</string>
           </property>
           <property name="font">
            <font>
@@ -722,7 +722,7 @@
          </column>
          <column>
           <property name="text">
-           <string>Mw (kDa)</string>
+           <string>b</string>
           </property>
           <property name="font">
            <font>
@@ -732,7 +732,7 @@
          </column>
          <column>
           <property name="text">
-           <string>Mz (kDa)</string>
+           <string>Mp (Da)</string>
           </property>
           <property name="font">
            <font>
@@ -791,7 +791,7 @@
          <x>20</x>
          <y>30</y>
          <width>185</width>
-         <height>26</height>
+         <height>27</height>
         </rect>
        </property>
        <layout class="QHBoxLayout" name="horizontalLayout_2">
@@ -1089,7 +1089,7 @@
        <rect>
         <x>180</x>
         <y>20</y>
-        <width>351</width>
+        <width>363</width>
         <height>41</height>
        </rect>
       </property>
@@ -1244,7 +1244,7 @@
       <locale language="English" country="UnitedStates"/>
      </property>
      <attribute name="icon">
-      <iconset resource="icons.qrc">
+      <iconset>
        <normaloff>:/icons/1396475885_layer-raster-analyze.png</normaloff>:/icons/1396475885_layer-raster-analyze.png</iconset>
      </attribute>
      <attribute name="title">
@@ -1348,7 +1348,7 @@
      <x>0</x>
      <y>0</y>
      <width>800</width>
-     <height>25</height>
+     <height>19</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
@@ -1356,8 +1356,8 @@
      <rect>
       <x>2330</x>
       <y>107</y>
-      <width>192</width>
-      <height>92</height>
+      <width>184</width>
+      <height>87</height>
      </rect>
     </property>
     <property name="title">
@@ -1394,7 +1394,7 @@
   </widget>
   <action name="actionOpen">
    <property name="icon">
-    <iconset resource="icons.qrc">
+    <iconset>
      <normaloff>:/icons/1396515307_document-open.png</normaloff>:/icons/1396515307_document-open.png</iconset>
    </property>
    <property name="text">
@@ -1408,7 +1408,7 @@
   </action>
   <action name="actionSave">
    <property name="icon">
-    <iconset resource="icons.qrc">
+    <iconset>
      <normaloff>:/icons/1396515958_save.png</normaloff>:/icons/1396515958_save.png</iconset>
    </property>
    <property name="text">
@@ -1430,9 +1430,7 @@
    <container>1</container>
   </customwidget>
  </customwidgets>
- <resources>
-  <include location="icons.qrc"/>
- </resources>
+ <resources/>
  <connections>
   <connection>
    <sender>radio_eq</sender>

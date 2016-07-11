@@ -179,6 +179,7 @@ void make_gamma_table (float a, float b) {
 	//TODO: check if we need double or float
 
 	double lgam, g_1;
+	step = 0.0f;
 //	lgam = lgamma(a/b);
 //	g_0  = signgam*exp(lgam);
 	lgam = lgamma((a+1)/b);

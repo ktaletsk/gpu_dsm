@@ -82,6 +82,8 @@ private slots:
     void on_pushButton_save_jpg_clicked();
     void on_radio_flow_clicked();
     void on_radio_eq_clicked();
+    void on_radio_FSM_clicked();
+    void on_radio_CFSM_clicked();
 
 private:
     Ui::MainWindow *ui;

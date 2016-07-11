@@ -52,7 +52,7 @@ CUDA_DIR      = /usr/local/cuda
 INCLUDEPATH  += $$CUDA_DIR/include
 QMAKE_LIBDIR += $$CUDA_DIR/lib64
 # libs used in your code
-LIBS= -lcuda -lcudart
+LIBS= -lcudart
 CUDA_ARCH = 30 35 50 52
 NVCCFLAGS = -D_FORCE_INLINES
 
