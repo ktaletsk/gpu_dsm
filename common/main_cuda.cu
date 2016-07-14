@@ -53,7 +53,13 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 	ifstream in;
 	in.open("input.dat");
 	in >> Be;
-	in >> NK;
+	in >> narms;
+	NK_arms = new int[narms];
+	NK = 0;
+	for (int i=0; i<narms; i++){
+		in >> NK_arms[i];
+		NK += NK_arms[i];
+	}
 	in >> N_cha;
 	in >> kxx >> kxy >> kxz >> kyx >> kyy >> kyz >> kzx >> kzy >> kzz;
 	in >> CD_flag;	//Computation mode: 0-only SD / 1-SD+CD

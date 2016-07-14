@@ -26,29 +26,26 @@
 #include "cuda_call.h"
 #include "textures_surfaces.h"
 #include "math.h"
-extern char * filename_ID(string filename, bool temp);
 
+using namespace std;
+
+extern char * filename_ID(string filename, bool temp);
 extern float mp,Mk;
 extern float step;
 extern float* GEX_table;
 extern float* GEXd_table;
 extern bool PD_flag;
+extern cudaArray* d_gamma_table;
+extern cudaArray* d_gamma_table_d;
 
 void random_textures_refill(int n_cha, cudaStream_t stream_calc);
 void random_textures_fill(int n_cha);
 
-#include "ensemble_call_block.cu"
-
-using namespace std;
-
-extern cudaArray* d_gamma_table;
-extern cudaArray* d_gamma_table_d;
+#include "ensemble_block.cu"
 
 #define chains_per_call 5000
-//MAX surface size is 32768
 
-sstrentp chains; // host chain conformations
-
+vector_chains chains; // host chain conformations
 // and only one array with scalar part chain conformation
 // every time the vector part is copied from one array to another
 // coping is done in entanglement parallel portion of the code
@@ -56,18 +53,20 @@ sstrentp chains; // host chain conformations
 // scalar part(chain headers) are update in the chain parallel portion of the code
 // chain headers are occupied much smaller memory, no specific memory access technic are used for them.
 // depending one odd or even number of time step were performed,
-//one of the get_chains_from_device_# should be used
+//one of the transfer_from_device_# should be used
 
-chain_head* chain_heads; // host device chain headers arrays, store scalar variables of chain conformations
+scalar_chains* chain_heads; // host device chain headers arrays, store scalar variables of chain conformations
 
 int chain_blocks_number;
-ensemble_call_block *chain_blocks;
+ensemble_block *chain_blocks;
 
 //host constants
 double universal_time;//since chain_head do not store universal time due to SP issues
 		      	  	  //see chain.h chain_head for explanation
 int N_cha;
 int NK;
+int narms;
+int* NK_arms;
 int z_max;
 float Be;
 float kxx, kxy, kxz, kyx, kyy, kyz, kzx, kzy, kzz;
@@ -76,18 +75,18 @@ bool PD_flag=0;
 bool dbug = false;	//true;
 
 //navigation
-sstrentp chain_index(const int i) { //absolute navigation i - is a global index of chains i:[0..N_cha-1]
-	sstrentp ptr;
+vector_chains chain_index(const int i) { //absolute navigation i - is a global index of chains i:[0..N_cha-1]
+	vector_chains ptr;
 	ptr.QN = &(chains.QN[z_max * i]);
 	ptr.tau_CD = &(chains.tau_CD[z_max * i]);
 	ptr.R1 = &(chains.R1[i]);
 	return ptr;
 }
 
-sstrentp chain_index(const int bi, const int i) {    //block navigation
+vector_chains chain_index(const int bi, const int i) {    //block navigation
 	//bi is a block index bi :[0..chain_blocks_number]
 	//i - is a chain index in the block bi  i:[0..chains_per_call-1]
-	sstrentp ptr;
+	vector_chains ptr;
 	ptr.QN = &(chains.QN[z_max * (bi * chains_per_call + i)]);
 	ptr.tau_CD = &(chains.tau_CD[z_max * (bi * chains_per_call)]);
 	ptr.R1 = &(chains.R1[bi * chains_per_call + i]);
@@ -97,10 +96,13 @@ sstrentp chain_index(const int bi, const int i) {    //block navigation
 void chains_malloc() {
 	//setup z_max modification maybe needed for large \beta
 	z_max = NK;    // current realization limits z to 2^23
-	chain_heads = new chain_head[N_cha];
-	chains.QN = new float4[N_cha * z_max];
-	chains.tau_CD = new float[N_cha * z_max];
-	chains.R1 = new float4[N_cha];
+	chain_heads = new scalar_chains[N_cha];
+//	chains.QN = new float4[N_cha * z_max];
+//	chains.tau_CD = new float[N_cha * z_max];
+//	chains.R1 = new float4[N_cha];
+	cudaMallocManaged((void**)&(chains.QN), sizeof(float4) * N_cha * z_max);
+	cudaMallocManaged((void**)&(chains.tau_CD), sizeof(float4) * N_cha * z_max);
+	cudaMallocManaged((void**)&(chains.R1), sizeof(float4) * N_cha);
 }
 
 void host_chains_init(Ran* eran) {
@@ -108,7 +110,7 @@ void host_chains_init(Ran* eran) {
 	cout << "generating chain conformations on host..";
 	universal_time=0.0;
 	for (int i = 0; i < N_cha; i++) {
-		sstrentp ptr = chain_index(i);
+		vector_chains ptr = chain_index(i);
 		chain_init(&(chain_heads[i]), ptr, NK, z_max, PD_flag, eran);
 	}
 	cout << "done\n";
@@ -194,16 +196,21 @@ void gpu_init(int seed, p_cd* pcd, int s) {
 	chain_blocks_number = (N_cha + chains_per_call - 1) / chains_per_call;
 	cout << " Number of ensemble blocks " << chain_blocks_number << '\n';
 
-	//chain_blocks - array of blocks
-	chain_blocks = new ensemble_call_block[chain_blocks_number];
+	chain_blocks = new ensemble_block[chain_blocks_number];
 	for (int i = 0; i < chain_blocks_number - 1; i++) {
-		init_call_block(&(chain_blocks[i]), chains_per_call, chain_index(i, 0), &(chain_heads[i * chains_per_call]),s);
-		cout << "  copying chains to device block " << i + 1 << ". chains in the ensemble block " << chains_per_call << '\n';
+		chain_blocks[i].init(chains_per_call, chain_index(i, 0), &(chain_heads[i * chains_per_call]), s);
 	}
-	init_call_block(&(chain_blocks[chain_blocks_number - 1]), (N_cha - 1) % chains_per_call + 1, chain_index(chain_blocks_number - 1, 0), &(chain_heads[(chain_blocks_number - 1) * chains_per_call]),s);
-	cout << "  copying chains to device block " << chain_blocks_number
-			<< ". chains in the ensemble block "
-			<< (N_cha - 1) % chains_per_call + 1 << '\n';
+	chain_blocks[chain_blocks_number - 1].init((N_cha - 1) % chains_per_call + 1, chain_index(chain_blocks_number - 1, 0), &(chain_heads[(chain_blocks_number - 1) * chains_per_call]),s);
+
+	//chain_blocks - array of blocks
+//	chain_blocks = new ensemble_call_block[chain_blocks_number];
+//	for (int i = 0; i < chain_blocks_number - 1; i++) {
+//		init_call_block(&(chain_blocks[i]), chains_per_call, chain_index(i, 0), &(chain_heads[i * chains_per_call]),s);
+//		cout << "  copying chains to device block " << i + 1 << ". chains in the ensemble block " << chains_per_call << '\n';
+//	}
+//	init_call_block(&(chain_blocks[chain_blocks_number - 1]), (N_cha - 1) % chains_per_call + 1, chain_index(chain_blocks_number - 1, 0), &(chain_heads[(chain_blocks_number - 1) * chains_per_call]),s);
+
+	cout << "  copying chains to device block " << chain_blocks_number << ". chains in the ensemble block " << (N_cha - 1) % chains_per_call + 1 << '\n';
 	cout << " device chains done\n";
 
 	cout << "init done\n";
@@ -214,7 +221,7 @@ stress_plus calc_stress() {
 	int total_chains = 0;
 	for (int i = 0; i < chain_blocks_number; i++) {
 		int cc;
-		stress_plus tmp = calc_stress_call_block(&(chain_blocks[i]), &cc);
+		stress_plus tmp = chain_blocks[i].calc_stress(&cc);
 		total_chains += cc;
 		double w = double(cc);
 		tmps = tmps + tmp * w;
@@ -224,7 +231,7 @@ stress_plus calc_stress() {
 
 int gpu_time_step(double reach_time, bool* run_flag) {
 	for (int i = 0; i < chain_blocks_number; i++) {
-		if(time_step_call_block(reach_time, &(chain_blocks[i]), run_flag)==-1) return -1;
+		if(chain_blocks[i].flow_time_step(reach_time,run_flag)==-1) return -1;
 	}
 	universal_time=reach_time;
 	return 0;
@@ -233,7 +240,7 @@ int gpu_time_step(double reach_time, bool* run_flag) {
 void get_chains_from_device()    //Copies chains back to host memory
 {
 	for (int i = 0; i < chain_blocks_number; i++) {
-		get_chain_from_device_call_block(&(chain_blocks[i]));
+		chain_blocks[i].transfer_from_device();
 	}
 }
 
@@ -308,21 +315,7 @@ int gpu_Gt_PCS(int res, double length, float *&t, float *&x, int s, int correlat
 	}
 
 	for (int i = 0; i < chain_blocks_number; i++){
-		int *tint = new int[np];
-		float *x_buf = new float[np];
-
-		get_chain_to_device_call_block(&(chain_blocks[i]));
-		cudaMemset(chain_blocks[i].d_correlator_time, 0,sizeof(int) * chain_blocks[i].nc);
-		if(EQ_time_step_call_block(length, &(chain_blocks[i]), correlator_type, run_flag, progress_bar)==-1) return -1;
-		chain_blocks[i].corr->calc(tint, x_buf,correlator_type);
-		get_chain_from_device_call_block(&(chain_blocks[i]));
-
-		for (int j = 0; j < chain_blocks[i].corr->npcorr; j++) {
-			t[j] = tint[j];
-			x[j] += x_buf[j] / N_cha;
-		}
-		delete[] x_buf;
-		delete[] tint;
+		chain_blocks[i].equilibrium_calc(length, correlator_type, run_flag, progress_bar, np, t, x);
 	}
 
 	ofstream correlator_file;
@@ -509,7 +502,7 @@ void gpu_clean() {
 	cout << "Memory cleanup.. ";
 
 	for (int i = 0; i < chain_blocks_number; i++){
-		free_block(&(chain_blocks[i]));
+		chain_blocks[i].free_block();
 	}
 	if (PD_flag){
 		delete[] GEX_table;

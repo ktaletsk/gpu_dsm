@@ -39,7 +39,7 @@ void sort(float* A,int sz)
 
 //Generates GNU plot for Z distribution from simualtion and analytic one
 // used to debug code
-void z_plot(chain_head * chead,float Be, int Nk,int N_cha){
+void z_plot(scalar_chains * chead,float Be, int Nk,int N_cha){
   
 	float J = powf(1.0f+1.0f/Be,Nk-1);
 	ofstream out;

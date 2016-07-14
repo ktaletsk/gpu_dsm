@@ -25,20 +25,20 @@
 #include "chain.h"// chain conformations
 #include "stress.h"// chain stress
 #include "pcd_tau.h"// CD lifetime distribution
-#include "ensemble_call_block.h" //GPU can process only 32K chains simulataneously
+#include "ensemble_block.h" //GPU can process only 32K chains simulataneously
 //we split ensemble in call_blocks and feed them to GPU one by one
 //most interesting part of the code is there
 using namespace std;
 
 //public variables
-extern sstrentp chains;	// arrays with vector part of chain conformations(Q,N,tauCD)
+extern vector_chains chains;	// arrays with vector part of chain conformations(Q,N,tauCD)
 //contains conformations for all the chains. It is 1D array. use chain_index to access chain i
 
-extern chain_head* chain_heads;	//array with scalar part chain conformations header
+extern scalar_chains* chain_heads;	//array with scalar part chain conformations header
 
-sstrentp chain_index(const int i);//absolute navigation i - is a global index of chains i:[0..N_cha-1]
+vector_chains chain_index(const int i);//absolute navigation i - is a global index of chains i:[0..N_cha-1]
 
-sstrentp chain_index(const int bi, const int i);	//block navigation
+vector_chains chain_index(const int bi, const int i);	//block navigation
 //bi is a block index bi :[0..chain_blocks_number]
 //i - is a chain index in the block bi  i:[0..chains_per_call-1]
 extern double universal_time;//since chain_head do not store universal time due to SP issues
@@ -46,6 +46,8 @@ extern double universal_time;//since chain_head do not store universal time due 
 extern int N_cha;	// number of chains
 extern int NK;	//number of chain segments in each chain
 extern int z_max;	// max number of strand in chain (currently same as NK)
+extern int narms;
+extern int* NK_arms;
 extern bool dbug;	//debug flag
 extern float kxx, kxy, kxz, kyx, kyy, kyz, kzx, kzy, kzz;	//deformation tensor
 extern bool PD_flag;

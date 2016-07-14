@@ -128,7 +128,7 @@ __host__ __device__ float tau_dist(float p,float Be, float Nk) {
 	}
 }
 
-void chain_init(chain_head *chain_head, sstrentp data, int tnk, int z_max, bool PD_flag, Ran* eran) {
+void chain_init(scalar_chains *chain_head, vector_chains data, int tnk, int z_max, bool PD_flag, Ran* eran) {
 	//Choose z for the chain
 	int tz = z_dist_truncated(tnk, z_max, eran);   //z distribution
 
@@ -214,7 +214,7 @@ void chain_init(chain_head *chain_head, sstrentp data, int tnk, int z_max, bool 
 	delete[] tent_tau;
 }
 
-void print(ostream& stream, const sstrentp c, const chain_head chead) {
+void print(ostream& stream, const vector_chains c, const scalar_chains chead) {
 	stream<<"time "<<universal_time+chead.time<<'\n';
 	stream<<"Z: "<<chead.Z<<'\n';
 // 	stream<<"dummy: "<<chead.dummy<<'\n';//can be used for debug
@@ -233,16 +233,16 @@ void print(ostream& stream, const sstrentp c, const chain_head chead) {
 	stream << '\n';
 }
 
-void save_to_file(ostream& stream, const sstrentp c, const chain_head chead) {
-	stream.write((char*) &chead, sizeof(chain_head));
+void save_to_file(ostream& stream, const vector_chains c, const scalar_chains chead) {
+	stream.write((char*) &chead, sizeof(scalar_chains));
 	for (int j = 0; j < chead.Z; j++)
 		stream.write((char*) &(c.QN[j]), sizeof(float4));
 	for (int j = 0; j < chead.Z; j++)
 		stream.write((char*) &(c.tau_CD[j]), sizeof(float));
 }
 
-void load_from_file(istream& stream, const sstrentp c, const chain_head *chead) {
-	stream.read((char*) chead, sizeof(chain_head));
+void load_from_file(istream& stream, const vector_chains c, const scalar_chains *chead) {
+	stream.read((char*) chead, sizeof(scalar_chains));
 	for (int j = 0; j < chead->Z; j++)
 		stream.read((char*) &(c.QN[j]), sizeof(float4));
 	for (int j = 0; j < chead->Z; j++)

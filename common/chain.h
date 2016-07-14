@@ -34,7 +34,7 @@ extern int CD_flag;
 //this structure is used to access arrays(vectors) of chain conformation
 //there is one big array with chain conformations for the whole ensemble
 //this structure contains pointers beginning of the chain conformation in the big array
-typedef struct sstrentp {//actually there are only Z-1 tau_CD and only Z-2 Q_i(i:[2,Z-1])
+typedef struct vector_chains {//actually there are only Z-1 tau_CD and only Z-2 Q_i(i:[2,Z-1])
 	//but we are ignoring this fact here
 	float4 *QN;	//number of chain segments in the strand and the strand connector vector
 	float *tau_CD;				//CD lifetime
@@ -42,7 +42,7 @@ typedef struct sstrentp {//actually there are only Z-1 tau_CD and only Z-2 Q_i(i
 } sstrentp;
 
 //this structure contains scalar variables of chain conformation
-typedef struct chain_head {//chain header
+typedef struct scalar_chains {//chain header
 	int Z;//n strands
 	float time;//time since last ensemble synchronization/time_step.
 		   //Single precision float works only up to time~=1E7.
@@ -50,19 +50,34 @@ typedef struct chain_head {//chain header
 		   //which leads to detailed balance issues
 	float dummy;// dummy field for 16 byte alignment
 	int stall_flag;//algorithm crash flag
-} chain_head;
+} scalar_chains;
 
 extern double universal_time;
 
+//class chain{
+//	float4 *QN;	//number of chain segments in the strand and the strand connector vector
+//	float *tau_CD;				//CD lifetime
+//	float4 *R1; //Position of the first entanglement in fixed frame
+//
+//	int Z;//n strands
+//	float time;//time since last ensemble synchronization/time_step.
+//				//Single precision float works only up to time~=1E7.
+//			   //For time 1E7 dt/time can be below single precision resolution,
+//			   //which leads to detailed balance issues
+//	float dummy;// dummy field for 16 byte alignment
+//	int stall_flag;//algorithm crash flag
+//public:
+//	void init();
+//};
 
 //init chain conformation
-void chain_init(chain_head *chain_head, sstrentp data, int tnk, bool PD_flag, Ran* eran);
-void chain_init(chain_head *chain_head, sstrentp data, int tnk, int z_max, bool PD_flag, Ran* eran);	//z_max is maximum number of entaglements. purpose - truncate z distribution for optimization. NOTE: not tested
+void chain_init(scalar_chains *chain_head, vector_chains data, int tnk, bool PD_flag, Ran* eran);
+void chain_init(scalar_chains *chain_head, vector_chains data, int tnk, int z_max, bool PD_flag, Ran* eran);	//z_max is maximum number of entaglements. purpose - truncate z distribution for optimization. NOTE: not tested
 
 //outputs chain conformation
-void print(ostream& stream, const sstrentp c, const chain_head chead);
+void print(ostream& stream, const vector_chains c, const scalar_chains chead);
 
-void save_to_file(ostream& stream, const sstrentp c, const chain_head chead);
-void load_from_file(istream& stream, const sstrentp c, const chain_head *chead);
+void save_to_file(ostream& stream, const vector_chains c, const scalar_chains chead);
+void load_from_file(istream& stream, const vector_chains c, const scalar_chains *chead);
 
 #endif

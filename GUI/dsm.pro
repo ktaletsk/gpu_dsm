@@ -17,7 +17,7 @@ HEADERS += mainwindow.h \
         ../common/cudautil.h \
         ../common/detailed_balance.h \
         ../common/ensemble.h \
-        ../common/ensemble_call_block.h \
+        ../common/ensemble_block.h \
         ../common/gamma.h \
         ../common/gpu_random.h \
         ../common/job_ID.h \
@@ -27,7 +27,7 @@ HEADERS += mainwindow.h \
         ../common/textures_surfaces.h \
         ../common/timer.h \
         ../common/timer_linux.h \
-        ../common/ensemble_call_block.cu \
+        ../common/ensemble_block.cu \
         ../common/ensemble_kernel.cu \
         ../common/eq_ensemble_kernel.cu \
         qcustomplot.h
