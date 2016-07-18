@@ -82,10 +82,6 @@ correlator::correlator(int n, int s) {//Initialize correlator
 	temp = correlator_res;
 	CUDA_SAFE_CALL(cudaMemcpy((gpu_corr.d_correlator_aver_size), &temp, sizeof(int), cudaMemcpyHostToDevice));
 
-	//Initialize stress array
-	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
-	CUDA_SAFE_CALL(cudaMallocArray(&(gpu_corr.d_correlator), &channelDesc4, sizeof(float4)*stressarray_count, n, cudaArraySurfaceLoadStore));
-
 	CUT_CHECK_ERROR("kernel execution failed");
 }
 
@@ -98,7 +94,6 @@ correlator::~correlator() {
 	cudaFree(gpu_corr.d_insertindex);
 	cudaFree(gpu_corr.d_kmax);
 	cudaFree(gpu_corr.d_accval);
-	cudaFree(gpu_corr.d_correlator);
 }
 
 __global__ void corr_function_calc_kernel(cudaPitchedPtr d_correlation, cudaPitchedPtr d_ncorrelation, float* d_lag, float* d_corr, int* d_nc, int* d_numcorrelators, int *d_dmin, int *d_correlator_size, int *d_correlator_aver_size) {

@@ -94,12 +94,8 @@ vector_chains chain_index(const int bi, const int i) {    //block navigation
 }
 
 void chains_malloc() {
-	//setup z_max modification maybe needed for large \beta
-	z_max = NK;    // current realization limits z to 2^23
+	z_max = NK;
 	chain_heads = new scalar_chains[N_cha];
-//	chains.QN = new float4[N_cha * z_max];
-//	chains.tau_CD = new float[N_cha * z_max];
-//	chains.R1 = new float4[N_cha];
 	cudaMallocManaged((void**)&(chains.QN), sizeof(float4) * N_cha * z_max);
 	cudaMallocManaged((void**)&(chains.tau_CD), sizeof(float4) * N_cha * z_max);
 	cudaMallocManaged((void**)&(chains.R1), sizeof(float4) * N_cha);
@@ -117,7 +113,7 @@ void host_chains_init(Ran* eran) {
 }
 
 //preparation of constants/arrays/etc
-void gpu_init(int seed, p_cd* pcd, int s) {
+void gpu_init(int seed, p_cd* pcd, int nsteps) {
 	cout << "preparing GPU chain conformations..\n";
 
 	//Copy host constants from host to device
@@ -198,9 +194,9 @@ void gpu_init(int seed, p_cd* pcd, int s) {
 
 	chain_blocks = new ensemble_block[chain_blocks_number];
 	for (int i = 0; i < chain_blocks_number - 1; i++) {
-		chain_blocks[i].init(chains_per_call, chain_index(i, 0), &(chain_heads[i * chains_per_call]), s);
+		chain_blocks[i].init(chains_per_call, chain_index(i, 0), &(chain_heads[i * chains_per_call]), nsteps);
 	}
-	chain_blocks[chain_blocks_number - 1].init((N_cha - 1) % chains_per_call + 1, chain_index(chain_blocks_number - 1, 0), &(chain_heads[(chain_blocks_number - 1) * chains_per_call]),s);
+	chain_blocks[chain_blocks_number - 1].init((N_cha - 1) % chains_per_call + 1, chain_index(chain_blocks_number - 1, 0), &(chain_heads[(chain_blocks_number - 1) * chains_per_call]), nsteps);
 
 	//chain_blocks - array of blocks
 //	chain_blocks = new ensemble_call_block[chain_blocks_number];
@@ -227,14 +223,6 @@ stress_plus calc_stress() {
 		tmps = tmps + tmp * w;
 	}
 	return tmps / total_chains;
-}
-
-int gpu_time_step(double reach_time, bool* run_flag) {
-	for (int i = 0; i < chain_blocks_number; i++) {
-		if(chain_blocks[i].flow_time_step(reach_time,run_flag)==-1) return -1;
-	}
-	universal_time=reach_time;
-	return 0;
 }
 
 void get_chains_from_device()    //Copies chains back to host memory
@@ -294,8 +282,16 @@ void random_textures_refill(int n_cha, cudaStream_t stream_calc) {
 //	cudaDeviceSynchronize();
 }
 
+int flow_run(int res, double length, bool* run_flag, int *progress_bar) {
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(res), sizeof(int))); //Copy timestep for calculation
+	for (int i = 0; i < chain_blocks_number; i++) {
+		if(chain_blocks[i].time_step<1>(length,2,run_flag,progress_bar)==-1) return -1;
+	}
+	universal_time=length;
+	return 0;
+}
 
-int gpu_Gt_PCS(int res, double length, float *&t, float *&x, int s, int correlator_type, bool* run_flag, int *progress_bar) {
+int equilibrium_run(int res, double length, int s, int correlator_type, bool* run_flag, int *progress_bar) {
 	//Start simulation
 	//Calculate stress with timestep specified
 	//Update correlators on the fly for each chain (on GPU)
@@ -306,8 +302,8 @@ int gpu_Gt_PCS(int res, double length, float *&t, float *&x, int s, int correlat
 
 	int np = correlator_size + (s-1) * (correlator_size - (float)correlator_size/(float)correlator_res);
 
-	t = new float[np];
-	x = new float[np];
+	float *t = new float[np];
+	float *x = new float[np];
 
 	for (int j = 0; j < np; j++) {
 		t[j] = 0.0f;
@@ -501,9 +497,8 @@ void load_from_file(char *filename) {
 void gpu_clean() {
 	cout << "Memory cleanup.. ";
 
-	for (int i = 0; i < chain_blocks_number; i++){
-		chain_blocks[i].free_block();
-	}
+	delete[] chain_blocks;
+
 	if (PD_flag){
 		delete[] GEX_table;
 		delete[] GEXd_table;

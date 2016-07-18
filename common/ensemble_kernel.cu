@@ -158,6 +158,7 @@ template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_ker
 		QN = d_new_strent[j]; //second check if strent created last time step should go here
 	else
 		QN = tex2D(t_a_QN, make_offset(i, oft), j); // all access to strents is done through two operations: first texture fetch
+
 	float tcd;
 	if (d_CD_flag) { //If constraint dynamics is enabled
 		if (fetch_new_strent(i, oft))
@@ -166,7 +167,6 @@ template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_ker
 			tcd = tex2D(t_a_tCD, make_offset(i, oft), j);
 	} else
 		tcd = 0;
-
 
 	float dt;
 	if (type==1){//transform
@@ -327,8 +327,23 @@ __global__ __launch_bounds__(tpb_chain_kernel) void update_correlator(corr_devic
 	float4 stress;
 	for (int j=0; j<n; j++){
 		stress = tex2D(t_corr, i, j);
-		if (stress.w == 1.0f){
+		if (stress.w != -1.0f){
 			corr_add(gpu_corr, stress, 0, i, type); //add new value to the correlator
+		}
+	}
+}
+
+__global__ __launch_bounds__(tpb_chain_kernel) void flow_stress(corr_device gpu_corr, int n, float4* stress_average){
+	int i = blockIdx.x * blockDim.x + threadIdx.x; //Chain index
+	if (i >= dn_cha_per_call)
+		return;
+	float4 stress;
+	for (int j=0; j<n; j++){
+		stress = tex2D(t_corr, i, j);
+		if (stress.w != -1.0f){
+			atomicAdd(&(stress_average[(int)stress.w].x),stress.x);
+			atomicAdd(&(stress_average[(int)stress.w].y),stress.y);
+			atomicAdd(&(stress_average[(int)stress.w].z),stress.z);
 		}
 	}
 }
@@ -336,7 +351,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void update_correlator(corr_devic
 template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_kernel(
 		scalar_chains* gpu_chain_heads, float *tdt, float *reach_flag, 
 		float next_sync_time, int *d_offset, float4 *d_new_strent, 
-		float *d_new_tau_CD, int *d_correlator_time, int correlator_type,
+		float *d_new_tau_CD, int *d_write_time, int correlator_type,
 		int *rand_used, int *tau_CD_used_CD, int *tau_CD_used_SD, int stress_index)
 {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -350,23 +365,18 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 	d_offset[i] = offset_code(0xffff, +1);
 
 	float4 sum_stress;
-	if (type == 0){
-		sum_stress = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+	float4 sum_stress2;
+	if (correlator_type==0 || correlator_type==2){
+		sum_stress = make_float4(0.0f, 0.0f, 0.0f, -1.0f);
+		sum_stress2 = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 		surf2Dwrite(sum_stress, s_corr, sizeof(float4) * i, stress_index); //Write stress value to the stack
-	}	
+	}
 
 	if (reach_flag[i]!=0) {
 		return;
 	}
 
-	bool stop_cond;
-	if (type==0){
-		stop_cond = (gpu_chain_heads[i].time >= next_sync_time) && (d_universal_time + next_sync_time <= d_correlator_time[i] * d_correlator_res);
-	}
-	else if (type==1){
-		stop_cond = (gpu_chain_heads[i].time >= next_sync_time);
-	}
-	if (stop_cond || (gpu_chain_heads[i].stall_flag != 0)) {
+	if (((gpu_chain_heads[i].time >= next_sync_time) && (d_universal_time + next_sync_time <= d_write_time[i] * d_correlator_res)) || (gpu_chain_heads[i].stall_flag != 0)) {
 		reach_flag[i] = 1;
 		gpu_chain_heads[i].time-=next_sync_time;
 		tdt[i] = 0.0f;
@@ -379,61 +389,74 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 	float new_tCD = d_new_tau_CD[i];
 
 	float4 R1;
-	if (correlator_type==0){
+	if (type==0){
 		R1 = tex1D(t_a_R1,i);
 		surf1Dwrite(R1,s_b_R1,i*sizeof(float4));
-		
-		//check for correlator
-		if (d_universal_time + gpu_chain_heads[i].time > d_correlator_time[i] * d_correlator_res) { //TODO add d_correlator_time to gpu_chain_heads
-			if(correlator_type==0){//stress calc
-				for (int j = 0; j < tz; j++) {
-					float4 QN1;
-					if (fetch_new_strent(j, oft))
-						QN1 = new_strent;
-					else
-						QN1 = tex2D(t_a_QN, make_offset(j, oft), i);
-					sum_stress.x -= __fdividef(3.0f * QN1.x * QN1.y, QN1.w);
-					sum_stress.y -= __fdividef(3.0f * QN1.y * QN1.z, QN1.w);
-					sum_stress.z -= __fdividef(3.0f * QN1.x * QN1.z, QN1.w);
-				}
-				sum_stress.w = 1.0f;
-				surf2Dwrite(sum_stress, s_corr, sizeof(float4) * i, stress_index); //Write stress value to the stack
+	}
+
+	//check for correlator
+	if (d_universal_time + gpu_chain_heads[i].time > d_write_time[i] * d_correlator_res) { //TODO add d_correlator_time to gpu_chain_heads
+		if(correlator_type==0 || correlator_type==2){//stress calc
+			for (int j = 0; j < tz; j++) {
+				float4 QN1;
+				if (fetch_new_strent(j, oft))
+					QN1 = new_strent;
+				else
+					QN1 = tex2D(t_a_QN, make_offset(j, oft), i);
+				if (type==1) QN1 = kappa(QN1, olddt); //transformation
+				sum_stress.x -= __fdividef(3.0f * QN1.x * QN1.y, QN1.w);
+				sum_stress.y -= __fdividef(3.0f * QN1.y * QN1.z, QN1.w);
+				sum_stress.z -= __fdividef(3.0f * QN1.x * QN1.z, QN1.w);
+				sum_stress2.x -= __fdividef(3.0f * QN1.y * QN1.z, QN1.w);
+				sum_stress2.y -= __fdividef(3.0f * QN1.x * QN1.z, QN1.w);
+				sum_stress2.z += __fsqrt_rn(QN1.x * QN1.x + QN1.y * QN1.y + QN1.z * QN1.z);
 			}
 
-			if (correlator_type==1){//center of mass calc
-				float4 temp_sum = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-				float4 center_mass = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-				float4 prev_q = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-				for (int j = 0; j < tz; j++) {
-					float4 QN1;
-					if (fetch_new_strent(j, oft))
-						QN1 = new_strent;
-					else
-						QN1 = tex2D(t_a_QN, make_offset(j, oft), i);
+			sum_stress2.w = float(tz);
 
-					float4 term = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-					temp_sum	+=	prev_q;
-					term		+=	temp_sum;
-					term.x 		+=	__fdividef(QN1.x, 2);
-					term.y		+=	__fdividef(QN1.y, 2);
-					term.z		+=	__fdividef(QN1.z, 2);
-					center_mass.x += term.x * QN1.w / dnk;
-					center_mass.y += term.y * QN1.w / dnk;
-					center_mass.z += term.z * QN1.w / dnk;
+//			surf1Dwrite(sum_stress, s_stress, 32 * i);
+//			surf1Dwrite(sum_stress2, s_stress, 32 * i + 16);
+		}
+		if (correlator_type==0){
+			sum_stress.w = 1.0f;
+			surf2Dwrite(sum_stress, s_corr, sizeof(float4) * i, stress_index); //Write stress value to the stack
+		}
+		if (correlator_type==2){
+			sum_stress.w = (float)d_write_time[i];
+			surf2Dwrite(sum_stress, s_corr, sizeof(float4) * i, stress_index); //Write stress value to the stack
+		}
+		if (correlator_type==1){//center of mass calc
+			float4 temp_sum = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+			float4 center_mass = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+			float4 prev_q = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+			for (int j = 0; j < tz; j++) {
+				float4 QN1;
+				if (fetch_new_strent(j, oft))
+					QN1 = new_strent;
+				else
+					QN1 = tex2D(t_a_QN, make_offset(j, oft), i);
 
-					prev_q = QN1;
-				}
-				center_mass+=R1;
-				center_mass.w = 1.0f;
-				surf2Dwrite(center_mass, s_corr, sizeof(float4) * i, stress_index); //Write center of mass to the stack
+				float4 term = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+				temp_sum	+=	prev_q;
+				term		+=	temp_sum;
+				term.x 		+=	__fdividef(QN1.x, 2);
+				term.y		+=	__fdividef(QN1.y, 2);
+				term.z		+=	__fdividef(QN1.z, 2);
+				center_mass.x += term.x * QN1.w / dnk;
+				center_mass.y += term.y * QN1.w / dnk;
+				center_mass.z += term.z * QN1.w / dnk;
+
+				prev_q = QN1;
 			}
-
-			//Update counter
-			d_correlator_time[i]++;
-			if (d_universal_time + gpu_chain_heads[i].time > d_correlator_time[i] * d_correlator_res) {
-				return;
-				//do nothing until next step
-			}
+			center_mass+=R1;
+			center_mass.w = 1.0f;
+			surf2Dwrite(center_mass, s_corr, sizeof(float4) * i, stress_index); //Write center of mass to the stack
+		}
+		//Update counter
+		d_write_time[i]++;
+		if (d_universal_time + gpu_chain_heads[i].time > d_write_time[i] * d_correlator_res) {
+			return;
+			//do nothing until next step
 		}
 	}
 
@@ -508,6 +531,7 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		gpu_chain_heads[i].stall_flag = 2;
 	if (isinf(tdt[i]))
 		gpu_chain_heads[i].stall_flag = 3;
+
 	//update time
 	gpu_chain_heads[i].time += tdt[i];
 	//start picking the jump process
@@ -784,7 +808,7 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 
 __global__ __launch_bounds__(tpb_chain_kernel) //stress calculation
 void stress_calc(scalar_chains* gpu_chain_heads, float *tdt, int *d_offset,
-		float4 *d_new_strent) {
+		float4 *d_new_strent, float4* QN, int size) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= dn_cha_per_call)
 		return;
@@ -795,7 +819,6 @@ void stress_calc(scalar_chains* gpu_chain_heads, float *tdt, int *d_offset,
 
 	float4 sum_stress = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 	float4 sum_stress2 = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-	float ree_x = 0.0, ree_y = 0.0, ree_z = 0.0;
 	for (int j = 0; j < tz; j++) {
 		float4 QN1 = tex2D(t_a_QN, make_offset(j, oft), i);
 		if (fetch_new_strent(j, oft))
@@ -808,11 +831,8 @@ void stress_calc(scalar_chains* gpu_chain_heads, float *tdt, int *d_offset,
 		sum_stress2.x -= __fdividef(3.0f * QN1.y * QN1.z, QN1.w);
 		sum_stress2.y -= __fdividef(3.0f * QN1.x * QN1.z, QN1.w);
 		sum_stress2.z += __fsqrt_rn(QN1.x * QN1.x + QN1.y * QN1.y + QN1.z * QN1.z);
-		ree_x += QN1.x;
-		ree_y += QN1.y;
-		ree_z += QN1.z;
 	}
-	sum_stress2.w = float(tz); //__fsqrt_rn(ree_x*ree_x+ree_y*ree_y+ree_z*ree_z);
+	sum_stress2.w = float(tz);
 	surf1Dwrite(sum_stress, s_stress, 32 * i);
 	surf1Dwrite(sum_stress2, s_stress, 32 * i + 16);
 

@@ -24,22 +24,16 @@
 class ensemble_block {
 	//chain conformations on host (CPU)
 	int nc; //number of chains
+	int nsteps;
 	vector_chains chains; //vector values
 	scalar_chains* chain_heads; //scalar values
-
-	//chain conformation on device (GPU)
-	cudaArray* d_QN;  //device arrays for vector part of chain conformations
-	cudaArray* d_tCD; //these arrays used to store conformations
-	cudaArray* d_R1;
 
 	//regular device arrays
 	scalar_chains* gpu_chain_heads;
 
 	float *d_dt;       // time step size from previous time step. used for applying deformation
 	float *reach_flag; // flag that chain evolution reached required time
-					   //copied to host each times step
 	double block_time; //since chain_head do not store universal time due to SP issues
-	                   //see chain.h chain_head for explanation
 
 	// delayed dynamics --- see ensemble_kernel
 	int *d_offset;        //coded array shifting parameters
@@ -48,34 +42,21 @@ class ensemble_block {
 
 	//G(t) calculations
 	correlator *corr;     //correlator
-	int *d_correlator_time; //index of next cell to fill
+	int *d_write_time; //index of next cell to fill
+
+	float4* stress_average;
 
 public:
-	void init(int nc, vector_chains chains, scalar_chains* chain_heads, int s);
-	int flow_time_step(double reach_time, bool* run_flag);//void init_call_block(ensemble_call_block *cb, int nc, conformations chains, chain_head* chain_heads, int s)
-														  //copies chain conformations from host and prepare block variables
-	int equilibrium_time_step(double reach_time, int correlator_type, bool* run_flag, int *progress_bar);
-	//int correlator_update_call_block(int n_steps, ensemble_call_block *cb, bool* run_flag);
-	//performs time evolution
+	void init(int nc, vector_chains chains, scalar_chains* chain_heads, int nsteps);
+	template<int type> int time_step(double reach_time, int correlator_type, bool* run_flag, int *progress_bar);
 
 	int equilibrium_calc(double length, int correlator_type, bool* run_flag, int *progress_bar, int np, float* t, float* x);
-
-	void transfer_to_device();
-	//copies chain conformations to device from host
-
-	void transfer_from_device();
-	//copies chain conformations from device to host
-
-	stress_plus calc_stress(int *r_chain_count);
-	//calculates average stress over chains in the block, also return number of healthy chains
-
-	void free_block();
-	// free block memory
-
+	void transfer_to_device(); //copies chain conformations to device from host
+	void transfer_from_device(); //copies chain conformations from device to host
+	stress_plus calc_stress(int *r_chain_count); //calculates average stress over chains in the block, also return number of healthy chains
 	void activate_block(); //prepares block for performing time evolution
-	//i.e. copies chain conformations to working memory
-
 	void deactivate_block();//copies chain conformations to storing memory
+	~ensemble_block(); //destructor
 };
 
 #endif

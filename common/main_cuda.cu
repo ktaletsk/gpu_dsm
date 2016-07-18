@@ -72,7 +72,6 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 	//in>>int_t;//TODO f_d not implemented
 	in >> t_step_size;
 	in >> simulation_time;
-
 	int s = ceil(log(simulation_time/t_step_size/correlator_size)/log(correlator_res)) + 1; //number of correlator levels
 
 	//Print simulation parameters
@@ -88,7 +87,6 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 
 	cout << "simulation time, sync time" << "\n";
 	cout << simulation_time << '\t' << t_step_size << '\n';
-	cout << "number of correlator levels" << '\t' << s << '\n' << '\n';
 	//Toy parameters
 	//     Be=1.0;
 	//     NK=46;
@@ -122,7 +120,7 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 		host_chains_init(&eran);	// or generate equilibrium conformations
 
 	gpu_ran_init(pcd);	//init gpu random module
-	gpu_init(job_ID, pcd, s);	//prepare GPU to run DSM calculation
+	gpu_init(job_ID, pcd, (int)(simulation_time/t_step_size));	//prepare GPU to run DSM calculation
 
 	ctimer timer;
 	if (flow) {	//Flow calculations
@@ -134,34 +132,30 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 		//main loop
 		cout << "performing time evolution for the ensemble..\n";
 		cout << "time\tstress tensor(xx yy zz xy yz xz)\t<Lpp>\t<Z>\n";
-		for (double t_step = 0; t_step < simulation_time; t_step +=t_step_size) {
-			if(gpu_time_step(t_step + t_step_size, run_flag)==-1) return -1;
-			stress_plus stress = calc_stress();
-			cout << t_step + t_step_size << '\t' << stress << '\n';
-			tau_file << t_step + t_step_size << '\t' << stress << '\n';
-			tau_file.flush();
-		}
+
+		if(flow_run(t_step_size, simulation_time, run_flag, progress_bar)==-1) return -1;
+//		for (double t_step = 0; t_step < simulation_time; t_step +=t_step_size) {
+//			if(gpu_time_step(t_step + t_step_size, run_flag)==-1) return -1;
+//			stress_plus stress = calc_stress();
+//			cout << t_step + t_step_size << '\t' << stress << '\n';
+//			tau_file << t_step + t_step_size << '\t' << stress << '\n';
+//			tau_file.flush();
+//		}
 		timer.stop();
 		tau_file.close();
 		cout << "time evolution done.\n";
 	} else {		//Equlibrium calculations
+		timer.start();
 		if (equilibrium_type==1) {
 			cout << "G(t) calc...\n";
-			cout.flush();
-			float *t, *x;
-			timer.start();
-            if(gpu_Gt_PCS(t_step_size, simulation_time, t, x, s, 0, run_flag, progress_bar)==-1) return -1;
-			timer.stop();
+            if(equilibrium_run(t_step_size, simulation_time, s, 0, run_flag, progress_bar)==-1) return -1;
 		} else if (equilibrium_type==2){
 			cout << "MSD(t) calc...\n";
-			cout.flush();
-			float *t, *x;
-			timer.start();
-			if(gpu_Gt_PCS(t_step_size, simulation_time, t, x, s, 1, run_flag, progress_bar)==-1) return -1;
-			timer.stop();
+			if(equilibrium_run(t_step_size, simulation_time, s, 1, run_flag, progress_bar)==-1) return -1;
 		} else {
 			cout<< "There are no flow and no equilibrium quantity to calculate. Exiting... \n";
 		}
+		timer.stop();
 	}
 
 	get_chains_from_device();
