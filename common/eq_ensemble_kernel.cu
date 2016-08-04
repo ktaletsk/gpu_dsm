@@ -197,7 +197,7 @@ __device__ void corr_add(corr_device gpu_corr, float4 w, int k, int i, int type)
 		int ind2 = ind1;
 		for (int j = 0; j < p; ++j) {
 			temp_shift_2 = shift[ind2];
-			if (temp_shift_2.x != 0.0f || temp_shift_2.y != 0.0f || temp_shift_2.z != 0.0f) {
+			if (temp_shift_2.w == 1.0f) {
 				if (type==0)	correlation[j] += temp_shift_1 * temp_shift_2;
 				if (type==1)	correlation[j] += (temp_shift_1 - temp_shift_2)*(temp_shift_1 - temp_shift_2);
 				ncorrelation[j] += 1.0f;
@@ -212,7 +212,7 @@ __device__ void corr_add(corr_device gpu_corr, float4 w, int k, int i, int type)
 			if (ind2 < 0)
 				ind2 += p;
 			temp_shift_2 = shift[ind2];
-			if (temp_shift_2.x != 0.0f || temp_shift_2.y != 0.0f || temp_shift_2.z != 0.0f) {
+			if (temp_shift_2.w == 1.0f) {
 				if (type==0)	correlation[j] += temp_shift_1 * temp_shift_2;
 				if (type==1)	correlation[j] += (temp_shift_1 - temp_shift_2)*(temp_shift_1 - temp_shift_2);
 				ncorrelation[j] += 1.0f;
