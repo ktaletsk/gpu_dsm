@@ -122,6 +122,13 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 	gpu_ran_init(pcd);	//init gpu random module
 	gpu_init(job_ID, pcd, (int)(simulation_time/t_step_size));	//prepare GPU to run DSM calculation
 
+	if (distr) {		//Calculating distributions for Z,N,Q
+		cout << "\nSaving initial distribution to file...";
+		save_Z_distribution_to_file("distr_Z_initial.dat", 0);
+		save_N_distribution_to_file("distr_N_initial.dat", 0);
+		save_Q_distribution_to_file("distr_Q_initial.dat", 1);
+	}
+
 	ctimer timer;
 	if (flow) {	//Flow calculations
 		//tau file
@@ -151,7 +158,7 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
             if(equilibrium_run(t_step_size, simulation_time, s, 0, run_flag, progress_bar)==-1) return -1;
 		} else if (equilibrium_type==2){
 			cout << "MSD(t) calc...\n";
-			if(equilibrium_run(t_step_size, simulation_time, s, 1, run_flag, progress_bar)==-1) return -1;
+			if(msd_run(t_step_size, simulation_time, run_flag, progress_bar)==-1) return -1;
 		} else {
 			cout<< "There are no flow and no equilibrium quantity to calculate. Exiting... \n";
 		}
@@ -159,15 +166,14 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 	}
 
 	get_chains_from_device();
-	//     z_plot(chain_heads,Be, NK,N_cha);
 	if (savefile != NULL) {
-		cout << "saving chain conformations to " << savefile << "..";
+		cout << "\nSaving chain conformations to " << savefile << "..";
 		save_to_file(savefile);
 		cout << "done.\n";
 	}
 
 	if (distr) {		//Calculating distributions for Z,N,Q
-		cout << "Saving distribution to file...";
+		cout << "\nSaving distribution to file...";
 		if (CD_flag) {
 			save_Z_distribution_to_file("distr_Z.dat", 0);
 			save_N_distribution_to_file("distr_N.dat", 0);

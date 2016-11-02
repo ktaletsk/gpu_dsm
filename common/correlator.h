@@ -18,7 +18,7 @@
 #define CORRELATOR_H_
 #include "textures_surfaces.h"
 
-#define correlator_size 64 // number of points in each correlator
+#define correlator_size 16 // number of points in each correlator
 #define correlator_res 8 // number of points to calculate average
 
 texture<float4, 2, cudaReadModeElementType> t_correlator;//to read stress values from d_correlator

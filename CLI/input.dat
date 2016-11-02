@@ -1,23 +1,10 @@
 	1
-	1
-	50
-	100
-	0.0	0.0 0.0	0.0	0.0	0.0	0.0	0.0	0.0
-	1
+	3
+	10 10 10
+	1000
+	0.0     0.0 0.0 0.0     0.0     0.0     0.0     0.0     0.0
+	0
 	0
 	1
-	1
-	5000
-	
-! Input file for linear chains
-!Line by line description of input:
-! 1) + 2) theory parameters - for detailed description see Schieber et al., J. of Rheol. 47(1), 2003 an Khaliullin et al., Phys. Rew. Letters, 2008
-! 1) Beta --- entanglement spacing
-! 2) NK --- number of chain segments on the chain
-! 3) N_cha --- number of chains (ensemble size)
-! 4) Transpose of imposed velocity gradient, kappa. (1/(\tau_K))
-! 5) CD toggle: 0 - SD only / 1 - SD+CD
-! 6) Polydispersity toggle: 0 - monodisperse chains / 1 - GEX polydisperse distribution (specify parameters in polydisp.dat)
-! 7) Equilibrium calculation type: 1 - G(t) calculation / 2 - MSD of COM (works only if kappa=0)
-! 8) Syncronization time (\tau_K). How often stress is calculated. Cannot be less than one.
-! 9) Total simulation time (\tau_K)
+	1.0
+	500000

@@ -54,7 +54,7 @@ void z_plot(scalar_chains * chead,float Be, int Nk,int N_cha){
 	out.close();
 	float *Z=new float [N_cha];
 	for (int  i=0;i<N_cha;i++){
-	    Z[i]=chead[i].Z;
+	    Z[i]=chead[i].Z[1];
 	}
 	sort(Z, N_cha);
 	out.open("z_exp.dat");

@@ -37,7 +37,7 @@ extern vector_chains chains;	// arrays with vector part of chain conformations(Q
 extern scalar_chains* chain_heads;	//array with scalar part chain conformations header
 
 vector_chains chain_index(const int i);//absolute navigation i - is a global index of chains i:[0..N_cha-1]
-
+vector_chains chain_index_arm(const int i, const int arm);//absolute navigation i - is a global index of chains i:[0..N_cha-1]
 vector_chains chain_index(const int bi, const int i);	//block navigation
 //bi is a block index bi :[0..chain_blocks_number]
 //i - is a chain index in the block bi  i:[0..chains_per_call-1]
@@ -61,8 +61,8 @@ void save_Z_distribution_to_file(string filename, bool cumulative); //saves Z di
 void save_N_distribution_to_file(string filename, bool cumulative); //saves N distribution to file
 void save_Q_distribution_to_file(string filename, bool cumulative); //saves Q distribution to file
 void load_from_file(char *filename);  //loads chain conformations from a file
-
 int flow_run(int res, double length, bool* run_flag, int *progress_bar);  // performs time evolution of ensemble
+int msd_run(int res, double length, bool* run_flag, int *progress_bar);  // calculates mean-squared displacement of chains in ensemble
 int equilibrium_run(int res, double length, int s, int correlator_type, bool* run_flag, int *progress_bar); // (PCS correlator)
 
 void gpu_clean();  //free memory used by ensemble

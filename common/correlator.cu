@@ -169,12 +169,12 @@ void correlator::calc(int *t, float *x, int correlator_type){
 		++im;
 	}
 	for (int k=1; k<numcorrelators; ++k) {
-			for (int i=correlator_size/correlator_res; i<correlator_size; ++i) {
-				t[im] = (int)(lag_buffer[k * correlator_size + i]);
-				if (correlator_type==0)	x[im] = corr_buffer[k* correlator_size + i]/3.0f;
-				if (correlator_type==1)	x[im] = corr_buffer[k* correlator_size + i];
-				++im;
-			}
+		for (int i=correlator_size/correlator_res; i<correlator_size; ++i) {
+			t[im] = (int)(lag_buffer[k * correlator_size + i]);
+			if (correlator_type==0)	x[im] = corr_buffer[k* correlator_size + i]/3.0f;
+			if (correlator_type==1)	x[im] = corr_buffer[k* correlator_size + i];
+			++im;
+		}
 	}
 	npcorr = im;
 	delete[] lag_buffer;

@@ -36,7 +36,7 @@ DEPS = ../common/gpu_random.h ../common/cudautil.h ../common/cuda_call.h ../comm
 
 #For debug you need to generate CPU (-g) and GPU (-G) debug information
 #For ability to watch state of variables you need to generate additional information (-keep)
-debug: DEBUGFLAGS = -g -G -keep
+debug: DEBUGFLAGS = -g -G -keep -lineinfo
 debug: gpu_DSM
 
 all: gpu_DSM
@@ -46,6 +46,6 @@ gpu_DSM:  main.o $(OBJS)
 %.o: %.cpp $(DEPS)
 	$(CC) -c $<  $(GENCODE_FLAGS) $(DEBUGFLAGS) -o $@
 %.o: %.cu $(DEPS)
-	$(CC) -c $<  $(GENCODE_FLAGS) $(DEBUGFLAGS) --maxrregcount=24 -o $@
+	$(CC) -c $<  $(GENCODE_FLAGS) $(DEBUGFLAGS) -o $@
 clean:
 	rm -f *.o *~ *.cubin *.ptx *.ii *.i *module_id *.hash *fatbin* *cudafe*

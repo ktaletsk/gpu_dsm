@@ -87,18 +87,21 @@ void N_dist(int ztmp, int *&tN, int tNk, Ran* eran) {
 	}
 }
 
-void Q_dist(int tz, int *Ntmp, float *&Qxtmp, float *&Qytmp, float *&Qztmp, Ran* eran) {
+void Q_dist(int tz, int *Ntmp, bool dangling_begin, float *&Qxtmp, float *&Qytmp, float *&Qztmp, Ran* eran) {
 
 	Qxtmp = new float[tz];
 	Qytmp = new float[tz];
 	Qztmp = new float[tz];
-	if (tz > 2) {    //dangling ends is not part of distribution
-		for (int i = 1; i < tz - 1; i++) {
-			Qxtmp[i] = eran->gauss_distr() * sqrt(float(Ntmp[i]) / 3.0); //using gaussian distribution
-			Qytmp[i] = eran->gauss_distr() * sqrt(float(Ntmp[i]) / 3.0); //gaussian distribution is defined in math_module
-			Qztmp[i] = eran->gauss_distr() * sqrt(float(Ntmp[i]) / 3.0);
-		}
+//	if (tz > 2) {    //dangling ends is not part of distribution
+	int i;
+	if(dangling_begin)	i=1;
+	else	i=0;
+	for (; i < tz - 1; i++) {
+		Qxtmp[i] = eran->gauss_distr() * sqrt(float(Ntmp[i]) / 3.0); //using gaussian distribution
+		Qytmp[i] = eran->gauss_distr() * sqrt(float(Ntmp[i]) / 3.0); //gaussian distribution is defined in math_module
+		Qztmp[i] = eran->gauss_distr() * sqrt(float(Ntmp[i]) / 3.0);
 	}
+//	}
 }
 
 __host__ __device__ float tau_dist(float p,float Be, float Nk) {
@@ -128,10 +131,10 @@ __host__ __device__ float tau_dist(float p,float Be, float Nk) {
 	}
 }
 
-void chain_init(scalar_chains *chain_head, vector_chains data, int tnk, int z_max, bool PD_flag, Ran* eran) {
+void chain_init(int* z, vector_chains data, int tnk, int z_max, bool dangling_begin, bool PD_flag, Ran* eran) {
 	//Choose z for the chain
 	int tz = z_dist_truncated(tnk, z_max, eran);   //z distribution
-
+	*z = tz;
 	//Create temporary array for characteristic entanglement lifetime tau^CD
 	float *tent_tau = new float[tz - 1];
 
@@ -165,25 +168,28 @@ void chain_init(scalar_chains *chain_head, vector_chains data, int tnk, int z_ma
 	N_dist(tz, tN, tnk, eran);
 
 	//Generate Qi for every strand
-	Q_dist(tz, tN, Qxtmp, Qytmp, Qztmp, eran); //Q distributions //realization Free_Energy_module(Gauss)
+	Q_dist(tz, tN, dangling_begin, Qxtmp, Qytmp, Qztmp, eran); //Q distributions //realization Free_Energy_module(Gauss)
 
 	//Copy results from temporary array to 'data'
 	memset(data.QN, 0, sizeof(float) * z_max * 4);
 	memset(data.R1, 0, sizeof(float) * 4);
-	for (int k = 1; k < tz - 1; k++) { //all except first and last ent-t
-		data.QN[k] = make_float4(Qxtmp[k], Qytmp[k], Qztmp[k], float(tN[k]));
-		data.tau_CD[k] = 1.0f / tent_tau[k];
-	}
-	//Set first entanglement
-	data.tau_CD[0] = 1.0f / tent_tau[0];
-	//Set_dangling_ends
-	data.QN[0] = make_float4(0.0f, 0.0f, 0.0f, float(tN[0]));
-	data.QN[tz - 1] = make_float4(0.0f, 0.0f, 0.0f, float(tN[tz - 1]));
 
-	//Set chain parameters in 'chain_head'
-	chain_head->Z = tz;
-	chain_head->time = 0.0;
-	chain_head->stall_flag = 0;
+	for (int k = 0; k < tz - 1; k++) { //all except first and last ent-t
+		data.QN[k] = make_float4(Qxtmp[k], Qytmp[k], Qztmp[k], float(tN[k]));
+//		cout << "\n" << data.QN[k].x << "\t" << data.QN[k].y << "\t" << data.QN[k].z << "\t" << data.QN[k].w;
+//		data.tau_CD[k] = 1.0f / tent_tau[k];
+		data.tau_CD[k] = 0.0f;
+	}
+
+	//Set first entanglement
+//	data.tau_CD[0] = 1.0f / tent_tau[0];
+	data.tau_CD[0] = 0.0f;
+	//Set_dangling_ends
+	if (dangling_begin){
+		data.QN[0] = make_float4(0.0f, 0.0f, 0.0f, float(tN[0]));
+	}
+	data.QN[tz - 1] = make_float4(0.0f, 0.0f, 0.0f, float(tN[tz - 1]));
+//	cout << "\n" << data.QN[tz - 1].x << "\t" << data.QN[tz - 1].y << "\t" << data.QN[tz - 1].z << "\t" << data.QN[tz - 1].w;
 
 	//Calculate center of mass for MSD calculations
 	float4 sum_stress = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -214,38 +220,45 @@ void chain_init(scalar_chains *chain_head, vector_chains data, int tnk, int z_ma
 	delete[] tent_tau;
 }
 
+void converttoQhat(vector_chains datai, float4 Q1){
+	datai.QN[0].x -= Q1.x;
+	datai.QN[0].y -= Q1.y;
+	datai.QN[0].z -= Q1.z;
+//	printf("\n%f\t%f\t%f",datai.QN[0].x,datai.QN[0].y,datai.QN[0].z);
+}
+
 void print(ostream& stream, const vector_chains c, const scalar_chains chead) {
 	stream<<"time "<<universal_time+chead.time<<'\n';
 	stream<<"Z: "<<chead.Z<<'\n';
 // 	stream<<"dummy: "<<chead.dummy<<'\n';//can be used for debug
 	stream << "N:  ";
-	for (int j = 0; j < chead.Z; j++)
+	for (int j = 0; j < chead.Z[1]; j++)
 		stream << c.QN[j].w << ' ';
 	stream << "\nQx: ";
-	for (int j = 0; j < chead.Z; j++)
+	for (int j = 0; j < chead.Z[1]; j++)
 		stream << c.QN[j].x << ' ';
 	stream << "\nQy: ";
-	for (int j = 0; j < chead.Z; j++)
+	for (int j = 0; j < chead.Z[1]; j++)
 		stream << c.QN[j].y << ' ';
 	stream << "\nQz: ";
-	for (int j = 0; j < chead.Z; j++)
+	for (int j = 0; j < chead.Z[1]; j++)
 		stream << c.QN[j].z << ' ';
 	stream << '\n';
 }
 
 void save_to_file(ostream& stream, const vector_chains c, const scalar_chains chead) {
 	stream.write((char*) &chead, sizeof(scalar_chains));
-	for (int j = 0; j < chead.Z; j++)
+	for (int j = 0; j < chead.Z[1]; j++)
 		stream.write((char*) &(c.QN[j]), sizeof(float4));
-	for (int j = 0; j < chead.Z; j++)
+	for (int j = 0; j < chead.Z[1]; j++)
 		stream.write((char*) &(c.tau_CD[j]), sizeof(float));
 }
 
 void load_from_file(istream& stream, const vector_chains c, const scalar_chains *chead) {
 	stream.read((char*) chead, sizeof(scalar_chains));
-	for (int j = 0; j < chead->Z; j++)
+	for (int j = 0; j < chead->Z[1]; j++)
 		stream.read((char*) &(c.QN[j]), sizeof(float4));
-	for (int j = 0; j < chead->Z; j++)
+	for (int j = 0; j < chead->Z[1]; j++)
 		stream.read((char*) &(c.tau_CD[j]), sizeof(float));
 }
 

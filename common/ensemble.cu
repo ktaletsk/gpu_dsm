@@ -82,6 +82,17 @@ vector_chains chain_index(const int i) { //absolute navigation i - is a global i
 	ptr.R1 = &(chains.R1[i]);
 	return ptr;
 }
+vector_chains chain_index_arm(const int i, const int arm) { //absolute navigation i - is a global index of chains i:[0..N_cha-1]
+	vector_chains ptr;
+	int shift=0;
+	for (int k=0; k<arm; k++){
+		shift += NK_arms[k];
+	}
+	ptr.QN = &(chains.QN[z_max * i + shift]);
+	ptr.tau_CD = &(chains.tau_CD[z_max * i + shift]);
+	ptr.R1 = &(chains.R1[i]);
+	return ptr;
+}
 
 vector_chains chain_index(const int bi, const int i) {    //block navigation
 	//bi is a block index bi :[0..chain_blocks_number]
@@ -95,7 +106,13 @@ vector_chains chain_index(const int bi, const int i) {    //block navigation
 
 void chains_malloc() {
 	z_max = NK;
-	chain_heads = new scalar_chains[N_cha];
+	cudaMallocManaged((void**)&chain_heads, sizeof(scalar_chains) * N_cha);
+
+	for (int k=0; k<N_cha; k++){
+		chain_heads[k].stall_flag = 0;
+		chain_heads[k].time = 0.0f;
+		cudaMallocManaged((void**)&(chain_heads[k].Z), sizeof(int) * narms);
+	}
 	cudaMallocManaged((void**)&(chains.QN), sizeof(float4) * N_cha * z_max);
 	cudaMallocManaged((void**)&(chains.tau_CD), sizeof(float4) * N_cha * z_max);
 	cudaMallocManaged((void**)&(chains.R1), sizeof(float4) * N_cha);
@@ -106,8 +123,13 @@ void host_chains_init(Ran* eran) {
 	cout << "generating chain conformations on host..";
 	universal_time=0.0;
 	for (int i = 0; i < N_cha; i++) {
-		vector_chains ptr = chain_index(i);
-		chain_init(&(chain_heads[i]), ptr, NK, z_max, PD_flag, eran);
+		for (int arm=0; arm<narms; arm++){
+			chain_init(&(chain_heads[i].Z[arm]), chain_index_arm(i,arm), NK_arms[arm], NK_arms[arm], false, PD_flag, eran);
+		}
+		float4 Q1 = chain_index_arm(i,0).QN[0];
+		for (int arm=0; arm<narms; arm++) {
+			converttoQhat(chain_index_arm(i,arm), Q1);
+		}
 	}
 	cout << "done\n";
 }
@@ -120,6 +142,9 @@ void gpu_init(int seed, p_cd* pcd, int nsteps) {
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(dBe, &Be, sizeof(float)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(dnk, &NK, sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_z_max, &z_max, sizeof(int)));
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_z_max_arms, NK_arms, sizeof(int)*narms));
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(dnk_arms, NK_arms, sizeof(int)*narms));
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_narms, &narms, sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_kappa_xx, &kxx, sizeof(float)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_kappa_xy, &kxy, sizeof(float)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_kappa_xz, &kxz, sizeof(float)));
@@ -154,6 +179,9 @@ void gpu_init(int seed, p_cd* pcd, int nsteps) {
 	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
 	cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
 
+	cudaMalloc((void**) &d_value_found, sizeof(int) * rsz);
+	cudaMalloc((void**) &d_shift_found, sizeof(int) * rsz);
+
 	cudaMallocArray(&d_a_QN, &channelDesc4, z_max, rsz, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_a_tCD, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_a_R1, &channelDesc4, rsz, 1, cudaArraySurfaceLoadStore);
@@ -165,10 +193,14 @@ void gpu_init(int seed, p_cd* pcd, int nsteps) {
 	cudaMallocArray(&d_b_R1, &channelDesc4, rsz, 1, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_corr_b, &channelDesc4, rsz, stressarray_count, cudaArraySurfaceLoadStore);
 
-	cudaMallocArray(&d_sum_W, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
+	cudaMallocArray(&d_sum_W, &channelDesc4, z_max, rsz, cudaArraySurfaceLoadStore);
+	cudaMallocArray(&d_sum_W_sorted, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_stress, &channelDesc4, rsz * 2, 0, cudaArraySurfaceLoadStore);
+	cudaMallocArray(&d_ft, &channelDesc1, rsz, 0, cudaArraySurfaceLoadStore);
 	cudaBindSurfaceToArray(s_stress, d_stress);
 	cudaBindSurfaceToArray(s_sum_W, d_sum_W);
+	cudaBindSurfaceToArray(s_sum_W_sorted, d_sum_W_sorted);
+	cudaBindSurfaceToArray(s_ft, d_ft);
 
 	cout << "\n";
 	cout << " GPU random generator init: \n";
@@ -291,6 +323,15 @@ int flow_run(int res, double length, bool* run_flag, int *progress_bar) {
 	return 0;
 }
 
+int msd_run(int res, double length, bool* run_flag, int *progress_bar) {
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(res), sizeof(int))); //Copy timestep for calculation
+	for (int i = 0; i < chain_blocks_number; i++) {
+		if(chain_blocks[i].time_step<0>(length,1,run_flag,progress_bar)==-1) return -1;
+	}
+	universal_time=length;
+	return 0;
+}
+
 int equilibrium_run(int res, double length, int s, int correlator_type, bool* run_flag, int *progress_bar) {
 	//Start simulation
 	//Calculate stress with timestep specified
@@ -314,18 +355,18 @@ int equilibrium_run(int res, double length, int s, int correlator_type, bool* ru
 		chain_blocks[i].equilibrium_calc(length, correlator_type, run_flag, progress_bar, np, t, x);
 	}
 
-	ofstream correlator_file;
-	if(correlator_type==0)	correlator_file.open(filename_ID("G",false));
-	if(correlator_type==1)	correlator_file.open(filename_ID("MSD",false));
-	cout << "\n";
-	int actual_np = (np - correlator_size + floor(length/((float)res*pow((float)correlator_res,(s-1)))));
-	for (int j = 0; j < actual_np; j++) {
-		cout << t[j] << '\t' << x[j] << '\n';
-		correlator_file << t[j] << '\t' << x[j] << '\n';
-	}
-	correlator_file.close();
-	delete[] t;
-	delete[] x;
+//	ofstream correlator_file;
+//	if(correlator_type==0)	correlator_file.open(filename_ID("G",false));
+//	if(correlator_type==1)	correlator_file.open(filename_ID("MSD",false));
+//	cout << "\n";
+//	int actual_np = (np - correlator_size + floor(length/((float)res*pow((float)correlator_res,(s-1)))));
+//	for (int j = 0; j < actual_np; j++) {
+//		cout << t[j] << '\t' << x[j] << '\n';
+//		correlator_file << t[j] << '\t' << x[j] << '\n';
+//	}
+//	correlator_file.close();
+//	delete[] t;
+//	delete[] x;
 	return 0;
 }
 
@@ -344,40 +385,42 @@ void save_to_file(char *filename) {
 		cout << "file error\n";
 }
 
-void save_Z_distribution_to_file(string filename /*char *filename*/, bool cumulative) {
-
+void save_Z_distribution_to_file(string filename, bool cumulative) {
 	ofstream file(filename.c_str(), ios::out);
 	if (file.is_open()) {
-//		file<<"Number of chains: "<<N_cha<<"\n";
-
 		//Calculation of Z distribution in ensemble
 
-		//Search for maximum and minimum of Z
-		int Zmin = chain_heads[0].Z;
-		int Zmax = chain_heads[0].Z;
-		for (int i = 0; i < N_cha; i++) {
-			if (chain_heads[i].Z > Zmax)
-				Zmax = chain_heads[i].Z;
-			if (chain_heads[i].Z < Zmin)
-				Zmin = chain_heads[i].Z;
-		}
-
-		//Sum up coinciding Z
-		float P[N_cha];
-		for (int j = Zmin; j <= Zmax; j++) {
-			P[j]=0.0f;
-			int counter=0;
+		for (int arm=0; arm < narms; arm++){
+			//Search for maximum and minimum of Z
+			int Zmin = chain_heads[0].Z[arm];
+			int Zmax = chain_heads[0].Z[arm];
 			for (int i = 0; i < N_cha; i++) {
-				if (chain_heads[i].Z == j && !cumulative)
-					counter++;
-				if (chain_heads[i].Z <= j && cumulative)
-					counter++;
+				if (chain_heads[i].Z[arm] > Zmax)
+					Zmax = chain_heads[i].Z[arm];
+				if (chain_heads[i].Z[arm] < Zmin)
+					Zmin = chain_heads[i].Z[arm];
 			}
-			P[j] = (float) counter / N_cha;
-		}
 
-		for (int i = Zmin; i <= Zmax; i++)
-			file << i << "\t" << P[i] << "\n";
+			//Sum up coinciding Ze
+			float* P = new float[Zmax - Zmin +1];
+			for (int j = Zmin; j <= Zmax; j++) {
+				P[j-Zmin]=0.0f;
+				int counter=0;
+				for (int i = 0; i < N_cha; i++) {
+					if (chain_heads[i].Z[arm] == j && !cumulative)
+						counter++;
+					if (chain_heads[i].Z[arm] <= j && cumulative)
+						counter++;
+				}
+				P[j-Zmin] = (float) counter / N_cha;
+			}
+			file << "Arm " << arm;
+			for (int i = Zmin; i <= Zmax; i++){
+				file << "\n" << i << "\t" << P[i-Zmin];
+			}
+			file << "\n";
+			delete[] P;
+		}
 	} else
 		cout << "file error\n";
 }
@@ -385,93 +428,115 @@ void save_Z_distribution_to_file(string filename /*char *filename*/, bool cumula
 void save_N_distribution_to_file(string filename, bool cumulative) {
 	ofstream file(filename.c_str(), ios::out);
 	if (file.is_open()) {
-		//Search for maximum and minimum of N across all strands in all chains
-		int Nmin = chain_index(0).QN[0].w;
-		int Nmax = chain_index(0).QN[0].w;
-		int Nstr = 0;
-		for (int i = 0; i < N_cha; i++) {
-			for (int j = 0; j < chain_heads[i].Z; j++) {
-				if (chain_index(i).QN[j].w > Nmax)
-					Nmax = chain_index(i).QN[j].w;
-				if (chain_index(i).QN[j].w < Nmin)
-					Nmin = chain_index(i).QN[j].w;
-				if (chain_index(i).QN[j].w == 0)
-					cout << "Zero length strand in chain " << i << ", #" << j << "\n";
-			}
-			Nstr += chain_heads[i].Z;
-		}
-
-		//Sum up coinciding N
-		float P[Nstr];
-		for (int n = Nmin; n <= Nmax; n++) {
-			P[n]=0.0f;
-			int counter=0;
+		int run_sum = 0;
+		for (int arm=0; arm < narms; arm++){
+			//Search for maximum and minimum of N across all strands in all chains
+			int Nmin = chain_index(0).QN[run_sum+1].w;
+			int Nmax = chain_index(0).QN[run_sum+1].w;
+			int Nstr = 0;
 			for (int i = 0; i < N_cha; i++) {
-				for (int j = 0; j < chain_heads[i].Z; j++) {
-					if (chain_index(i).QN[j].w == n && !cumulative)
-						counter++;
-					if (chain_index(i).QN[j].w <= n && cumulative)
-						counter++;
+				for (int j = 1; j < chain_heads[i].Z[arm]; j++) {
+					//cout << "\nArm " << arm << "\tChain " << i << "\tStrand " << j << "\tN " << chain_index(i).QN[run_sum+j].w;
+					if (chain_index(i).QN[run_sum+j].w > Nmax)
+						Nmax = chain_index(i).QN[run_sum+j].w;
+					if (chain_index(i).QN[run_sum+j].w < Nmin)
+						Nmin = chain_index(i).QN[run_sum+j].w;
+					if (chain_index(i).QN[run_sum+j].w == 0){
+						cout << "Zero length strand in chain " << i << ", #" << j << "\n";
+					}
+				}
+				Nstr += chain_heads[i].Z[arm]-1;
+			}
+
+			//Sum up coinciding N
+			float P[Nstr];
+			file << "\nArm " << arm;
+			for (int n = Nmin; n <= Nmax; n++) {
+				P[n]=0.0f;
+				int counter=0;
+				for (int i = 0; i < N_cha; i++) {
+					for (int j = 1; j < chain_heads[i].Z[arm]; j++) {
+						if (chain_index(i).QN[run_sum+j].w == n && !cumulative)
+							counter++;
+						if (chain_index(i).QN[run_sum+j].w <= n && cumulative)
+							counter++;
+					}
+				}
+				P[n] += (float)counter / Nstr;
+				file << "\n" << n << "\t" << P[n];
+			}
+
+			//Near branching point
+			Nmin = chain_index(0).QN[run_sum].w;
+			Nmax = chain_index(0).QN[run_sum].w;
+			Nstr = N_cha;
+			for (int i = 0; i < N_cha; i++) {
+				if (chain_index(i).QN[run_sum].w > Nmax)
+					Nmax = chain_index(i).QN[run_sum].w;
+				if (chain_index(i).QN[run_sum].w < Nmin)
+					Nmin = chain_index(i).QN[run_sum].w;
+				if (chain_index(i).QN[run_sum].w == 0){
+					cout << "Zero length strand in chain (near branching point)" << i << "\n";
 				}
 			}
-			P[n] += (float)counter / Nstr;
-			file << n << "\t" << P[n] << "\n";
+
+			//Sum up coinciding N
+			float P2[Nstr];
+			file << "\nArm " << arm << " (near branching point)";
+			for (int n = Nmin; n <= Nmax; n++) {
+				P2[n]=0.0f;
+				int counter=0;
+				for (int i = 0; i < N_cha; i++) {
+					if (chain_index(i).QN[run_sum].w == n && !cumulative)
+						counter++;
+					if (chain_index(i).QN[run_sum].w <= n && cumulative)
+						counter++;
+				}
+				P2[n] += (float)counter / Nstr;
+				file << "\n" << n << "\t" << P2[n];
+			}
+			run_sum += NK_arms[arm];
 		}
 	} else
 		cout << "file error\n";
-}
-
-int compare(const void * a, const void * b) {
-	float fa = *(const float*) a;
-	float fb = *(const float*) b;
-	return (fa > fb) - (fa < fb);
+	return;
 }
 
 void save_Q_distribution_to_file(string filename, bool cumulative) {
 	ofstream file(filename.c_str(), ios::out);
 	if (file.is_open()) {
-		//Search for maximal and minimal value of |Q| across all strands in all chains
+		int run_sum = 0;
+		for (int arm=0; arm < narms; arm++){
+			std::vector<float> Q;
+			std::vector<float> P;
 
-		int Nstr = 0;
-		int prev[N_cha];
-
-		for (int i = 0; i < N_cha; i++) {
-			Nstr += chain_heads[i].Z - 2;
-			if (i == 0)
-				prev[i] = 0;
-			else
-				prev[i] = prev[i - 1] + chain_heads[i - 1].Z - 2;
-		}
-
-		//Calculating strand vector lengths
-		float Q[Nstr];
-		for (int i = 0; i < N_cha; i++) {
-			for (int j = 1; j < chain_heads[i].Z - 1; j++) {
-				Q[prev[i] + j - 1] = sqrt(chain_index(i).QN[j].x * chain_index(i).QN[j].x + chain_index(i).QN[j].y * chain_index(i).QN[j].y + chain_index(i).QN[j].z * chain_index(i).QN[j].z);
-				if (Q[prev[i] + j - 1] < 0)
-					cout << "NaN detected at strand " << prev[i] + j << "\n";
+			//Calculating strand vector lengths
+			for (int i = 0; i < N_cha; i++) {
+				for (int j = 1; j < chain_heads[i].Z[arm] - 1; j++) {
+					float tt = sqrt(chain_index(i).QN[run_sum+j].x * chain_index(i).QN[run_sum+j].x + chain_index(i).QN[run_sum+j].y * chain_index(i).QN[run_sum+j].y + chain_index(i).QN[run_sum+j].z * chain_index(i).QN[run_sum+j].z);
+					Q.push_back(tt);
+					if (tt < 0 || tt!=tt)
+						cout << "\nProblem detected at strand " << j << " of chain " << i << " length is equal " << tt;
+				}
 			}
-		}
-		cout << "\n";
+			cout << "\n";
 
-		//Sort vector lenghts
-		qsort(Q, Nstr, sizeof(float), compare);
+			//Sort vector lenghts
+			std::sort(Q.begin(), Q.end());
 
-		//Calculate probabilities
-		float P[Nstr];
-		for (int i = 0; i < Nstr; i++) {
-			if (i != 0) {
-				if (Q[i] == Q[i - 1])
-					P[i - 1] = (float) i / (float) Nstr;
+			for(int i=0; i < Q.size(); i++){
+				P.push_back( (float)i / (float)Q.size() );
 			}
-			P[i] = (float) i / (float) Nstr;
-		}
-		int quant = 10;
-		for (int i = 0; i < Nstr / quant; i++) {
-			file << Q[i * quant] << "\t" << P[i * quant] << "\n";
+
+			int quant = 1;
+			file << "\nArm " << arm;
+			for (int i = 0; i < Q.size() / quant; i++) {
+				file << "\n" << Q[i * quant] << "\t" << P[i * quant];
+			}
+			run_sum += NK_arms[arm];
 		}
 	} else
-		cout << "file error\n";
+		cout << "\nfile error";
 }
 
 void load_from_file(char *filename) {
@@ -495,9 +560,16 @@ void load_from_file(char *filename) {
 }
 
 void gpu_clean() {
+
 	cout << "Memory cleanup.. ";
 
 	delete[] chain_blocks;
+
+	cudaFree(chains.QN);
+	cudaFree(chains.tau_CD);
+	cudaFree(chains.R1);
+
+	cudaFree(chain_heads);
 
 	if (PD_flag){
 		delete[] GEX_table;
@@ -505,6 +577,7 @@ void gpu_clean() {
 		cudaFreeArray(d_gamma_table);
 		cudaFreeArray(d_gamma_table_d);
 	}
+
 	cudaFreeArray(d_a_QN);
 	cudaFreeArray(d_a_tCD);
 	cudaFreeArray(d_b_QN);
@@ -514,6 +587,8 @@ void gpu_clean() {
 	cudaFreeArray(d_corr_a);
 	cudaFreeArray(d_corr_b);
 	cudaFreeArray(d_sum_W);
+	cudaFreeArray(d_sum_W_sorted);
+	cudaFreeArray(d_ft);
 	cudaFreeArray(d_stress);
 
 	cudaFreeArray(d_uniformrand);
@@ -523,6 +598,8 @@ void gpu_clean() {
 	cudaFree(d_tau_CD_used_SD);
 	cudaFree(d_tau_CD_used_CD);
 	cudaFree(d_rand_used);
+	cudaFree(d_value_found);
+	cudaFree(d_shift_found);
 	cudaFree(d_random_gens);
 	cudaFree(d_random_gens2);
 

@@ -41,6 +41,14 @@
 #define tpb_chain_kernel 256
 #define tpb_strent_kernel 32
 
+#define NUM_BANKS 16
+#define LOG_NUM_BANKS 4
+#ifdef ZERO_BANK_CONFLICTS
+#define CONFLICT_FREE_OFFSET(n) ((n) >> NUM_BANKS + (n) >> (2 * LOG_NUM_BANKS))
+#else
+#define CONFLICT_FREE_OFFSET(n) ((n) >> LOG_NUM_BANKS)
+#endif
+
 #include "textures_surfaces.h"
 #include "chain.h"
 
@@ -48,7 +56,10 @@
 __constant__ float d_universal_time;
 __constant__ float dBe;
 __constant__ int dnk;
+__constant__ int dnk_arms[100];
 __constant__ int d_z_max; //limits actual array size. might come useful for large beta values and for polydisperse systems
+__constant__ int d_z_max_arms[100];//limits for each arm
+__constant__ int d_narms;
 __constant__ int dn_cha_per_call; //number of chains in this call. cannot be bigger than chains_per_call
 __constant__ float d_kappa_xx, d_kappa_xy, d_kappa_xz, d_kappa_yx, d_kappa_yy,d_kappa_yz, d_kappa_zx, d_kappa_zy, d_kappa_zz;
 
@@ -56,10 +67,6 @@ __constant__ float d_kappa_xx, d_kappa_xy, d_kappa_xz, d_kappa_yx, d_kappa_yy,d_
 __constant__ int d_CD_flag;
 __constant__ float d_CD_create_prefact;
 __constant__ int d_correlator_res;
-//Next variables actually declared in ensemble_block.h
-//    float *d_dt; // time step size from prevous time step. used for appling deformation
-//    float *reach_flag;// flag that chain evolution reached required time
-//copied to host each times step
 
 // delayed dynamics --- how does it work:
 // There are entanglement parallel portion of the code and chain parallel portion.
@@ -68,10 +75,6 @@ __constant__ int d_correlator_res;
 // It applies only some simpliest chain conformation changes(SD shifting).
 // The Information about complex chain conformation changes(entanglement creation/destruction) is stored in temp arrays d_offset, d_new_strent,d_new_tau_CD.
 // Complex changes are applied next time step by entanglement parallel part.
-
-//    int *d_offset;//coded shifting parameters
-//    float4 *d_new_strent;//new strent which shoud be inserted in the middle of the chain//TODO two new_strents will allow do all the updates at once
-//    float *d_new_tau_CD;//new life time
 
 //float4 math operators
 inline __device__ void operator+=(float4 &a, float4 b) {
@@ -85,6 +88,9 @@ inline __device__ float4 operator/(float4 a, float b) {
 }
 inline __device__ float4 operator*(float4 a, float4 b) {
 	return make_float4(a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w);
+}
+inline __device__ float4 operator*(float4 a, float b) {
+	return make_float4(a.x * b, a.y * b, a.z * b, a.w * b);
 }
 inline __device__ float4 operator+(float4 a, float4 b) {
 	return make_float4(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w);
@@ -129,13 +135,10 @@ __device__   __forceinline__ float4 kappa(const float4 QN, const float dt) {//Qx
 			QN.z + dt * d_kappa_zx * QN.x + dt * d_kappa_zy * QN.y + dt * d_kappa_zz * QN.z, QN.w);
 }
 
-
-
 //The entanglement parallel part of the code
 //2D kernel: i- entanglement index j - chain index
 template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void strent_kernel(
-		scalar_chains* gpu_chain_heads, float *tdt, int *d_offset, float4 *d_new_strent, 
-		float *d_new_tau_CD)
+		scalar_chains* chain_heads, float *tdt, int *d_offset, float4 *d_new_strent, float *d_new_tau_CD)
 {
 	//Calculate kernel index
 	int i = blockIdx.x * blockDim.x + threadIdx.x;//strent index
@@ -145,38 +148,51 @@ template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_ker
 	if ((j >= dn_cha_per_call) || (i >= d_z_max))
 		return;
 
-	int tz = gpu_chain_heads[j].Z; //Current chain size
-	if (i >= tz) //Check if entaglement index is over chain size
+	int arm=0;
+	int run_sum=0;
+	for (int k=0; i>=run_sum; k++){
+		run_sum+=d_z_max_arms[k];
+		arm = k;
+	}
+	int ii = i-run_sum+d_z_max_arms[arm];
+	int jj = j*d_narms+arm;
+
+	int tz = chain_heads[j].Z[arm]; //Current chain size
+	if (ii >= tz) //Check if entaglement index is over chain size
 		return;
 
 	//When new entaglements are created we need to shift index +1(destruction, skip one strent), 0(nothing happens) or -1(new strent created before)
-	int oft = d_offset[j]; //Offset for current chain
+	int oft = d_offset[jj]; //Offset for current chain
 
 	//fetch
 	float4 QN;
-	if (fetch_new_strent(i, oft))
+	if (fetch_new_strent(i, oft)){
 		QN = d_new_strent[j]; //second check if strent created last time step should go here
-	else
+//		printf("\nNew strent\t%i\t%i\t%i\t%i\t%i\t%f\t%f\t%f\t%f\t%i",i,arm,ii,d_z_max_arms[arm],tz,QN.x,QN.y,QN.z,QN.w,oft);
+	}
+	else{
 		QN = tex2D(t_a_QN, make_offset(i, oft), j); // all access to strents is done through two operations: first texture fetch
+//		printf("\nRead\t%i\t%i\t%i\t%i\t%i\t%f\t%f\t%f\t%f\t%i\t%i\t%i\t%i",i,arm,ii,d_z_max_arms[arm],tz,QN.x,QN.y,QN.z,QN.w,oft,offset_index(oft),offset_dir(oft),make_offset(i, oft));
+	}
 
 	float tcd;
-	if (d_CD_flag) { //If constraint dynamics is enabled
+//	if (d_CD_flag) { //If constraint dynamics is enabled
 		if (fetch_new_strent(i, oft))
 			tcd = d_new_tau_CD[j];
 		else
 			tcd = tex2D(t_a_tCD, make_offset(i, oft), j);
-	} else
-		tcd = 0;
+//	} else
+//		tcd = 0;
 
 	float dt;
 	if (type==1){//transform
 		dt = tdt[j];
 		QN = kappa(QN, dt);
 	}
-
+//	printf("\n%i\t%i\t%i\t%i\t%i\t%f\t%f\t%f\t%f\t%i",i,arm,ii,d_z_max_arms[arm],tz,QN.x,QN.y,QN.z,QN.w,oft);
 	//fetch next strent
-	if (i < tz - 1) {
-		float2 wsh = make_float2(0.0f, 0.0f);
+	if ((ii > 0) && (ii < tz - 1)) {
+		float4 wsh = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 		float4 QN2; //Q for next strent
 		if (fetch_new_strent(i + 1, oft))
 			QN2 = d_new_strent[j];
@@ -193,35 +209,277 @@ template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_ker
 
 		if (QN2.w > 1.0f) { //N=1 mean that shift is not possible, also ot will lead to dividing on zero error
 			//float prefact=__powf( __fdividef(QN.w*QN2.w,(QN.w+1)*(QN2.w-1)),0.75f);
-
+//			printf("\n%i\t%i\t%i\tQN2.w %f",i,arm,ii,QN2.w);
 			float sig1 = __fdividef(0.75f, QN.w * (QN.w + 1)); //fdivedf - fast divide float
 			float sig2 = __fdividef(0.75f, QN2.w * (QN2.w - 1));
 			float prefact1 = (Q == 0.0f) ? 1.0f : __fdividef(QN.w, (QN.w + 1));
-			float prefact2 =
-					(Q2 == 0.0f) ? 1.0f : __fdividef(QN2.w, (QN2.w - 1));
-			float f1 = (Q == 0.0f) ? 2.0f * QN.w + 0.5f : QN.w;
-			float f2 = (Q2 == 0.0f) ? 2.0f * QN2.w - 0.5f : QN2.w;
+			float prefact2 = (Q2 == 0.0f) ? 1.0f : __fdividef(QN2.w, (QN2.w - 1));
+			float f1 = (ii == 0) ? 2.0f * QN.w + 0.5f : QN.w;
+			float f2 = (ii == tz-2) ? 2.0f * QN2.w - 0.5f : QN2.w;
 			float friction = __fdividef(2.0f, f1 + f2);
 			wsh.x = friction * __powf(prefact1 * prefact2, 0.75f)* __expf(Q * sig1 - Q2 * sig2);
 		}
 		if (QN.w > 1.0f) {//N=1 mean that shift is not possible, also ot will lead to dividing on zero error
-
+//			printf("\n%i\t%i\t%i\tQN.w %f",i,arm,ii,QN.w);
 			float sig1 = __fdividef(0.75f, QN.w * (QN.w - 1.0f));
 			float sig2 = __fdividef(0.75f, QN2.w * (QN2.w + 1.0f));
 			float prefact1 = (Q == 0.0f) ? 1.0f : __fdividef(QN.w, (QN.w - 1.0f));
 			float prefact2 = (Q2 == 0.0f) ? 1.0f : __fdividef(QN2.w, (QN2.w + 1.0f));
-			float f1 = (Q == 0.0f) ? 2.0f * QN.w - 0.5f : QN.w;
-			float f2 = (Q2 == 0.0f) ? 2.0f * QN2.w + 0.5f : QN2.w;
+			float f1 = (ii == 0) ? 2.0f * QN.w - 0.5f : QN.w;
+			float f2 = (ii == tz-2) ? 2.0f * QN2.w + 0.5f : QN2.w;
 			float friction = __fdividef(2.0f, f1 + f2);
 			wsh.y = friction * __powf(prefact1 * prefact2, 0.75f) * __expf(-Q * sig1 + Q2 * sig2);
 		}
-		surf2Dwrite(wsh.x + wsh.y+ d_CD_flag* (tcd + d_CD_create_prefact * (QN.w - 1.0f)),s_sum_W, 4 * i, j);
+//			printf("\nStrent %i\t%i\t%i\t%i\t%i\t%i\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f",j,i,arm,ii,d_z_max_arms[arm],tz,QN.x,QN.y,QN.z,QN.w,wsh.x + wsh.y,wsh.x,wsh.y,QN2.x,QN2.y,QN2.z,QN2.w);
+//			printf("\n%i\t%i\t%i\t%f\t%f\t%f\t%f",arm,ii,tz,QN.x,QN.y,QN.z,QN.w);
+//		surf2Dwrite(wsh.x + wsh.y /*+ d_CD_flag* (tcd + d_CD_create_prefact * (QN.w - 1.0f))*/,s_sum_W, 4 * i, j);
+//		printf("\nwsh %i %i: %f\t%f\t%f\t%f",arm,ii,wsh.x,wsh.y,wsh.z,wsh.w);
+		surf2Dwrite(wsh, s_sum_W, sizeof(float4)*i, j);
 		//probability of Kuhn step shitt + probability of entanglement destruction by CD
 		// + probability of entanglement creation by CD
 	}
+
+//	if (j==1)	printf("\n%i\t%i\t%i\t%i\t%i\t%f\t%f",j,i,arm,ii,tz,QN.w,d_universal_time + chain_heads[j].time);
+
 	//write updated chain conformation
 	surf2Dwrite(QN, s_b_QN, 16 * i, j);
 	surf2Dwrite(tcd, s_b_tCD, 4 * i, j);
+}
+
+__global__ void boundary1_kernel(
+		scalar_chains* chain_heads, int *d_offset, float4 *d_new_strent)
+{
+	//calculate probabilities at the ends of chain
+//	int i = blockIdx.x * blockDim.x + threadIdx.x;//chain index
+	int ii = blockIdx.x * blockDim.x + threadIdx.x;//arm index in ensemble
+	int i = int(ii/d_narms);
+	int arm = ii - i*d_narms;
+
+	if (i >= dn_cha_per_call)
+		return;
+	float4 QNtail; //last strent
+	float4 QNtailp;
+	float4 new_strent = d_new_strent[i];
+	float sumW = 0;
+
+	int run_sum=0;
+
+	for (int u=0; u<arm; u++){
+		run_sum += d_z_max_arms[arm];
+	}
+
+	int tz = chain_heads[i].Z[arm];
+	uint oft = d_offset[ii];
+
+	float4 probs_z = make_float4(0.0f,0.0f,0.0f,0.0f);
+
+	if (fetch_new_strent(tz - 1 + run_sum, oft))
+		QNtail = new_strent;
+	else
+		QNtail = tex2D(t_a_QN, make_offset((tz - 1)+ run_sum, oft), i);
+
+	if (tz == 1) {
+		probs_z.y = __fdividef(1.0f, (dBe * dnk_arms[arm]));//Creation at the end by SD
+	} else {
+		if (QNtail.w == 1.0f) {//destruction by SD at the end
+			if (fetch_new_strent(tz - 2 + run_sum, oft))
+				QNtailp = new_strent;
+			else
+				QNtailp = tex2D(t_a_QN, make_offset(tz - 2 + run_sum, oft), i);
+			float f1 = (tz == 2) ? QNtailp.w + 0.25f : 0.5f * QNtailp.w;
+			probs_z.x = __fdividef(1.0f, f1 + 0.75f);
+		} else {//creation by SD at the end
+			probs_z.y = __fdividef(2.0f, dBe * (QNtail.w + 0.5f));
+		}
+	}
+	sumW += probs_z.x + probs_z.y;
+	surf2Dwrite(probs_z, s_sum_W, sizeof(float4)*(tz - 1+run_sum), i);
+}
+
+template<int narms> __global__ void boundary2_kernel(
+		scalar_chains* chain_heads, int *d_offset, float4 *d_new_strent)
+{
+	//calculate probabilities at the ends of chain
+//	int i = blockIdx.x * blockDim.x + threadIdx.x;//chain index
+	int ii = blockIdx.x * blockDim.x + threadIdx.x;//arm index in ensemble
+	int i = int(ii/narms);
+	int arm = ii - i*narms;
+
+	if (i >= dn_cha_per_call)
+		return;
+//	clock_t t1 = clock();
+	float4 QNhead_arms[narms]; // first strent
+	float4 new_strent = d_new_strent[i];
+	float sumW = 0;
+	int tz;
+	int run_sum=0;
+	for (int u=0; u<narms; u++){
+		tz = chain_heads[i].Z[u];
+		uint oft = d_offset[i*narms+u];
+
+		float4 probs_z = make_float4(0.0f,0.0f,0.0f,0.0f);
+
+		if (fetch_new_strent(0 + run_sum, oft))
+			QNhead_arms[u] = new_strent;
+		else
+			QNhead_arms[u] = tex2D(t_a_QN, make_offset(0 + run_sum, oft), i);
+
+		run_sum += d_z_max_arms[u];
+	}
+//	clock_t t2 = clock();
+	//Shifts near branching point
+	float4 QN2; //Q for next strent
+	run_sum=0;
+	float upsum1 = 0.0f;
+	float upsum2 = 0.0f;
+	float downsum1 = 0.0f;
+	float downsum2 = 0.0f;
+	float temp;
+
+	run_sum=0;
+	for (int u=0; u<arm; u++){
+		run_sum += d_z_max_arms[u];
+	}
+//	for (int arm=0; arm<narms; arm++){
+	tz = chain_heads[i].Z[arm];
+	if (tz>1){
+		uint oft = d_offset[i*narms+arm];
+		if (fetch_new_strent(1 + run_sum, oft))
+			QN2 = new_strent;
+		else
+			QN2 = tex2D(t_a_QN, make_offset(1 + run_sum, oft), i);
+
+		float Q2 = QN2.x * QN2.x + QN2.y * QN2.y + QN2.z * QN2.z;
+		float4 probs_1 = make_float4(0.0f,0.0f,0.0f,0.0f);
+		//backward shift
+		if (QN2.w > 1.0f) { //N=1 mean that shift is not possible
+			upsum1 = 0.0f;
+			upsum2 = 0.0f;
+			downsum1 = 0.0f;
+			downsum2 = 0.0f;
+			for (int q1=0; q1 < narms; q1++){
+				if (chain_heads[i].Z[q1]>1){
+					for (int q2=q1+1; q2 < narms; q2++){
+						if (chain_heads[i].Z[q2]>1){
+							temp = (QNhead_arms[q2].x - QNhead_arms[q1].x)*(QNhead_arms[q2].x - QNhead_arms[q1].x)+(QNhead_arms[q2].y - QNhead_arms[q1].y)*(QNhead_arms[q2].y - QNhead_arms[q1].y)+(QNhead_arms[q2].z - QNhead_arms[q1].z)*(QNhead_arms[q2].z - QNhead_arms[q1].z);
+							upsum1 += __fdividef(0.75 * temp,QNhead_arms[q2].w * QNhead_arms[q1].w);
+							upsum2 += __fdividef(0.75 * temp,(QNhead_arms[q2].w + (int)(q2==arm)) * (QNhead_arms[q1].w + (int)(q1==arm)));
+						}
+					}
+					downsum1 += __fdividef(1.0f, QNhead_arms[q1].w);
+					downsum2 += __fdividef(1.0f, QNhead_arms[q1].w + (int)(q1==arm));
+				}
+			}
+
+			float sig2 = __fdividef(0.75f, QN2.w * (QN2.w - 1));
+			float prefact1 = __fdividef(QNhead_arms[arm].w, (QNhead_arms[arm].w + 1));
+			float prefact2 = (Q2 == 0.0f) ? 1.0f : __fdividef(QN2.w, (QN2.w - 1));
+			float f1 = QNhead_arms[arm].w;
+			float f2 = (tz == 2) ? 2.0f * QN2.w - 0.5f : QN2.w;
+			float friction = __fdividef(2.0f, f1 + f2);
+			probs_1.x = friction * __powf(__fdividef(prefact1 * prefact2 * downsum1,downsum2), 0.75f)* __expf(__fdividef(upsum1,downsum1) - __fdividef(upsum2,downsum2) - Q2 * sig2);
+		}
+
+		//forward shift
+		if (QNhead_arms[arm].w > 1.0f) { //N=1 mean that shift is not possible
+			upsum1 = 0.0f;
+			upsum2 = 0.0f;
+			downsum1 = 0.0f;
+			downsum2 = 0.0f;
+			for (int q1=0; q1 < narms; q1++){
+				if (chain_heads[i].Z[q1]>1){
+					for (int q2=q1+1; q2 < narms; q2++){
+						if (chain_heads[i].Z[q2]>1){
+							temp = (QNhead_arms[q2].x - QNhead_arms[q1].x)*(QNhead_arms[q2].x - QNhead_arms[q1].x)+(QNhead_arms[q2].y - QNhead_arms[q1].y)*(QNhead_arms[q2].y - QNhead_arms[q1].y)+(QNhead_arms[q2].z - QNhead_arms[q1].z)*(QNhead_arms[q2].z - QNhead_arms[q1].z);
+							upsum1 += __fdividef(0.75 * temp,QNhead_arms[q2].w * QNhead_arms[q1].w);
+							upsum2 += __fdividef(0.75 * temp,(QNhead_arms[q2].w - (int)(q2==arm)) * (QNhead_arms[q1].w - (int)(q1==arm)));
+						}
+					}
+					downsum1 += __fdividef(1.0f, QNhead_arms[q1].w);
+					downsum2 += __fdividef(1.0f, QNhead_arms[q1].w - (int)(q1==arm));
+				}
+			}
+
+			float sig2 = __fdividef(0.75f, QN2.w * (QN2.w + 1));
+			float prefact1 = __fdividef(QNhead_arms[arm].w, (QNhead_arms[arm].w - 1));
+			float prefact2 = (Q2 == 0.0f) ? 1.0f : __fdividef(QN2.w, (QN2.w + 1));
+			float f1 = QNhead_arms[arm].w;
+			float f2 = (tz == 2) ? 2.0f * QN2.w - 0.5f : QN2.w;
+			float friction = __fdividef(2.0f, f1 + f2);
+			probs_1.y = friction * __powf(__fdividef(prefact1 * prefact2 * downsum1,downsum2), 0.75f)* __expf(__fdividef(upsum1,downsum1) - __fdividef(upsum2,downsum2) + Q2 * sig2);
+		}
+		//sumW += probs_1.x + probs_1.y;
+		surf2Dwrite(probs_1, s_sum_W, sizeof(float4)*run_sum, i);
+	}
+//		run_sum += d_z_max_arms[arm];
+//	}
+//	clock_t t3 = clock();
+//	printf("\n%i\t%i",(int)(t2-t1),(int)(t3-t2));
+}
+
+__global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* found_index,  int* found_shift) {
+	extern __shared__ double s[];
+	//Calculate kernel index
+	int i = blockIdx.x * blockDim.x + threadIdx.x;//strent index
+	int j = blockIdx.y * blockDim.y + threadIdx.y;//chain index
+	//Check if kernel index is outside boundaries
+	if ((j >= dn_cha_per_call) || (i >= d_z_max))
+		return;
+
+	int arm, run_sum, ii, tz;
+	float4 temp;
+
+	arm=0;
+	run_sum=0;
+
+	for (arm=0; i>=run_sum+d_z_max_arms[arm]; arm++){
+		run_sum+=d_z_max_arms[arm];
+	}
+//	clock_t t1 = clock();
+	tz = chain_heads[j].Z[arm]; //Current chain size
+	temp = make_float4(0.0f,0.0f,0.0f,0.0f);
+	ii = i-run_sum;
+
+	if ((ii >= 0) && (ii < tz)){
+		surf2Dread(&temp, s_sum_W, sizeof(float4)*i, j);
+	}
+//	clock_t t2 = clock();
+	//parallel scan in s (naive)
+	int pout = 0, pin = 1;
+	s[pout*d_z_max+i] = (double)temp.x + (double)temp.y;
+//	clock_t t3 = clock();
+	__syncthreads();
+	for (int offset = 1; offset < d_z_max; offset *= 2) {
+		pout = 1 - pout; // swap double buffer indices
+		pin = 1 - pout;
+
+		if (i >= offset)
+		    s[pout*d_z_max + i] = s[pin*d_z_max + i] + s[pin*d_z_max + i - offset];
+		else
+			s[pout*d_z_max + i] = s[pin*d_z_max + i];
+		__syncthreads();
+	}
+	surf2Dwrite((float)s[pout*d_z_max + i], s_sum_W_sorted, sizeof(float)*i, j);
+//	clock_t t4 = clock();
+	//search
+	float ran = tex2D(t_uniformrand, rand_used[j], j);
+	double x = s[pout*d_z_max+d_z_max-1]*(double)ran;
+	double left = (i==0)? 0.0f : s[pout*d_z_max + i - 1];
+	double right = s[pout*d_z_max + i];
+	bool xFound = (left < x) && (x <= right);
+	if (xFound){
+		found_index[j]=i;
+		if (temp.y == 0.0f)
+			found_shift[j]=1;
+		else{
+			if (x-left > temp.x)
+				found_shift[j]=0;
+			else
+				found_shift[j]=1;
+		}
+	}
+//	clock_t t5 = clock();
+//	printf("\n%i\t%i\t%i\t%i",(int)(t2-t1),(int)(t3-t2),(int)(t4-t3),(int)(t5-t4));
 }
 
 //Add new value w to k-th level of correlator corr for chain i
@@ -333,7 +591,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void update_correlator(corr_devic
 	}
 }
 
-__global__ __launch_bounds__(tpb_chain_kernel) void flow_stress(corr_device gpu_corr, int n, float4* stress_average){
+__global__ __launch_bounds__(tpb_chain_kernel) void flow_stress(corr_device gpu_corr, int n, float4* stress_average, int nc){
 	int i = blockIdx.x * blockDim.x + threadIdx.x; //Chain index
 	if (i >= dn_cha_per_call)
 		return;
@@ -341,220 +599,99 @@ __global__ __launch_bounds__(tpb_chain_kernel) void flow_stress(corr_device gpu_
 	for (int j=0; j<n; j++){
 		stress = tex2D(t_corr, i, j);
 		if (stress.w != -1.0f){
-			atomicAdd(&(stress_average[(int)stress.w].x),stress.x);
-			atomicAdd(&(stress_average[(int)stress.w].y),stress.y);
-			atomicAdd(&(stress_average[(int)stress.w].z),stress.z);
+			stress_average[(int)stress.w * nc + i].x = stress.x;
+			stress_average[(int)stress.w * nc + i].y = stress.y;
+			stress_average[(int)stress.w * nc + i].z = stress.z;
+			//atomicAdd(&(stress_average[(int)stress.w].x),stress.x);
+			//atomicAdd(&(stress_average[(int)stress.w].y),stress.y);
+			//atomicAdd(&(stress_average[(int)stress.w].z),stress.z);
 		}
 	}
 }
 
 template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_kernel(
-		scalar_chains* gpu_chain_heads, float *tdt, float *reach_flag, 
+		scalar_chains* chain_heads, float *tdt, float *reach_flag, 
 		float next_sync_time, int *d_offset, float4 *d_new_strent, 
 		float *d_new_tau_CD, int *d_write_time, int correlator_type,
-		int *rand_used, int *tau_CD_used_CD, int *tau_CD_used_SD, int stress_index)
+		int *rand_used, int *tau_CD_used_CD, int *tau_CD_used_SD, int stress_index,
+		int* found_index, int* found_shift)
 {
-	int i = blockIdx.x * blockDim.x + threadIdx.x;
+	int i = blockIdx.x * blockDim.x + threadIdx.x;//chain index
 
 	if (i >= dn_cha_per_call)
 		return;
 
-	//setup local variables
-	int tz = gpu_chain_heads[i].Z;
-	uint oft = d_offset[i];
-	d_offset[i] = offset_code(0xffff, +1);
-
-	float4 sum_stress;
-	float4 sum_stress2;
-	if (correlator_type==0 || correlator_type==2){
-		sum_stress = make_float4(0.0f, 0.0f, 0.0f, -1.0f);
-		sum_stress2 = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-		surf2Dwrite(sum_stress, s_corr, sizeof(float4) * i, stress_index); //Write stress value to the stack
-	}
-
+	surf1Dwrite(0.0f,s_ft,i*sizeof(float));
 	if (reach_flag[i]!=0) {
 		return;
 	}
 
-	if (((gpu_chain_heads[i].time >= next_sync_time) && (d_universal_time + next_sync_time <= d_write_time[i] * d_correlator_res)) || (gpu_chain_heads[i].stall_flag != 0)) {
+	if (((chain_heads[i].time >= next_sync_time) && (d_universal_time + next_sync_time <= d_write_time[i] * d_correlator_res)) || (chain_heads[i].stall_flag != 0)) {
 		reach_flag[i] = 1;
-		gpu_chain_heads[i].time-=next_sync_time;
+		chain_heads[i].time-=next_sync_time;
 		tdt[i] = 0.0f;
+		for (int u=0; u<d_narms; u++){
+			d_offset[i*d_narms+u] = offset_code(0xffff, +1);
+		}
 		return;
 	}
-	
+
 	float olddt;
 	if (type == 1) olddt = tdt[i];
 	float4 new_strent = d_new_strent[i];
-	float new_tCD = d_new_tau_CD[i];
-
-	float4 R1;
-	if (type==0){
-		R1 = tex1D(t_a_R1,i);
-		surf1Dwrite(R1,s_b_R1,i*sizeof(float4));
-	}
 
 	//check for correlator
-	if (d_universal_time + gpu_chain_heads[i].time > d_write_time[i] * d_correlator_res) { //TODO add d_correlator_time to gpu_chain_heads
-		if(correlator_type==0 || correlator_type==2){//stress calc
-			for (int j = 0; j < tz; j++) {
-				float4 QN1;
-				if (fetch_new_strent(j, oft))
-					QN1 = new_strent;
-				else
-					QN1 = tex2D(t_a_QN, make_offset(j, oft), i);
-				if (type==1) QN1 = kappa(QN1, olddt); //transformation
-				sum_stress.x -= __fdividef(3.0f * QN1.x * QN1.y, QN1.w);
-				sum_stress.y -= __fdividef(3.0f * QN1.y * QN1.z, QN1.w);
-				sum_stress.z -= __fdividef(3.0f * QN1.x * QN1.z, QN1.w);
-				sum_stress2.x -= __fdividef(3.0f * QN1.y * QN1.z, QN1.w);
-				sum_stress2.y -= __fdividef(3.0f * QN1.x * QN1.z, QN1.w);
-				sum_stress2.z += __fsqrt_rn(QN1.x * QN1.x + QN1.y * QN1.y + QN1.z * QN1.z);
-			}
-
-			sum_stress2.w = float(tz);
-
-//			surf1Dwrite(sum_stress, s_stress, 32 * i);
-//			surf1Dwrite(sum_stress2, s_stress, 32 * i + 16);
-		}
-		if (correlator_type==0){
-			sum_stress.w = 1.0f;
-			surf2Dwrite(sum_stress, s_corr, sizeof(float4) * i, stress_index); //Write stress value to the stack
-		}
-		if (correlator_type==2){
-			sum_stress.w = (float)d_write_time[i];
-			surf2Dwrite(sum_stress, s_corr, sizeof(float4) * i, stress_index); //Write stress value to the stack
-		}
-		if (correlator_type==1){//center of mass calc
-			float4 temp_sum = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-			float4 center_mass = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-			float4 prev_q = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-			for (int j = 0; j < tz; j++) {
-				float4 QN1;
-				if (fetch_new_strent(j, oft))
-					QN1 = new_strent;
-				else
-					QN1 = tex2D(t_a_QN, make_offset(j, oft), i);
-
-				float4 term = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-				temp_sum	+=	prev_q;
-				term		+=	temp_sum;
-				term.x 		+=	__fdividef(QN1.x, 2);
-				term.y		+=	__fdividef(QN1.y, 2);
-				term.z		+=	__fdividef(QN1.z, 2);
-				center_mass.x += term.x * QN1.w / dnk;
-				center_mass.y += term.y * QN1.w / dnk;
-				center_mass.z += term.z * QN1.w / dnk;
-
-				prev_q = QN1;
-			}
-			center_mass+=R1;
-			center_mass.w = 1.0f;
-			surf2Dwrite(center_mass, s_corr, sizeof(float4) * i, stress_index); //Write center of mass to the stack
-		}
-		//Update counter
+	if (d_universal_time + chain_heads[i].time > d_write_time[i] * d_correlator_res) { //TODO add d_correlator_time to gpu_chain_heads
 		d_write_time[i]++;
-		if (d_universal_time + gpu_chain_heads[i].time > d_write_time[i] * d_correlator_res) {
-			return;
-			//do nothing until next step
+	}
+	//check again to stop if necessary
+	if (d_universal_time + chain_heads[i].time > d_write_time[i] * d_correlator_res) {
+		for (int u=0; u<d_narms; u++){
+			d_offset[i*d_narms+u] = offset_code(0xffff, +1);
 		}
+		return;
 	}
 
-	// sum W_SD_shifts
-	float sum_wshpm = 0.0f;
-	float tsumw;
-	for (int j = 0; j < tz - 1; j++) {
-		surf2Dread(&tsumw, s_sum_W, 4 * j, i);
-		sum_wshpm += tsumw;
-	}
-
-	// W_SD_c/d calc
-	float W_SD_c_1 = 0.0f, W_SD_d_1 = 0.0f;
-	float W_SD_c_z = 0.0f, W_SD_d_z = 0.0f;
-
-	//declare vars to reuse later
-	float4 QNheadn, QNtailp;
-
-	// first strent
-	float4 QNhead;
-	if (fetch_new_strent(0, oft))
-		QNhead = new_strent;
-	else
-		QNhead = tex2D(t_a_QN, make_offset(0, oft), i);
-
-	//last strent
-	float4 QNtail;
-	if (fetch_new_strent(tz - 1, oft))
-		QNtail = new_strent;
-	else
-		QNtail = tex2D(t_a_QN, make_offset(tz - 1, oft), i);
-
-	float W_CD_c_z = (double)d_CD_flag * (double)d_CD_create_prefact * (QNtail.w - 1.0f); //Create CD on the last strand
-
-	if (tz == 1) {
-		W_SD_c_1 = __fdividef(1.0f, (dBe * dnk));
-		W_SD_c_z = W_SD_c_1;
-	} else {
-		if (QNhead.w == 1.0f) {
-			//destruction
-			if (fetch_new_strent(1, oft))
-				QNheadn = new_strent;
-			else
-				QNheadn = tex2D(t_a_QN, make_offset(1, oft), i);
-			float f2 = (tz == 2) ? QNheadn.w + 0.25f : 0.5f * QNheadn.w;
-			W_SD_d_1 = __fdividef(1.0f, 0.75f + f2);
-		} else {
-			//creation
-			W_SD_c_1 = __fdividef(2.0f, dBe * (QNhead.w + 0.5f));
-		}
-
-		if (QNtail.w == 1.0f) {
-			//destruction
-			if (fetch_new_strent(tz - 2, oft))
-				QNtailp = new_strent;
-			else
-				QNtailp = tex2D(t_a_QN, make_offset(tz - 2, oft), i);
-			float f1 = (tz == 2) ? QNtailp.w + 0.25f : 0.5f * QNtailp.w;
-			W_SD_d_z = __fdividef(1.0f, f1 + 0.75f);
-		} else {
-			//creation
-			W_SD_c_z = __fdividef(2.0f, dBe * (QNtail.w + 0.5f));
-		}
-	}
-	//sum all the probabilities
-	float sumW = sum_wshpm + W_SD_c_1 + W_SD_c_z + W_SD_d_1 + W_SD_d_z + W_CD_c_z;
+	float sumW; // sum of probabilities
+	surf2Dread(&sumW, s_sum_W_sorted, sizeof(float)*(d_z_max-1), i);
+//	printf("\n%f",sumW);
+	//decide the timestep
 	tdt[i] = __fdividef(1.0f, sumW);
+
 	// error handling
 	if (tdt[i] == 0.0f)
-		gpu_chain_heads[i].stall_flag = 1;
+		chain_heads[i].stall_flag = 1;
 	if (isnan(tdt[i]))
-		gpu_chain_heads[i].stall_flag = 2;
+		chain_heads[i].stall_flag = 2;
 	if (isinf(tdt[i]))
-		gpu_chain_heads[i].stall_flag = 3;
-
+		chain_heads[i].stall_flag = 3;
 	//update time
-	gpu_chain_heads[i].time += tdt[i];
+	chain_heads[i].time += tdt[i];
 	//start picking the jump process
-	float pr = (sumW) * tex2D(t_uniformrand, rand_used[i], i);
 	rand_used[i]++;
-	int j = 0;
-	float tpr = 0.0f;
-	if (tz != 1)
-		surf2Dread(&tpr, s_sum_W, 4 * j, i);
-	// picking where(which strent) jump process will happen
-	// excluding SD creation destruction
-	// perhaps one of the most time consuming parts of the code
-	while ((pr >= tpr) && (j < tz - 2)) {
-		pr -= tpr;
-		j++;
-		surf2Dread(&tpr, s_sum_W, 4 * j, i);
+
+	int j = found_index[i];
+	int k = found_shift[i];
+	int arm=0;
+	int run_sum=0;
+	for (arm=0; j>=run_sum+d_z_max_arms[arm]; arm++){
+		run_sum+=d_z_max_arms[arm];
+	}
+	int jj = j-run_sum;
+	int ii = i*d_narms+arm;
+
+	//setup local variables
+	int tz = chain_heads[i].Z[arm];
+	uint oft = d_offset[ii];
+
+	bool shfl = (jj < tz-1) && (tz>1);
+
+	for (int u=0; u<d_narms; u++){
+		if (u!=arm)
+			d_offset[i*d_narms+u] = offset_code(0xffff, +1);
 	}
 
-	if (pr < tpr) {
-		// ok we picked some strent j
-		// now we need to decide which(SD shift or CDd CDc) jump process will happen
-		// TODO check if the order have an effect on performance
-
+	if (shfl) {//Shuffling
 		float4 QN1 = tex2D(t_a_QN, make_offset(j, oft), i);
 		if (fetch_new_strent(j, oft))
 			QN1 = new_strent;
@@ -566,253 +703,111 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 			QN2 = kappa(QN2, olddt);
 		}
 
-		// 1. CDd (destruction by constraint dynamics)
-		float wcdd;
-		if (d_CD_flag) {
-			wcdd = tex2D(t_a_tCD, make_offset(j, oft), i);    //////////////////
-			if (fetch_new_strent(j, oft))
-				wcdd = new_tCD;
-		} else
-			wcdd = 0;
-		if (pr < wcdd) {
-			float4 temp = make_float4(QN1.x + QN2.x, QN1.y + QN2.y, QN1.z + QN2.z, QN1.w + QN2.w);
-			if ((j == tz - 2) || (j == 0)) {
-				temp = make_float4(0.0f, 0.0f, 0.0f, QN1.w + QN2.w);
-			}
-			surf2Dwrite(temp, s_b_QN, 16 * (j + 1), i);
-			d_offset[i] = offset_code(j, +1);
-			gpu_chain_heads[i].Z--;
-
-			if (type==0){
-				if(correlator_type==1 && j == 0){
-					//update position of the first entanglement in the fixed frame
-					float4 delta_R1 = make_float4(0.0f,0.0f,0.0f,0.0f);
-					delta_R1.x = QN2.x;
-					delta_R1.y = QN2.y;
-					delta_R1.z = QN2.z;
-					R1+=delta_R1;
-					surf1Dwrite(R1,s_b_R1,i*sizeof(float4));
-				}
-			}
-
-			return;
+		if (k==1) {
+			QN1.w = QN1.w + 1;
+			QN2.w = QN2.w - 1;
+//			if (i==1)	printf("\nShuffling left");
 		} else {
-			pr -= wcdd;
+			QN1.w = QN1.w - 1;
+			QN2.w = QN2.w + 1;
+//			if (i==1)	printf("\nShuffling right");
 		}
+		surf2Dwrite(QN1, s_b_QN, 16 * j, i);
+		surf2Dwrite(QN2, s_b_QN, 16 * (j + 1), i);
+		d_offset[ii] = offset_code(0xffff, +1);
+		return;
+	} else {//Process at the end of chain
+		if (k==0) {//  Creation by sliding dynamics
+			if (tz == d_z_max_arms[arm])
+				return;	// possible detail balance issue
+//			printf("\nCreation by SD");
+			float4 temp = tex2D(t_taucd_gauss_rand_SD, tau_CD_used_SD[i], i);
+			tau_CD_used_SD[i]++;
+			chain_heads[i].Z[arm]++;
+			d_new_tau_CD[i] = d_universal_time + chain_heads[i].time;
 
-		// 2. SD shift
-		// SD shift probabilitiess are not saved from entanglement parallel part
-		// so we need to recalculate them
-		float2 twsh = make_float2(0.0f, 0.0f);
-		float Q = QN1.x * QN1.x + QN1.y * QN1.y + QN1.z * QN1.z;
-		float Q2 = QN2.x * QN2.x + QN2.y * QN2.y + QN2.z * QN2.z;
+			float4 QN_tail;
+			if (fetch_new_strent(tz - 1 + run_sum, oft))
+				QN_tail = new_strent;
+			else
+				QN_tail = tex2D(t_a_QN, make_offset((tz - 1)+ run_sum, oft), i);
 
-		if (QN2.w > 1.0f) {	//N=1 mean that shift is not possible, also ot will lead to dividing on zero error
-			//float prefact=__powf( __fdividef(QN1.w*QN2.w,(QN1.w+1)*(QN2.w-1)),0.75f);
-			//TODO replace powf with sqrt(x*x*x)
-
-			float sig1 = __fdividef(0.75f, QN1.w * (QN1.w + 1));
-			float sig2 = __fdividef(0.75f, QN2.w * (QN2.w - 1));
-			float prefact1 = (Q == 0.0f) ? 1.0f : __fdividef(QN1.w, (QN1.w + 1));
-			float prefact2 = (Q2 == 0.0f) ? 1.0f : __fdividef(QN2.w, (QN2.w - 1));
-			float f1 = (Q == 0.0f) ? 2.0f * QN1.w + 0.5f : QN1.w;
-			float f2 = (Q2 == 0.0f) ? 2.0f * QN2.w - 0.5f : QN2.w;
-			float friction = __fdividef(2.0f, f1 + f2);
-			twsh.x = friction * __powf(prefact1 * prefact2, 0.75f) * __expf(Q * sig1 - Q2 * sig2);
-		}
-		if (QN1.w > 1.0f) {	//N=1 mean that shift is not possible, also ot will lead to dividing on zero error
-
-			float sig1 = __fdividef(0.75f, QN1.w * (QN1.w - 1.0f));
-			float sig2 = __fdividef(0.75f, QN2.w * (QN2.w + 1.0f));
-			float prefact1 = (Q == 0.0f) ? 1.0f : __fdividef(QN1.w, (QN1.w - 1.0f));
-			float prefact2 = (Q2 == 0.0f) ? 1.0f : __fdividef(QN2.w, (QN2.w + 1.0f));
-			float f1 = (Q == 0.0f) ? 2.0f * QN1.w - 0.5f : QN1.w;
-			float f2 = (Q2 == 0.0f) ? 2.0f * QN2.w + 0.5f : QN2.w;
-			float friction = __fdividef(2.0f, f1 + f2);
-			twsh.y = friction * __powf(prefact1 * prefact2, 0.75f) * __expf(-Q * sig1 + Q2 * sig2);
-		}
-
-		if (pr < twsh.x + twsh.y) {
-
-			if (pr < twsh.x) {
-				QN1.w = QN1.w + 1;
-				QN2.w = QN2.w - 1;
-			} else {
-				QN1.w = QN1.w - 1;
-				QN2.w = QN2.w + 1;
-			}
-			surf2Dwrite(QN1, s_b_QN, 16 * j, i);
-			surf2Dwrite(QN2, s_b_QN, 16 * (j + 1), i);
-			return;
-		} else {
-			pr -= twsh.x + twsh.y;
-		}
-
-		// 3. CDc (creation by constraint dynamics in the middle)
-
-		float wcdc = d_CD_create_prefact * (QN1.w - 1.0f);
-		if (pr < wcdc) {
-			if (tz == d_z_max)
-				return;		// possible detail balance issue
-			float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used_CD[i], i);
-			tau_CD_used_CD[i]++;
-			gpu_chain_heads[i].Z++;
-			d_new_tau_CD[i] = temp.w;//__fdividef(1.0f,d_tau_d);
-			float newn = floorf(0.5f + __fdividef(pr * (QN1.w - 2.0f), wcdc)) + 1.0f;
-			if (j == 0) {
-				temp.w = QN1.w - newn;
-				float sigma = __fsqrt_rn(__fdividef(temp.w, 3.0f));
-				temp.x *= sigma;
-				temp.y *= sigma;
-				temp.z *= sigma;
-				surf2Dwrite(temp, s_b_QN, 16 * 0, i);
-				d_offset[i] = offset_code(0, -1);
-				d_new_strent[i] = make_float4(0.0f, 0.0f, 0.0f, newn);
-				if (type == 0){
-					if (correlator_type==1){
-					//update position of the first entanglement in the fixed frame
-					float4 delta_R1 = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-					delta_R1.x = -temp.x;
-					delta_R1.y = -temp.y;
-					delta_R1.z = -temp.z;
-					R1 += delta_R1;
-					surf1Dwrite(R1,s_b_R1,i*sizeof(float4));
+			temp.w = QN_tail.w - 1.0f;
+			float sigma = __fsqrt_rn(__fdividef(temp.w, 3.0f));
+			temp.x *= sigma;
+			temp.y *= sigma;
+			temp.z *= sigma;
+			if (tz==1){
+				float4 temp_;
+				bool unent=true; //if all arms are unentangled -> set temp as (0,0,0)
+				float4 sumQNinv = make_float4(0.0f,0.0f,0.0f,0.0f);
+				float sumNinv = 0.0f;
+				for (int arm_=0; arm_<d_narms; arm_++){
+					int tz_ = chain_heads[i].Z[arm_];
+					if ((tz_>1) && (arm_!=arm)){//entangled arms
+						unent=false;
+						if (fetch_new_strent(0 + run_sum, oft))
+							temp_ = new_strent;
+						else
+							temp_ = tex2D(t_a_QN, make_offset(0 + run_sum, oft), i);
+						sumQNinv += temp_/temp_.w;
+						sumNinv += 1/temp_.w;
 					}
 				}
-				return;
+				if(unent){
+					temp.x = 0.0f;
+					temp.y = 0.0f;
+					temp.z = 0.0f;
+				}else{
+					temp.x = __fdividef(temp.x * (sumNinv+__fdividef(1.0f,temp.w)) + sumQNinv.x, sumNinv);
+					temp.y = __fdividef(temp.y * (sumNinv+__fdividef(1.0f,temp.w)) + sumQNinv.y, sumNinv);
+					temp.z = __fdividef(temp.z * (sumNinv+__fdividef(1.0f,temp.w)) + sumQNinv.z, sumNinv);
+				}
+				//printf("\nCreating entanglement on chain %i, on unentangled arm %i, with N=%f",i,arm,temp.w);
 			}
-
-			temp.w = newn;
-			float sigma = __fsqrt_rn(__fdividef(newn * (QN1.w - newn), 3.0f * QN1.w));
-			float ration = __fdividef(newn, QN1.w);
-			temp.x *= sigma;
-			temp.y *= sigma;
-			temp.z *= sigma;
-			temp.x += QN1.x * ration;
-			temp.y += QN1.y * ration;
-			temp.z += QN1.z * ration;
-			surf2Dwrite(make_float4(QN1.x - temp.x, QN1.y - temp.y, QN1.z - temp.z, QN1.w - newn), s_b_QN, 16 * j, i);
-			d_offset[i] = offset_code(j, -1);
+			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 1.0f), s_b_QN, 16 * (tz - 1 + run_sum), i);
+			d_offset[ii] = offset_code(tz - 1 + run_sum, -1);
 			d_new_strent[i] = temp;
 			return;
 		} else {
-			pr -= wcdc;
-		}
-	} else {
-		pr -= tpr;
-	}
+		// Destruction by sliding dynamics
+//			printf("\nDestruction by SD");
+			chain_heads[i].Z[arm]--;
 
-	//None of the processes in the middle of the chain happened
-	//Now check processes on the left end
+			float4 QNtailp;
+			if (fetch_new_strent(tz - 2 + run_sum, oft))
+				QNtailp = new_strent;
+			else
+				QNtailp = tex2D(t_a_QN, make_offset(tz - 2 + run_sum, oft), i);
 
-	// 4. w_CD_c_z (creation by constraint dynamics on the left end)
-	if (pr < W_CD_c_z) {
-		if (tz == d_z_max) return;	// possible detail balance issue
-		float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used_CD[i], i);
-		tau_CD_used_CD[i]++;
-		gpu_chain_heads[i].Z++;
-		d_new_tau_CD[i] = temp.w;	//__fdividef(1.0f,d_tau_d);
-
-		float newn = floorf(0.5f + __fdividef(pr * (QNtail.w - 2.0f), W_CD_c_z)) + 1.0f;
-
-		temp.w = newn;
-		float sigma = (tz == 1) ? 0.0f : __fsqrt_rn(__fdividef(temp.w, 3.0f));
-		temp.x *= sigma;
-		temp.y *= sigma;
-		temp.z *= sigma;
-		surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNtail.w - newn), s_b_QN, 16 * (tz - 1), i);
-		d_offset[i] = offset_code(tz - 1, -1);
-		d_new_strent[i] = temp;
-		return;
-	} else {
-		pr -= W_CD_c_z;
-	}
-
-	// 5. w_SD_c (creation by sliding dynamics)
-
-	if (pr < W_SD_c_1 + W_SD_c_z) {
-		if (tz == d_z_max)
-			return;	// possible detail balance issue
-		float4 temp = tex2D(t_taucd_gauss_rand_SD, tau_CD_used_SD[i], i);
-		tau_CD_used_SD[i]++;
-		gpu_chain_heads[i].Z++;
-		d_new_tau_CD[i] = temp.w;
-
-		if (pr < W_SD_c_1) {//creation on the left end
-			temp.w = QNhead.w - 1.0f;
-			float sigma = (tz == 1) ? 0.0f : __fsqrt_rn(__fdividef(temp.w, 3.0f));
-			temp.x *= sigma;
-			temp.y *= sigma;
-			temp.z *= sigma;
-			surf2Dwrite(temp, s_b_QN, 16 * 0, i);//TODO maybe deformation should be applied here
-			if (type==0){
-				if (correlator_type==1){
-					//update position of the first entanglement in the fixed frame
-					float4 delta_R1 = make_float4(0.0f,0.0f,0.0f,0.0f);
-					delta_R1.x = - temp.x;
-					delta_R1.y = - temp.y;
-					delta_R1.z = - temp.z;
-					R1+=delta_R1;
-					surf1Dwrite(R1,s_b_R1,i*sizeof(float4));
-				}
+			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNtailp.w + 1.0f), s_b_QN, 16 * (tz - 2 + run_sum), i);
+			d_offset[ii] = offset_code(tz + run_sum, +1);
+//			if(chain_heads[i].Z[arm]==1){
+//				printf("\nDestroying entanglement on chain %i. Arm %i is now unentangled  with with N=%f",i,arm,QNtailp.w + 1.0f);
+//			}
+			float cr_time;
+			if (fetch_new_strent(tz - 2 + run_sum, oft)){
+				cr_time = d_new_tau_CD[i];
 			}
-			d_offset[i] = offset_code(0, -1);
-			d_new_strent[i] = make_float4(0.0f, 0.0f, 0.0f, 1.0f);
-		} else {
-			temp.w = QNtail.w - 1.0f;
-			float sigma = (tz == 1) ? 0.0f : __fsqrt_rn(__fdividef(temp.w, 3.0f));
-			temp.x *= sigma;
-			temp.y *= sigma;
-			temp.z *= sigma;
-			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 1.0f), s_b_QN, 16 * (tz - 1), i);//TODO maybe deformation should be applied here
-			d_offset[i] = offset_code(tz - 1, -1);
-			d_new_strent[i] = temp;
-		}
-
-		return;
-	} else {
-		pr -= W_SD_c_1 + W_SD_c_z;
-
-	}
-
-	// 6. Destruction by sliding dynamics
-	if (pr < W_SD_d_1 + W_SD_d_z) {	//to delete entanglement
-	// update cell and neigbours
-	//clear W_sd
-	//form a list of free cell
-		gpu_chain_heads[i].Z--;
-
-		if (pr < W_SD_d_1) {//Destruction of the 1st entanglement
-			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNheadn.w + 1.0f), s_b_QN, 16 * 1, i);
-			d_offset[i] = offset_code(0, +1);
-
-			if(type==0){
-				if (correlator_type==1){
-					//update position of the first entanglement in the fixed frame
-					float4 delta_R1 = tex2D(t_a_QN, make_offset(1, oft), i);
-					if (fetch_new_strent(1, oft))
-						delta_R1 = new_strent;
-					R1.w=0.0f;
-					R1+=delta_R1;
-					surf1Dwrite(R1,s_b_R1,i*sizeof(float4));
-				}
+			else{
+				cr_time = tex2D(t_a_tCD, make_offset(tz - 2 + run_sum, oft), i);
 			}
-		} else {
-			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNtailp.w + 1.0f), s_b_QN, 16 * (tz - 2), i);
-			d_offset[i] = offset_code(tz, +1);
+			if (cr_time!=0){
+				surf1Dwrite(log10f(d_universal_time + chain_heads[i].time - cr_time)+10,s_ft,i*sizeof(float));
+			}
+//			printf("\nDestruction by SD %f\t%f",d_universal_time + chain_heads[i].time - cr_time,cr_time);
+			return;
 		}
-		return;
-	} else
-		pr -= W_SD_d_1 + W_SD_d_z;
+	}
 }
 
 __global__ __launch_bounds__(tpb_chain_kernel) //stress calculation
-void stress_calc(scalar_chains* gpu_chain_heads, float *tdt, int *d_offset,
+void stress_calc(scalar_chains* chain_heads, float *tdt, int *d_offset,
 		float4 *d_new_strent, float4* QN, int size) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= dn_cha_per_call)
 		return;
-	int tz = gpu_chain_heads[i].Z;
+	int tz = chain_heads[i].Z[1];
 	uint oft = d_offset[i];
 	float olddt = tdt[i];
 	float4 new_strent = d_new_strent[i];

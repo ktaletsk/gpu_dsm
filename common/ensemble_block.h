@@ -28,9 +28,6 @@ class ensemble_block {
 	vector_chains chains; //vector values
 	scalar_chains* chain_heads; //scalar values
 
-	//regular device arrays
-	scalar_chains* gpu_chain_heads;
-
 	float *d_dt;       // time step size from previous time step. used for applying deformation
 	float *reach_flag; // flag that chain evolution reached required time
 	double block_time; //since chain_head do not store universal time due to SP issues
