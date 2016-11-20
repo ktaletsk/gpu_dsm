@@ -83,19 +83,19 @@ inline __device__ void operator+=(float4 &a, float4 b) {
 	a.z += b.z;
 	a.w += b.w;
 }
-inline __device__ float4 operator/(float4 a, float b) {
+inline __host__ __device__ float4 operator/(float4 a, float b) {
 	return make_float4(a.x / b, a.y / b, a.z / b, a.w / b);
 }
-inline __device__ float4 operator*(float4 a, float4 b) {
+inline __host__ __device__ float4 operator*(float4 a, float4 b) {
 	return make_float4(a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w);
 }
-inline __device__ float4 operator*(float4 a, float b) {
+inline __host__ __device__ float4 operator*(float4 a, float b) {
 	return make_float4(a.x * b, a.y * b, a.z * b, a.w * b);
 }
-inline __device__ float4 operator+(float4 a, float4 b) {
+inline __host__ __device__ float4 operator+(float4 a, float4 b) {
 	return make_float4(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w);
 }
-inline __device__ float4 operator-(float4 a, float4 b) {
+inline __host__ __device__ float4 operator-(float4 a, float4 b) {
 	return make_float4(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w);
 }
 
@@ -323,7 +323,6 @@ template<int narms> __global__ void boundary2_kernel(
 			QNhead_arms[u] = new_strent;
 		else
 			QNhead_arms[u] = tex2D(t_a_QN, make_offset(0 + run_sum, oft), i);
-
 		run_sum += d_z_max_arms[u];
 	}
 //	clock_t t2 = clock();
@@ -578,17 +577,17 @@ __device__ void corr_add(corr_device gpu_corr, float4 w, int k, int i, int type)
 		insertindex[k] = 0;
 }
 
-__global__ __launch_bounds__(tpb_chain_kernel) void update_correlator(corr_device gpu_corr, int n, int type){
+__global__ void update_correlator(corr_device gpu_corr, int n, int type){
 	int i = blockIdx.x * blockDim.x + threadIdx.x; //Chain index
-	if (i >= dn_cha_per_call)
-		return;
-	float4 stress;
-	for (int j=0; j<n; j++){
-		stress = tex2D(t_corr, i, j);
-		if (stress.w != -1.0f){
-			corr_add(gpu_corr, stress, 0, i, type); //add new value to the correlator
-		}
-	}
+	//if (i >= dn_cha_per_call)
+	//	return;
+	//float4 stress;
+	//for (int j=0; j<n; j++){
+	//	stress = tex2D(t_corr, i, j);
+	//	if (stress.w != -1.0f){
+	//		corr_add(gpu_corr, stress, 0, i, type); //add new value to the correlator
+	//	}
+	//}
 }
 
 __global__ __launch_bounds__(tpb_chain_kernel) void flow_stress(corr_device gpu_corr, int n, float4* stress_average, int nc){
@@ -621,6 +620,9 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 	if (i >= dn_cha_per_call)
 		return;
 
+	float4 sum_stress = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+	surf2Dwrite(sum_stress, s_corr, sizeof(float4) * i, stress_index); //Write stress value to the stack
+
 	surf1Dwrite(0.0f,s_ft,i*sizeof(float));
 	if (reach_flag[i]!=0) {
 		return;
@@ -642,6 +644,28 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 
 	//check for correlator
 	if (d_universal_time + chain_heads[i].time > d_write_time[i] * d_correlator_res) { //TODO add d_correlator_time to gpu_chain_heads
+		if (correlator_type == 0) {//stress calc
+			int run_sum_ = 0;
+			for (int arm_ = 0; arm_ < d_narms; arm_++) {
+				int tz_ = chain_heads[i].Z[arm_];
+				for (int j = 0; j < tz_; j++) {
+					float4 QN1;
+					if (fetch_new_strent(j + run_sum_, d_offset[i*d_narms + arm_]))
+						QN1 = new_strent;
+					else
+						QN1 = tex2D(t_a_QN, make_offset(j + run_sum_, d_offset[i*d_narms + arm_]), i);
+
+					sum_stress.x -= __fdividef(3.0f * QN1.x * QN1.y, QN1.w);
+					sum_stress.y -= __fdividef(3.0f * QN1.y * QN1.z, QN1.w);
+					sum_stress.z -= __fdividef(3.0f * QN1.x * QN1.z, QN1.w);
+				}
+				run_sum_ += d_z_max_arms[arm_];
+			}
+			sum_stress.w = 1.0f;
+			surf2Dwrite(sum_stress, s_corr, sizeof(float4) * i, stress_index); //Write stress value to the stack
+		}
+
+		//Update counter
 		d_write_time[i]++;
 	}
 	//check again to stop if necessary
@@ -686,10 +710,10 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 
 	bool shfl = (jj < tz-1) && (tz>1);
 
-	for (int u=0; u<d_narms; u++){
-		if (u!=arm)
-			d_offset[i*d_narms+u] = offset_code(0xffff, +1);
-	}
+	//for (int u=0; u<d_narms; u++){
+	//	if (u!=arm)
+	//		d_offset[i*d_narms+u] = offset_code(0xffff, +1);
+	//}
 
 	if (shfl) {//Shuffling
 		float4 QN1 = tex2D(t_a_QN, make_offset(j, oft), i);
@@ -706,21 +730,67 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		if (k==1) {
 			QN1.w = QN1.w + 1;
 			QN2.w = QN2.w - 1;
-//			if (i==1)	printf("\nShuffling left");
+			//printf("\nShuffling left, arm %i",arm);
 		} else {
 			QN1.w = QN1.w - 1;
 			QN2.w = QN2.w + 1;
-//			if (i==1)	printf("\nShuffling right");
+			//printf("\nShuffling right, arm %i", arm);
+		}
+
+		if (jj == 0) {//shuffling invoving branch-point
+			float sumNinv = 0.0f;
+			float4 temp_;
+			int run_sum_ = 0;
+			for (int arm_ = 0; arm_<d_narms; arm_++) {
+				int tz_ = chain_heads[i].Z[arm_];
+				//printf("\n%i\t%i", arm_,tz_);
+				if ((tz_>1) && (arm_ != arm)) {//entangled arms
+					if (fetch_new_strent(0 + run_sum_, d_offset[i*d_narms + arm_]))
+						temp_ = new_strent;
+					else
+						temp_ = tex2D(t_a_QN, make_offset(0 + run_sum_, d_offset[i*d_narms + arm_]), i);
+					//printf("\n%i\t%f\t%f\t%f\t%f", arm_, temp_.x, temp_.y, temp_.z, temp_.w);
+					sumNinv += 1 / temp_.w;
+					//printf("\n%i\t%f", arm_, 1 / temp_.w);
+				}
+				run_sum_ += d_z_max_arms[arm_];
+			}
+			sumNinv += 1 / QN1.w;
+			float4 deltaQ = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+			if (k == 1) {//shift left
+				deltaQ = QN1 / (-QN1.w*(QN1.w - 1)*sumNinv);
+			}
+			else {
+				deltaQ = QN1 / (QN1.w*(QN1.w + 1)*sumNinv);
+			}
+			deltaQ.w = 0.0f;
+			//printf("\nNear branch %i. Sum of inverses %f. Shifting origin at %f\t%f\t%f", arm, sumNinv, deltaQ.x, deltaQ.y, deltaQ.z);
+			run_sum_ = 0;
+			for (int arm_ = 0; arm_ < d_narms; arm_++) {
+				int tz_ = chain_heads[i].Z[arm_];
+				if ((tz_ > 1) && (arm_ != arm)) {//entangled arms
+					if (fetch_new_strent(0 + run_sum_, d_offset[i*d_narms + arm_]))
+						temp_ = new_strent;
+					else
+						temp_ = tex2D(t_a_QN, make_offset(0 + run_sum_, d_offset[i*d_narms + arm_]), i);
+					//printf("\n%f\t%f\t%f", temp_.x, temp_.y, temp_.z);
+					
+					temp_ = temp_ - deltaQ;
+					
+					surf2Dwrite(temp_, s_b_QN, 16 * run_sum_, i);
+				}
+				run_sum_ += d_z_max_arms[arm_];
+			}
+			QN1 = QN1 - deltaQ;
 		}
 		surf2Dwrite(QN1, s_b_QN, 16 * j, i);
 		surf2Dwrite(QN2, s_b_QN, 16 * (j + 1), i);
 		d_offset[ii] = offset_code(0xffff, +1);
-		return;
 	} else {//Process at the end of chain
 		if (k==0) {//  Creation by sliding dynamics
 			if (tz == d_z_max_arms[arm])
 				return;	// possible detail balance issue
-//			printf("\nCreation by SD");
+			//printf("\nCreation by SD");
 			float4 temp = tex2D(t_taucd_gauss_rand_SD, tau_CD_used_SD[i], i);
 			tau_CD_used_SD[i]++;
 			chain_heads[i].Z[arm]++;
@@ -739,39 +809,58 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 			temp.z *= sigma;
 			if (tz==1){
 				float4 temp_;
+				int run_sum_ = 0;
 				bool unent=true; //if all arms are unentangled -> set temp as (0,0,0)
-				float4 sumQNinv = make_float4(0.0f,0.0f,0.0f,0.0f);
 				float sumNinv = 0.0f;
 				for (int arm_=0; arm_<d_narms; arm_++){
 					int tz_ = chain_heads[i].Z[arm_];
 					if ((tz_>1) && (arm_!=arm)){//entangled arms
 						unent=false;
-						if (fetch_new_strent(0 + run_sum, oft))
+
+						if (fetch_new_strent(0 + run_sum_, d_offset[i*d_narms + arm_]))
 							temp_ = new_strent;
 						else
-							temp_ = tex2D(t_a_QN, make_offset(0 + run_sum, oft), i);
-						sumQNinv += temp_/temp_.w;
+							temp_ = tex2D(t_a_QN, make_offset(0 + run_sum_, d_offset[i*d_narms + arm_]), i);
+
 						sumNinv += 1/temp_.w;
 					}
+					run_sum_ += d_z_max_arms[arm_];
 				}
+
+				float4 deltaQ = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+				deltaQ = temp / (-temp.w*sumNinv);
+				deltaQ.w = 0.0f;
+
+
+				run_sum_ = 0;
+				for (int arm_ = 0; arm_ < d_narms; arm_++) {
+					int tz_ = chain_heads[i].Z[arm_];
+					if ((tz_ > 1) && (arm_ != arm)) {//entangled arms
+						if (fetch_new_strent(0 + run_sum_, d_offset[i*d_narms + arm_]))
+							temp_ = new_strent;
+						else
+							temp_ = tex2D(t_a_QN, make_offset(0 + run_sum_, d_offset[i*d_narms + arm_]), i);
+
+						temp_ = temp_ + deltaQ;
+						//printf("\n writing... %f\t%f\t%f\t%f\t",temp_.x,temp_.y,temp_.z,temp_.w);
+						surf2Dwrite(temp_, s_b_QN, 16 * run_sum_, i);
+					}
+					run_sum_ += d_z_max_arms[arm_];
+				}
+
 				if(unent){
 					temp.x = 0.0f;
 					temp.y = 0.0f;
 					temp.z = 0.0f;
-				}else{
-					temp.x = __fdividef(temp.x * (sumNinv+__fdividef(1.0f,temp.w)) + sumQNinv.x, sumNinv);
-					temp.y = __fdividef(temp.y * (sumNinv+__fdividef(1.0f,temp.w)) + sumQNinv.y, sumNinv);
-					temp.z = __fdividef(temp.z * (sumNinv+__fdividef(1.0f,temp.w)) + sumQNinv.z, sumNinv);
 				}
 				//printf("\nCreating entanglement on chain %i, on unentangled arm %i, with N=%f",i,arm,temp.w);
 			}
 			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 1.0f), s_b_QN, 16 * (tz - 1 + run_sum), i);
 			d_offset[ii] = offset_code(tz - 1 + run_sum, -1);
 			d_new_strent[i] = temp;
-			return;
 		} else {
 		// Destruction by sliding dynamics
-//			printf("\nDestruction by SD");
+			//printf("\nDestruction by SD");
 			chain_heads[i].Z[arm]--;
 
 			float4 QNtailp;
@@ -782,9 +871,48 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 
 			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNtailp.w + 1.0f), s_b_QN, 16 * (tz - 2 + run_sum), i);
 			d_offset[ii] = offset_code(tz + run_sum, +1);
-//			if(chain_heads[i].Z[arm]==1){
-//				printf("\nDestroying entanglement on chain %i. Arm %i is now unentangled  with with N=%f",i,arm,QNtailp.w + 1.0f);
-//			}
+			if(chain_heads[i].Z[arm]==1){
+				float4 temp_;
+				int run_sum_ = 0;
+				bool unent = true; //if all arms are unentangled -> set temp as (0,0,0)
+				float sumNinv = 0.0f;
+				for (int arm_ = 0; arm_<d_narms; arm_++) {
+					int tz_ = chain_heads[i].Z[arm_];
+					if ((tz_>1) && (arm_ != arm)) {//entangled arms
+						unent = false;
+
+						if (fetch_new_strent(0 + run_sum_, d_offset[i*d_narms + arm_]))
+							temp_ = new_strent;
+						else
+							temp_ = tex2D(t_a_QN, make_offset(0 + run_sum_, d_offset[i*d_narms + arm_]), i);
+
+						sumNinv += 1 / temp_.w;
+					}
+					run_sum_ += d_z_max_arms[arm_];
+				}
+
+				float4 deltaQ = QNtailp / (QNtailp.w*sumNinv);
+				deltaQ.w = 0.0f;
+
+				run_sum_ = 0;
+				for (int arm_ = 0; arm_ < d_narms; arm_++) {
+					int tz_ = chain_heads[i].Z[arm_];
+					if ((tz_ > 1) && (arm_ != arm)) {//entangled arms
+						if (fetch_new_strent(0 + run_sum_, d_offset[i*d_narms + arm_]))
+							temp_ = new_strent;
+						else
+							temp_ = tex2D(t_a_QN, make_offset(0 + run_sum_, d_offset[i*d_narms + arm_]), i);
+
+						temp_ = temp_ + deltaQ;
+
+						surf2Dwrite(temp_, s_b_QN, 16 * run_sum_, i);
+					}
+					run_sum_ += d_z_max_arms[arm_];
+				}
+
+				//printf("\nDestroying entanglement on chain %i. Arm %i is now unentangled  with with N=%f",i,arm,QNtailp.w + 1.0f);
+				//printf("\n deltaQ=%f\t%f\t%f",deltaQ.x, deltaQ.y, deltaQ.z);
+			}
 			float cr_time;
 			if (fetch_new_strent(tz - 2 + run_sum, oft)){
 				cr_time = d_new_tau_CD[i];
@@ -796,9 +924,13 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 				surf1Dwrite(log10f(d_universal_time + chain_heads[i].time - cr_time)+10,s_ft,i*sizeof(float));
 			}
 //			printf("\nDestruction by SD %f\t%f",d_universal_time + chain_heads[i].time - cr_time,cr_time);
-			return;
 		}
 	}
+	for (int u = 0; u<d_narms; u++) {
+		if (u != arm)
+			d_offset[i*d_narms + u] = offset_code(0xffff, +1);
+	}
+	return;
 }
 
 __global__ __launch_bounds__(tpb_chain_kernel) //stress calculation

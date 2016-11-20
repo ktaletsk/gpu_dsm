@@ -126,10 +126,19 @@ void host_chains_init(Ran* eran) {
 		for (int arm=0; arm<narms; arm++){
 			chain_init(&(chain_heads[i].Z[arm]), chain_index_arm(i,arm), NK_arms[arm], NK_arms[arm], false, PD_flag, eran);
 		}
-		float4 Q1 = chain_index_arm(i,0).QN[0];
-		for (int arm=0; arm<narms; arm++) {
-			converttoQhat(chain_index_arm(i,arm), Q1);
+
+		float4 aver_branch_point=make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+		float aver_sum = 0.0f;
+		for (int arm = 0; arm<narms; arm++) {
+			aver_branch_point = aver_branch_point + chain_index_arm(i, arm).QN[0] / chain_index_arm(i, arm).QN[0].w;
+			aver_sum += 1 / chain_index_arm(i, arm).QN[0].w;
 		}
+		aver_branch_point = aver_branch_point / aver_sum;
+
+		for (int arm = 0; arm<narms; arm++) {
+			converttoQhat(chain_index_arm(i, arm), aver_branch_point);
+		}
+		//I need to find average position of branch-point and substract it instead of Q1
 	}
 	cout << "done\n";
 }
@@ -449,7 +458,7 @@ void save_N_distribution_to_file(string filename, bool cumulative) {
 			}
 
 			//Sum up coinciding N
-			float P[Nstr];
+			float* P = new float[Nstr];
 			file << "\nArm " << arm;
 			for (int n = Nmin; n <= Nmax; n++) {
 				P[n]=0.0f;
@@ -481,7 +490,7 @@ void save_N_distribution_to_file(string filename, bool cumulative) {
 			}
 
 			//Sum up coinciding N
-			float P2[Nstr];
+			float* P2 = new float[Nstr];
 			file << "\nArm " << arm << " (near branching point)";
 			for (int n = Nmin; n <= Nmax; n++) {
 				P2[n]=0.0f;
@@ -496,6 +505,8 @@ void save_N_distribution_to_file(string filename, bool cumulative) {
 				file << "\n" << n << "\t" << P2[n];
 			}
 			run_sum += NK_arms[arm];
+			delete[] P;
+			delete[] P2;
 		}
 	} else
 		cout << "file error\n";

@@ -235,14 +235,14 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 			steps_count++;
 
 			//copy entanglement lifetimes
-			cudaStreamSynchronize(stream_calc1);
-			cudaMemcpyFromArray(entbuffer, d_ft, 0, 0, sizeof(float) * nc, cudaMemcpyDeviceToHost);
-			cudaStreamSynchronize(stream_calc1);
-			for (int i = 0; i < nc; i++){
-				if ((entbuffer[i]>0.0) && (entbuffer[i]<20.0)){
-					enttime_bins[floor(entbuffer[i]*1000)]++;
-				}
-			}
+			//cudaStreamSynchronize(stream_calc1);
+			//cudaMemcpyFromArray(entbuffer, d_ft, 0, 0, sizeof(float) * nc, cudaMemcpyDeviceToHost);
+			//cudaStreamSynchronize(stream_calc1);
+			//for (int i = 0; i < nc; i++){
+			//	if ((entbuffer[i]>0.0) && (entbuffer[i]<20.0)){
+			//		enttime_bins[floor(entbuffer[i]*1000)]++;
+			//	}
+			//}
 			//TODO: create empty array for bins
 			//Should be shared between blocks...
 
@@ -265,29 +265,32 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 			}
 
 
-//			if (steps_count % stressarray_count == 0) {
-//				cudaStreamSynchronize(stream_calc);
-//				cudaStreamSynchronize(stream_update);
-//				cudaUnbindTexture(t_corr);
-//				if (texture_flag==true){
-//					cudaBindTextureToArray(t_corr, d_corr_b, channelDesc4);
-//					texture_flag = false;
-//				} else {
-//					cudaBindTextureToArray(t_corr, d_corr_a, channelDesc4);
-//					texture_flag = true;
-//				}
-//				 if (type==0 && correlator_type==0){
-//				 	update_correlator<<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>((corr)->gpu_corr, stressarray_count, correlator_type);
-//				 }
-//				 if (correlator_type==1 || correlator_type==2){
-//					flow_stress<<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>((corr)->gpu_corr, stressarray_count, stress_average, nc);
-//				 }
-//			}
+			if (steps_count % stressarray_count == 0) {
+				cudaStreamSynchronize(stream_calc1);
+				cudaStreamSynchronize(stream_calc2);
+				cudaStreamSynchronize(stream_update);
+				cudaUnbindTexture(t_corr);
+				if (texture_flag==true){
+					cudaBindTextureToArray(t_corr, d_corr_b, channelDesc4);
+					texture_flag = false;
+				} else {
+					cudaBindTextureToArray(t_corr, d_corr_a, channelDesc4);
+					texture_flag = true;
+				}
+				if (type==0 && correlator_type==0){
+					update_correlator<<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0>>>((corr)->gpu_corr, stressarray_count, correlator_type);
+				}
+				//if (correlator_type==1 || correlator_type==2){
+				//	flow_stress<<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>((corr)->gpu_corr, stressarray_count, stress_average, nc);
+				//}
+			}
 
 			// check for reached time
 			cudaStreamSynchronize(stream_calc1);
+			cudaStreamSynchronize(stream_calc2);
 			cudaMemcpyAsync(rtbuffer, reach_flag, sizeof(float) * nc, cudaMemcpyDeviceToHost, stream_calc1);
 			cudaStreamSynchronize(stream_calc1);
+			cudaStreamSynchronize(stream_calc2);
 			float sumrt = 0;
 			for (int i = 0; i < nc; i++)
 				sumrt += rtbuffer[i];
@@ -299,26 +302,27 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 		}
 	}	//loop ends
 
-//	if (type==0){
-//		if (steps_count % stressarray_count != 0) {
-//			cudaStreamSynchronize(stream_calc);
-//			cudaStreamSynchronize(stream_update);
-//			cudaUnbindTexture(t_corr);
-//			if (texture_flag==true){
-//				cudaBindTextureToArray(t_corr, d_corr_b, channelDesc4);
-//				texture_flag = false;
-//			} else {
-//				cudaBindTextureToArray(t_corr, d_corr_a, channelDesc4);
-//				texture_flag = true;
-//			}
-//			if (type==0 && correlator_type==0){
-//				update_correlator<<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>((corr)->gpu_corr, steps_count, correlator_type);
-//			}
-//			if (correlator_type==1 || correlator_type==2){
-//				flow_stress<<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>((corr)->gpu_corr, steps_count, stress_average, nc);
-//			}
-//		}
-//	}
+	//if (type==0){
+	//	if (steps_count % stressarray_count != 0) {
+	//		cudaStreamSynchronize(stream_calc1);
+	//		cudaStreamSynchronize(stream_calc2);
+	//		cudaStreamSynchronize(stream_update);
+	//		cudaUnbindTexture(t_corr);
+	//		if (texture_flag==true){
+	//			cudaBindTextureToArray(t_corr, d_corr_b, channelDesc4);
+	//			texture_flag = false;
+	//		} else {
+	//			cudaBindTextureToArray(t_corr, d_corr_a, channelDesc4);
+	//			texture_flag = true;
+	//		}
+	//		if (type==0 && correlator_type==0){
+	//			update_correlator<<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>((corr)->gpu_corr, steps_count, correlator_type);
+	//		}
+	//		if (correlator_type==1 || correlator_type==2){
+	//			flow_stress<<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>((corr)->gpu_corr, steps_count, stress_average, nc);
+	//		}
+	//	}
+	//}
 
 	block_time = reach_time;
 	cudaHostUnregister(rtbuffer);
@@ -328,13 +332,13 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 	cudaStreamDestroy(stream_calc1);
 	cudaStreamDestroy(stream_calc2);
 
-	cout << "Entanglement life stats";
-	for (int it = 0; it < enttime_bins.size(); ++it){
-		if (enttime_bins[it] != 0){
-			cout << '\n' << it << '\t' << enttime_bins[it];
-		}
-	}
-	cout << '\n';
+	//cout << "Entanglement life stats";
+	//for (int it = 0; it < enttime_bins.size(); ++it){
+	//	if (enttime_bins[it] != 0){
+	//		cout << '\n' << it << '\t' << enttime_bins[it];
+	//	}
+	//}
+	//cout << '\n';
 
 //	if (correlator_type==1){
 //		cudaDeviceSynchronize();
