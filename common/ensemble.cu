@@ -364,18 +364,18 @@ int equilibrium_run(int res, double length, int s, int correlator_type, bool* ru
 		chain_blocks[i].equilibrium_calc(length, correlator_type, run_flag, progress_bar, np, t, x);
 	}
 
-//	ofstream correlator_file;
-//	if(correlator_type==0)	correlator_file.open(filename_ID("G",false));
-//	if(correlator_type==1)	correlator_file.open(filename_ID("MSD",false));
-//	cout << "\n";
-//	int actual_np = (np - correlator_size + floor(length/((float)res*pow((float)correlator_res,(s-1)))));
-//	for (int j = 0; j < actual_np; j++) {
-//		cout << t[j] << '\t' << x[j] << '\n';
-//		correlator_file << t[j] << '\t' << x[j] << '\n';
-//	}
-//	correlator_file.close();
-//	delete[] t;
-//	delete[] x;
+	ofstream correlator_file;
+	if(correlator_type==0)	correlator_file.open(filename_ID("G",false));
+	if(correlator_type==1)	correlator_file.open(filename_ID("MSD",false));
+	cout << "\n";
+	int actual_np = (np - correlator_size + floor(length/((float)res*pow((float)correlator_res,(s-1)))));
+	for (int j = 0; j < actual_np; j++) {
+		cout << t[j] << '\t' << x[j] << '\n';
+		correlator_file << t[j] << '\t' << x[j] << '\n';
+	}
+	correlator_file.close();
+	delete[] t;
+	delete[] x;
 	return 0;
 }
 

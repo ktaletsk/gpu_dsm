@@ -189,7 +189,7 @@ template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_ker
 		dt = tdt[j];
 		QN = kappa(QN, dt);
 	}
-//	printf("\n%i\t%i\t%i\t%i\t%i\t%f\t%f\t%f\t%f\t%i",i,arm,ii,d_z_max_arms[arm],tz,QN.x,QN.y,QN.z,QN.w,oft);
+	//printf("\n%i\t%i\t%i\t%i\t%i\t%f\t%f\t%f\t%f\t%i",i,arm,ii,d_z_max_arms[arm],tz,QN.x,QN.y,QN.z,QN.w,oft);
 	//fetch next strent
 	if ((ii > 0) && (ii < tz - 1)) {
 		float4 wsh = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -579,15 +579,15 @@ __device__ void corr_add(corr_device gpu_corr, float4 w, int k, int i, int type)
 
 __global__ void update_correlator(corr_device gpu_corr, int n, int type){
 	int i = blockIdx.x * blockDim.x + threadIdx.x; //Chain index
-	//if (i >= dn_cha_per_call)
-	//	return;
-	//float4 stress;
-	//for (int j=0; j<n; j++){
-	//	stress = tex2D(t_corr, i, j);
-	//	if (stress.w != -1.0f){
-	//		corr_add(gpu_corr, stress, 0, i, type); //add new value to the correlator
-	//	}
-	//}
+	if (i >= dn_cha_per_call)
+		return;
+	float4 stress;
+	for (int j=0; j<n; j++){
+		stress = tex2D(t_corr, i, j);
+		if (stress.w != -1.0f){
+			corr_add(gpu_corr, stress, 0, i, type); //add new value to the correlator
+		}
+	}
 }
 
 __global__ __launch_bounds__(tpb_chain_kernel) void flow_stress(corr_device gpu_corr, int n, float4* stress_average, int nc){
@@ -654,7 +654,7 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 						QN1 = new_strent;
 					else
 						QN1 = tex2D(t_a_QN, make_offset(j + run_sum_, d_offset[i*d_narms + arm_]), i);
-
+					
 					sum_stress.x -= __fdividef(3.0f * QN1.x * QN1.y, QN1.w);
 					sum_stress.y -= __fdividef(3.0f * QN1.y * QN1.z, QN1.w);
 					sum_stress.z -= __fdividef(3.0f * QN1.x * QN1.z, QN1.w);
@@ -662,6 +662,7 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 				run_sum_ += d_z_max_arms[arm_];
 			}
 			sum_stress.w = 1.0f;
+			//printf("\n%f\t%f\t%f", sum_stress.x, sum_stress.y, sum_stress.z);
 			surf2Dwrite(sum_stress, s_corr, sizeof(float4) * i, stress_index); //Write stress value to the stack
 		}
 

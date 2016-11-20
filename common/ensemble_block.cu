@@ -99,7 +99,7 @@ void ensemble_block::init(int nc_, vector_chains chains_, scalar_chains* chain_h
 
 	int s = ceil(log((float)nsteps/correlator_size)/log(correlator_res)) + 1; //number of correlator levels
 	cout << "number of correlator levels" << '\t' << s << '\n' << '\n';
-//	corr = new correlator(nc, s);//Allocate memory for c_correlator structure in cb
+	corr = new correlator(nc, s);//Allocate memory for c_correlator structure in cb
 	cudaMalloc((void**) &d_write_time, sizeof(int) * nc);//Allocated memory on device for correlator time for every chain in block
 	cudaMemset(d_write_time, 0, sizeof(int) * nc);	//Initialize d_correlator_time with zeros
 
@@ -278,11 +278,11 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 					texture_flag = true;
 				}
 				if (type==0 && correlator_type==0){
-					update_correlator<<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0>>>((corr)->gpu_corr, stressarray_count, correlator_type);
+					update_correlator<<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>((corr)->gpu_corr, stressarray_count, correlator_type);
 				}
-				//if (correlator_type==1 || correlator_type==2){
-				//	flow_stress<<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>((corr)->gpu_corr, stressarray_count, stress_average, nc);
-				//}
+				if (correlator_type==1 || correlator_type==2){
+					flow_stress<<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>((corr)->gpu_corr, stressarray_count, stress_average, nc);
+				}
 			}
 
 			// check for reached time
@@ -302,27 +302,27 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 		}
 	}	//loop ends
 
-	//if (type==0){
-	//	if (steps_count % stressarray_count != 0) {
-	//		cudaStreamSynchronize(stream_calc1);
-	//		cudaStreamSynchronize(stream_calc2);
-	//		cudaStreamSynchronize(stream_update);
-	//		cudaUnbindTexture(t_corr);
-	//		if (texture_flag==true){
-	//			cudaBindTextureToArray(t_corr, d_corr_b, channelDesc4);
-	//			texture_flag = false;
-	//		} else {
-	//			cudaBindTextureToArray(t_corr, d_corr_a, channelDesc4);
-	//			texture_flag = true;
-	//		}
-	//		if (type==0 && correlator_type==0){
-	//			update_correlator<<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>((corr)->gpu_corr, steps_count, correlator_type);
-	//		}
-	//		if (correlator_type==1 || correlator_type==2){
-	//			flow_stress<<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>((corr)->gpu_corr, steps_count, stress_average, nc);
-	//		}
-	//	}
-	//}
+	if (type==0){
+		if (steps_count % stressarray_count != 0) {
+			cudaStreamSynchronize(stream_calc1);
+			cudaStreamSynchronize(stream_calc2);
+			cudaStreamSynchronize(stream_update);
+			cudaUnbindTexture(t_corr);
+			if (texture_flag==true){
+				cudaBindTextureToArray(t_corr, d_corr_b, channelDesc4);
+				texture_flag = false;
+			} else {
+				cudaBindTextureToArray(t_corr, d_corr_a, channelDesc4);
+				texture_flag = true;
+			}
+			if (type==0 && correlator_type==0){
+				update_correlator<<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>((corr)->gpu_corr, steps_count, correlator_type);
+			}
+			if (correlator_type==1 || correlator_type==2){
+				flow_stress<<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>((corr)->gpu_corr, steps_count, stress_average, nc);
+			}
+		}
+	}
 
 	block_time = reach_time;
 	cudaHostUnregister(rtbuffer);
@@ -371,16 +371,16 @@ int ensemble_block::equilibrium_calc(double length, int correlator_type, bool* r
 	transfer_to_device();
 	cudaMemset(d_write_time, 0, sizeof(int) * nc);
 	if(time_step<0>(length, correlator_type, run_flag, progress_bar)==-1) return -1;
-//	int *tint = new int[np];
-//	float *x_buf = new float[np];
-//	corr->calc(tint, x_buf, correlator_type);
-//	transfer_from_device();
-//	for (int j = 0; j < corr->npcorr; j++) {
-//		t[j] = tint[j];
-//		x[j] += x_buf[j] / N_cha;
-//	}
-//	delete[] x_buf;
-//	delete[] tint;
+	int *tint = new int[np];
+	float *x_buf = new float[np];
+	corr->calc(tint, x_buf, correlator_type);
+	transfer_from_device();
+	for (int j = 0; j < corr->npcorr; j++) {
+		t[j] = tint[j];
+		x[j] += x_buf[j] / N_cha;
+	}
+	delete[] x_buf;
+	delete[] tint;
 	return 0;
 }
 
