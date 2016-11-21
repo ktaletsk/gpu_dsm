@@ -620,7 +620,7 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 	if (i >= dn_cha_per_call)
 		return;
 
-	float4 sum_stress = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+	float4 sum_stress = make_float4(0.0f, 0.0f, 0.0f, -1.0f);
 	surf2Dwrite(sum_stress, s_corr, sizeof(float4) * i, stress_index); //Write stress value to the stack
 
 	surf1Dwrite(0.0f,s_ft,i*sizeof(float));
