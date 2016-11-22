@@ -235,15 +235,14 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 			steps_count++;
 
 			//copy entanglement lifetimes
-			//cudaStreamSynchronize(stream_calc1);
-			//cudaMemcpyFromArray(entbuffer, d_ft, 0, 0, sizeof(float) * nc, cudaMemcpyDeviceToHost);
-			//cudaStreamSynchronize(stream_calc1);
-			//for (int i = 0; i < nc; i++){
-			//	if ((entbuffer[i]>0.0) && (entbuffer[i]<20.0)){
-			//		enttime_bins[floor(entbuffer[i]*1000)]++;
-			//	}
-			//}
-			//TODO: create empty array for bins
+			cudaStreamSynchronize(stream_calc1);
+			cudaMemcpyFromArray(entbuffer, d_ft, 0, 0, sizeof(float) * nc, cudaMemcpyDeviceToHost);
+			cudaStreamSynchronize(stream_calc1);
+			for (int i = 0; i < nc; i++){
+				if ((entbuffer[i]>0.0) && (entbuffer[i]<20.0)){
+					enttime_bins[floor(entbuffer[i]*1000)]++;
+				}
+			}
 			//Should be shared between blocks...
 
 			// update progress bar
@@ -332,13 +331,14 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 	cudaStreamDestroy(stream_calc1);
 	cudaStreamDestroy(stream_calc2);
 
-	//cout << "Entanglement life stats";
-	//for (int it = 0; it < enttime_bins.size(); ++it){
-	//	if (enttime_bins[it] != 0){
-	//		cout << '\n' << it << '\t' << enttime_bins[it];
-	//	}
-	//}
-	//cout << '\n';
+	ofstream lifetime_file;
+	lifetime_file.open(filename_ID("fdt", false));
+	for (int it = 0; it < enttime_bins.size(); ++it){
+		if (enttime_bins[it] != 0){
+			lifetime_file << it << '\t' << enttime_bins[it] << '\n';
+		}
+	}
+	lifetime_file.close();
 
 //	if (correlator_type==1){
 //		cudaDeviceSynchronize();
