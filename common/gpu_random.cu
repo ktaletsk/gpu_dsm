@@ -42,7 +42,7 @@ extern bool PD_flag;
 
 //CD constants
 __constant__ float d_At, d_Ct, d_Dt, d_Adt, d_Bdt, d_Cdt, d_Ddt;
-__constant__ float d_g, d_alpha, d_tau_0, d_tau_max, d_tau_d, d_tau_d_inv;
+__constant__ float d_g, d_alpha_1, d_alpha_2, d_tau_0, d_tau_1, d_tau_2, d_tau_d, d_tau_d_inv;
 __constant__ bool d_PD_flag;
 
 //Polydispersity constatnts
@@ -76,27 +76,29 @@ void gpu_ran_init (p_cd* pcd) {
 	}
 	else {
 		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_g, &(pcd->g), sizeof(float)));
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_alpha, &(pcd->alpha), sizeof(float)));
+		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_alpha_1, &(pcd->alpha_1), sizeof(float)));
+		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_alpha_1, &(pcd->alpha_2), sizeof(float)));
 		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_0, &(pcd->tau_0), sizeof(float)));
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_max, &(pcd->tau_max), sizeof(float)));
+		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_1, &(pcd->tau_1), sizeof(float)));
+		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_2, &(pcd->tau_2), sizeof(float)));
 		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_d, &(pcd->tau_d), sizeof(float)));
 		float cdtemp = 1.0f / pcd->tau_d;
 		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_d_inv, &(cdtemp), sizeof(float)));
 
-		cdtemp = 1.0f * (pcd->c1) / (pcd->At);
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_At, &cdtemp, sizeof(float)));
-		cdtemp = powf(pcd->tau_0, pcd->alpha);
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Dt, &cdtemp, sizeof(float)));
-		cdtemp = -1.0f / pcd->alpha;
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Ct, &cdtemp, sizeof(float)));
-		cdtemp = pcd->normdt * (pcd->c1) / (pcd->Adt);
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Adt, &cdtemp, sizeof(float)));
-		cdtemp = pcd->Bdt / pcd->normdt;
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Bdt, &cdtemp, sizeof(float)));
-		cdtemp = -1.0f / (pcd->alpha - 1.0f);
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Cdt, &cdtemp, sizeof(float)));
-		cdtemp = powf(pcd->tau_0, pcd->alpha - 1.0f);
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Ddt, &(cdtemp), sizeof(float)));
+		//cdtemp = 1.0f * (pcd->c1) / (pcd->At);
+		//CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_At, &cdtemp, sizeof(float)));
+		//cdtemp = powf(pcd->tau_0, pcd->alpha);
+		//CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Dt, &cdtemp, sizeof(float)));
+		//cdtemp = -1.0f / pcd->alpha;
+		//CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Ct, &cdtemp, sizeof(float)));
+		//cdtemp = pcd->normdt * (pcd->c1) / (pcd->Adt);
+		//CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Adt, &cdtemp, sizeof(float)));
+		//cdtemp = pcd->Bdt / pcd->normdt;
+		//CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Bdt, &cdtemp, sizeof(float)));
+		//cdtemp = -1.0f / (pcd->alpha - 1.0f);
+		//CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Cdt, &cdtemp, sizeof(float)));
+		//cdtemp = powf(pcd->tau_0, pcd->alpha - 1.0f);
+		//CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Ddt, &(cdtemp), sizeof(float)));
 	}
 
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_PD_flag, &PD_flag, sizeof(bool)));

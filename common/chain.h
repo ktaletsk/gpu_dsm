@@ -38,6 +38,7 @@ typedef struct vector_chains {//actually there are only Z-1 tau_CD and only Z-2 
 	//but we are ignoring this fact here
 	float4 *QN;	//number of chain segments in the strand and the strand connector vector
 	float *tau_CD;				//CD lifetime
+	float *tau_cr;
 	float4 *R1; //Position of the first entanglement in fixed frame
 } sstrentp;
 

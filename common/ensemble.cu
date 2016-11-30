@@ -79,6 +79,7 @@ vector_chains chain_index(const int i) { //absolute navigation i - is a global i
 	vector_chains ptr;
 	ptr.QN = &(chains.QN[z_max * i]);
 	ptr.tau_CD = &(chains.tau_CD[z_max * i]);
+	ptr.tau_cr = &(chains.tau_cr[z_max * i]);
 	ptr.R1 = &(chains.R1[i]);
 	return ptr;
 }
@@ -90,6 +91,7 @@ vector_chains chain_index_arm(const int i, const int arm) { //absolute navigatio
 	}
 	ptr.QN = &(chains.QN[z_max * i + shift]);
 	ptr.tau_CD = &(chains.tau_CD[z_max * i + shift]);
+	ptr.tau_cr = &(chains.tau_cr[z_max * i + shift]);
 	ptr.R1 = &(chains.R1[i]);
 	return ptr;
 }
@@ -100,6 +102,7 @@ vector_chains chain_index(const int bi, const int i) {    //block navigation
 	vector_chains ptr;
 	ptr.QN = &(chains.QN[z_max * (bi * chains_per_call + i)]);
 	ptr.tau_CD = &(chains.tau_CD[z_max * (bi * chains_per_call)]);
+	ptr.tau_cr = &(chains.tau_cr[z_max * (bi * chains_per_call)]);
 	ptr.R1 = &(chains.R1[bi * chains_per_call + i]);
 	return ptr;
 }
@@ -115,6 +118,7 @@ void chains_malloc() {
 	}
 	cudaMallocManaged((void**)&(chains.QN), sizeof(float4) * N_cha * z_max);
 	cudaMallocManaged((void**)&(chains.tau_CD), sizeof(float4) * N_cha * z_max);
+	cudaMallocManaged((void**)&(chains.tau_cr), sizeof(float4) * N_cha * z_max);
 	cudaMallocManaged((void**)&(chains.R1), sizeof(float4) * N_cha);
 }
 
@@ -193,12 +197,14 @@ void gpu_init(int seed, p_cd* pcd, int nsteps) {
 
 	cudaMallocArray(&d_a_QN, &channelDesc4, z_max, rsz, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_a_tCD, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
+	cudaMallocArray(&d_a_tcr, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_a_R1, &channelDesc4, rsz, 1, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_corr_a, &channelDesc4, rsz, stressarray_count, cudaArraySurfaceLoadStore);
 
 
 	cudaMallocArray(&d_b_QN, &channelDesc4, z_max, rsz, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_b_tCD, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
+	cudaMallocArray(&d_b_tcr, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_b_R1, &channelDesc4, rsz, 1, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_corr_b, &channelDesc4, rsz, stressarray_count, cudaArraySurfaceLoadStore);
 
@@ -578,6 +584,7 @@ void gpu_clean() {
 
 	cudaFree(chains.QN);
 	cudaFree(chains.tau_CD);
+	cudaFree(chains.tau_cr);
 	cudaFree(chains.R1);
 
 	cudaFree(chain_heads);
@@ -591,8 +598,10 @@ void gpu_clean() {
 
 	cudaFreeArray(d_a_QN);
 	cudaFreeArray(d_a_tCD);
+	cudaFreeArray(d_a_tcr);
 	cudaFreeArray(d_b_QN);
 	cudaFreeArray(d_b_tCD);
+	cudaFreeArray(d_b_tcr);
 	cudaFreeArray(d_a_R1);
 	cudaFreeArray(d_b_R1);
 	cudaFreeArray(d_corr_a);

@@ -36,6 +36,7 @@ class ensemble_block {
 	int *d_offset;        //coded array shifting parameters
 	float4 *d_new_strent; //new strent which should be inserted in the middle of the chain//TODO two new_strents will allow do all the updates at once
 	float *d_new_tau_CD;  //new life time
+	float *d_new_cr_time;
 
 	//G(t) calculations
 	correlator *corr;     //correlator

@@ -33,11 +33,13 @@ surface<void,2> rand_buffer;//temp array for random numbers
 //TODO replace a/b with source/dest
 texture<float4, 2, cudaReadModeElementType> t_a_QN;		// strents (N,Qx,Qy,Qz)
 texture<float, 2, cudaReadModeElementType> t_a_tCD;		// tau_CD
+texture<float, 2, cudaReadModeElementType> t_a_tcr;		// creation time
 texture<float4, 1, cudaReadModeElementType> t_a_R1;
 texture<float4, 2, cudaReadModeElementType> t_corr;
 
 surface<void,2> s_b_QN;// strents (N,Qx,Qy,Qz)
 surface<void,2> s_b_tCD;//tau_CD of ent-t
+surface<void, 2> s_b_tcr;//tau_CD of ent-t
 surface<void,1> s_b_R1;//R_1
 surface<void,2> s_corr;
  

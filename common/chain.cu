@@ -104,7 +104,7 @@ void Q_dist(int tz, int *Ntmp, bool dangling_begin, float *&Qxtmp, float *&Qytmp
 //	}
 }
 
-__host__ __device__ float tau_dist(float p,float Be, float Nk) {
+__host__ __device__ float tau_dist_linear(float p,float Be, float Nk) {
 	float g, alpha, tau_0, tau_max, tau_d;
 	double z = (Nk + Be) / (Be + 1.0);
 	g = 0.667f;
@@ -127,6 +127,33 @@ __host__ __device__ float tau_dist(float p,float Be, float Nk) {
 	if (p < (1.0f - g)) {
 		return powf(p / (1.0f - g) * (powf(tau_max, alpha) - powf(tau_0, alpha)) + powf(tau_0, alpha), 1.0f / alpha);
 	} else {
+		return tau_d;
+	}
+}
+
+__host__ __device__ float tau_dist(float p, float Be, float Nk) {
+	float A1, B1;
+	float g, alpha_1, alpha_2, tau_0, tau_1, tau_2, tau_d;
+	g = 0.0603976f;
+	alpha_1 = 0.281379f;
+	alpha_2 = -0.188025f;
+	tau_0 = 0.271977f;
+	tau_1 = 428.864f;
+	tau_2 = 450294.0f;
+	tau_d = 452485.f;
+
+	A1 = (powf(tau_1, alpha_1) - powf(tau_0, alpha_1)) / alpha_1;
+	B1 = (powf(tau_2, alpha_2) - powf(tau_1, alpha_2)) / alpha_2 * powf(tau_1, alpha_1 - alpha_2);
+	
+	if (p < (1.0f - g)) {
+		if (p < (1.0f - g)*A1 / (A1 + B1)) {
+			return powf(p * alpha_1 * (A1 + B1) / (1 - g) + powf(tau_0, alpha_1), 1.0f / alpha_1);
+		}
+		else {
+			return powf(alpha_2 / powf(tau_1, alpha_1 - alpha_2) * (p * (A1 + B1) / (1 - g) - A1) + powf(tau_1, alpha_2), 1.0f / alpha_2);
+		}
+	}
+	else {
 		return tau_d;
 	}
 }
@@ -176,20 +203,18 @@ void chain_init(int* z, vector_chains data, int tnk, int z_max, bool dangling_be
 
 	for (int k = 0; k < tz - 1; k++) { //all except first and last ent-t
 		data.QN[k] = make_float4(Qxtmp[k], Qytmp[k], Qztmp[k], float(tN[k]));
-//		cout << "\n" << data.QN[k].x << "\t" << data.QN[k].y << "\t" << data.QN[k].z << "\t" << data.QN[k].w;
-//		data.tau_CD[k] = 1.0f / tent_tau[k];
-		data.tau_CD[k] = 0.0f;
+		data.tau_CD[k] = 1.0f / tent_tau[k];
+		data.tau_cr[k] = 0.0f;
 	}
 
 	//Set first entanglement
-//	data.tau_CD[0] = 1.0f / tent_tau[0];
-	data.tau_CD[0] = 0.0f;
+	data.tau_CD[0] = 1.0f / tent_tau[0];
+	data.tau_cr[0] = 0.0f;
 	//Set_dangling_ends
 	if (dangling_begin){
 		data.QN[0] = make_float4(0.0f, 0.0f, 0.0f, float(tN[0]));
 	}
 	data.QN[tz - 1] = make_float4(0.0f, 0.0f, 0.0f, float(tN[tz - 1]));
-//	cout << "\n" << data.QN[tz - 1].x << "\t" << data.QN[tz - 1].y << "\t" << data.QN[tz - 1].z << "\t" << data.QN[tz - 1].w;
 
 	//Calculate center of mass for MSD calculations
 	float4 sum_stress = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
