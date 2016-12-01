@@ -185,7 +185,8 @@ void make_gamma_table (float a, float b) {
 //	lgam = lgamma(a/b);
 //	g_0  = signgam*exp(lgam);
 	lgam = lgamma((a+1)/b);
-	g_1  = signgam*exp(lgam);
+	//g_1  = signgam*exp(lgam);
+	g_1 = exp(lgam);
 	double m_max = pow(a/b,1/b);
 	double W_max=b/g_1*pow(m_max,a)*exp(-pow(m_max,b));//max value of W(m)/m (b/Gamma((a+1)/b) cancel in expression for m_cutoff)
 	double c = 0.001*W_max; //Cutoff value for W(m)/m

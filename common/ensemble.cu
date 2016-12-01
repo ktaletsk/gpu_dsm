@@ -374,7 +374,7 @@ void save_Z_distribution_to_file(string filename /*char *filename*/, bool cumula
 		}
 
 		//Sum up coinciding Z
-		float P[N_cha];
+		float* P = new float[N_cha];
 		for (int j = Zmin; j <= Zmax; j++) {
 			P[j]=0.0f;
 			int counter=0;
@@ -413,7 +413,7 @@ void save_N_distribution_to_file(string filename, bool cumulative) {
 		}
 
 		//Sum up coinciding N
-		float P[Nstr];
+		float* P = new float[Nstr];
 		for (int n = Nmin; n <= Nmax; n++) {
 			P[n]=0.0f;
 			int counter=0;
@@ -444,7 +444,7 @@ void save_Q_distribution_to_file(string filename, bool cumulative) {
 		//Search for maximal and minimal value of |Q| across all strands in all chains
 
 		int Nstr = 0;
-		int prev[N_cha];
+		int *prev = new int[N_cha];
 
 		for (int i = 0; i < N_cha; i++) {
 			Nstr += chain_heads[i].Z - 2;
@@ -455,7 +455,7 @@ void save_Q_distribution_to_file(string filename, bool cumulative) {
 		}
 
 		//Calculating strand vector lengths
-		float Q[Nstr];
+		float *Q = new float[Nstr];
 		for (int i = 0; i < N_cha; i++) {
 			for (int j = 1; j < chain_heads[i].Z - 1; j++) {
 				Q[prev[i] + j - 1] = sqrt(chain_index(i).QN[j].x * chain_index(i).QN[j].x + chain_index(i).QN[j].y * chain_index(i).QN[j].y + chain_index(i).QN[j].z * chain_index(i).QN[j].z);
@@ -469,7 +469,7 @@ void save_Q_distribution_to_file(string filename, bool cumulative) {
 		qsort(Q, Nstr, sizeof(float), compare);
 
 		//Calculate probabilities
-		float P[Nstr];
+		float *P = new float[Nstr];
 		for (int i = 0; i < Nstr; i++) {
 			if (i != 0) {
 				if (Q[i] == Q[i - 1])

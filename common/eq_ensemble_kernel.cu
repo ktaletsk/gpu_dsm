@@ -519,7 +519,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 			gpu_chain_heads[i].Z++;
 			d_new_tau_CD[i] = temp.w;		//__fdividef(1.0f,d_tau_d);
 			float newn = floorf(0.5f + __fdividef(pr * (QN1.w - 2.0f), wcdc)) + 1.0f;
-			if (correlator_type==1 && j == 0) {
+			if (j == 0) {
 				temp.w = QN1.w - newn;
 				float sigma = __fsqrt_rn(__fdividef(temp.w, 3.0f));
 				temp.x *= sigma;

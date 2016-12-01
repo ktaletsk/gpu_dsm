@@ -4,9 +4,9 @@
 	0.0	0.0 0.0	0.0	0.0	0.0	0.0	0.0	0.0
 	1
 	0
-	1
+	2
 	1.0
-	50000
+	1000
 	
 ! Input file for linear chains
 !Line by line description of input:
