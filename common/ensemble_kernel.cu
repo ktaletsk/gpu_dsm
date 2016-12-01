@@ -455,7 +455,7 @@ __global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* fou
 
 	//parallel scan in s (naive)
 	int pout = 0, pin = 1;
-	printf("\n%i\t%i\t%f\t%f\t%f\t%f",ii,arm,temp.x,temp.y,temp.z,temp.w);
+	//printf("\n%i\t%i\t%f\t%f\t%f\t%f",ii,arm,temp.x,temp.y,temp.z,temp.w);
 	s[pout*d_z_max+i] = (double)temp.x + (double)temp.y;
 	__syncthreads();
 	for (int offset = 1; offset < d_z_max; offset *= 2) {
@@ -484,9 +484,9 @@ __global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* fou
 		else if (x - left < temp.x + temp.y)
 			found_shift[j] = 1;
 		else if (x - left < temp.x + temp.y + temp.z)
-			found_shift[j] = 2;
+			found_shift[j] = 2; //destruction by CD
 		else
-			found_shift[j] = 3;
+			found_shift[j] = 4; //creation by CD
 
 		//if (temp.y == 0.0f)
 		//	found_shift[j]=1;
@@ -727,18 +727,16 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 	int tz = chain_heads[i].Z[arm];
 	uint oft = d_offset[ii];
 
-	bool shfl = (jj < tz-1) && (tz>1);
-
-	//for (int u=0; u<d_narms; u++){
-	//	if (u!=arm)
-	//		d_offset[i*d_narms+u] = offset_code(0xffff, +1);
-	//}
-
-	if (jj == tz - 1 && k == 0){
-		jj--;
-		j--;
+	if (jj == tz - 1) {//boundary cases
+		if (k == 0) {//destruction by SD at the end
+			k = 2;
+			jj--;
+			j--;
+		}
+		else if (k == 1) {//creation by SD at the end
+			k = 3;
+		}
 	}
-		
 
 	float4 QN1 = tex2D(t_a_QN, make_offset(j, oft), i);
 	if (fetch_new_strent(j, oft))
@@ -751,14 +749,12 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		QN2 = kappa(QN2, olddt);
 	}
 
-	//printf("\n%i\t%i\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f", arm, jj, QN1.x, QN1.y, QN1.z, QN1.w, QN2.x, QN2.y, QN2.z, QN2.w);
-
-	if (shfl) {//Shuffling
-		if (k==0) {
+	//Apply chosen process (shuffling of Kuhn step, destruction or creation of entanglement)
+	if (k==0 || k==1) {//Shuffling
+		if (k==0) { //shuffling left
 			QN1.w = QN1.w + 1;
 			QN2.w = QN2.w - 1;
-			//printf("\nShuffling left, arm %i",arm);
-		} else {
+		} else { //shuffling right
 			QN1.w = QN1.w - 1;
 			QN2.w = QN2.w + 1;
 			//printf("\nShuffling right, arm %i", arm);
@@ -813,143 +809,153 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		surf2Dwrite(QN1, s_b_QN, 16 * j, i);
 		surf2Dwrite(QN2, s_b_QN, 16 * (j + 1), i);
 		d_offset[ii] = offset_code(0xffff, +1);
-	} else {//Process at the end of chain
-		if (k==1) {//  Creation by sliding dynamics
-			if (tz == d_z_max_arms[arm])
-				return;	// possible detail balance issue
-			//printf("\nCreation by SD");
-			float4 temp = tex2D(t_taucd_gauss_rand_SD, tau_CD_used_SD[i], i);
-			tau_CD_used_SD[i]++;
-			chain_heads[i].Z[arm]++;
-			//d_new_tau_CD[i] =
-			d_new_cr_time[i] = d_universal_time + chain_heads[i].time;
-
-			float4 QN_tail;
-			if (fetch_new_strent(tz - 1 + run_sum, oft))
-				QN_tail = new_strent;
-			else
-				QN_tail = tex2D(t_a_QN, make_offset((tz - 1)+ run_sum, oft), i);
-
-			temp.w = QN_tail.w - 1.0f;
-			float sigma = __fsqrt_rn(__fdividef(temp.w, 3.0f));
-			temp.x *= sigma;
-			temp.y *= sigma;
-			temp.z *= sigma;
-			if (tz==1){
-				float4 temp_;
-				int run_sum_ = 0;
-				bool unent=true; //if all arms are unentangled -> set temp as (0,0,0)
-				float sumNinv = 0.0f;
-				for (int arm_=0; arm_<d_narms; arm_++){
-					int tz_ = chain_heads[i].Z[arm_];
-					if ((tz_>1) && (arm_!=arm)){//entangled arms
-						unent=false;
-
-						if (fetch_new_strent(0 + run_sum_, d_offset[i*d_narms + arm_]))
-							temp_ = new_strent;
-						else
-							temp_ = tex2D(t_a_QN, make_offset(0 + run_sum_, d_offset[i*d_narms + arm_]), i);
-
-						sumNinv += 1/temp_.w;
-					}
-					run_sum_ += d_z_max_arms[arm_];
-				}
-
-				float4 deltaQ = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-				deltaQ = temp / (-temp.w*sumNinv);
-				deltaQ.w = 0.0f;
-
-
-				run_sum_ = 0;
-				for (int arm_ = 0; arm_ < d_narms; arm_++) {
-					int tz_ = chain_heads[i].Z[arm_];
-					if ((tz_ > 1) && (arm_ != arm)) {//entangled arms
-						if (fetch_new_strent(0 + run_sum_, d_offset[i*d_narms + arm_]))
-							temp_ = new_strent;
-						else
-							temp_ = tex2D(t_a_QN, make_offset(0 + run_sum_, d_offset[i*d_narms + arm_]), i);
-
-						temp_ = temp_ + deltaQ;
-						//printf("\n writing... %f\t%f\t%f\t%f\t",temp_.x,temp_.y,temp_.z,temp_.w);
-						surf2Dwrite(temp_, s_b_QN, 16 * run_sum_, i);
-					}
-					run_sum_ += d_z_max_arms[arm_];
-				}
-
-				if(unent){
-					temp.x = 0.0f;
-					temp.y = 0.0f;
-					temp.z = 0.0f;
-				}
-				//printf("\nCreating entanglement on chain %i, on unentangled arm %i, with N=%f",i,arm,temp.w);
-			}
-			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 1.0f), s_b_QN, 16 * (tz - 1 + run_sum), i);
-			d_offset[ii] = offset_code(tz - 1 + run_sum, -1);
-			d_new_strent[i] = temp;
-		} else {
+	}
+	else if (k == 2) {
 		// Destruction by sliding dynamics
 
-			chain_heads[i].Z[arm]--;  //decrease number of strands as entanglement is destroyed
-			float4 temp = make_float4(0.0f, 0.0f, 0.0f, QN1.w + 1.0f); //temporary variable for new strand
-			//printf("\nDangling end N=%f", QN2.w);
-			surf2Dwrite(temp, s_b_QN, 16 * (tz - 2 + run_sum), i);
-			d_offset[ii] = offset_code(tz + run_sum, +1);
+		chain_heads[i].Z[arm]--;  //decrease number of strands as entanglement is destroyed
+		float4 temp = make_float4(0.0f, 0.0f, 0.0f, QN1.w + QN2.w); //temporary variable for new strand
+		surf2Dwrite(temp, s_b_QN, 16 * (jj + run_sum), i);
+		d_offset[ii] = offset_code(jj + 1 + run_sum, +1);
 
-			if(chain_heads[i].Z[arm]==1){
-				float4 temp_;
-				int run_sum_ = 0;
-				bool unent = true; //if all arms are unentangled -> set temp as (0,0,0)
-				float sumNinv = 0.0f;
-				for (int arm_ = 0; arm_<d_narms; arm_++) {
-					int tz_ = chain_heads[i].Z[arm_];
-					if ((tz_>1) && (arm_ != arm)) {//entangled arms
-						unent = false;
+		if (chain_heads[i].Z[arm] == 1) {
+			float4 temp_;
+			int run_sum_ = 0;
+			bool unent = true; //if all arms are unentangled -> set temp as (0,0,0)
+			float sumNinv = 0.0f;
+			for (int arm_ = 0; arm_<d_narms; arm_++) {
+				int tz_ = chain_heads[i].Z[arm_];
+				if ((tz_>1) && (arm_ != arm)) {//entangled arms
+					unent = false;
 
-						if (fetch_new_strent(0 + run_sum_, d_offset[i*d_narms + arm_]))
-							temp_ = new_strent;
-						else
-							temp_ = tex2D(t_a_QN, make_offset(0 + run_sum_, d_offset[i*d_narms + arm_]), i);
+					if (fetch_new_strent(0 + run_sum_, d_offset[i*d_narms + arm_]))
+						temp_ = new_strent;
+					else
+						temp_ = tex2D(t_a_QN, make_offset(0 + run_sum_, d_offset[i*d_narms + arm_]), i);
 
-						sumNinv += 1 / temp_.w;
-					}
-					run_sum_ += d_z_max_arms[arm_];
+					sumNinv += 1 / temp_.w;
 				}
+				run_sum_ += d_z_max_arms[arm_];
+			}
 
-				float4 deltaQ = QN1 / (QN1.w*sumNinv);
-				deltaQ.w = 0.0f;
+			float4 deltaQ = QN1 / (QN1.w*sumNinv);
+			deltaQ.w = 0.0f;
 
-				run_sum_ = 0;
-				for (int arm_ = 0; arm_ < d_narms; arm_++) {
-					int tz_ = chain_heads[i].Z[arm_];
-					if ((tz_ > 1) && (arm_ != arm)) {//entangled arms
-						if (fetch_new_strent(0 + run_sum_, d_offset[i*d_narms + arm_]))
-							temp_ = new_strent;
-						else
-							temp_ = tex2D(t_a_QN, make_offset(0 + run_sum_, d_offset[i*d_narms + arm_]), i);
+			run_sum_ = 0;
+			for (int arm_ = 0; arm_ < d_narms; arm_++) {
+				int tz_ = chain_heads[i].Z[arm_];
+				if ((tz_ > 1) && (arm_ != arm)) {//entangled arms
+					if (fetch_new_strent(0 + run_sum_, d_offset[i*d_narms + arm_]))
+						temp_ = new_strent;
+					else
+						temp_ = tex2D(t_a_QN, make_offset(0 + run_sum_, d_offset[i*d_narms + arm_]), i);
 
-						temp_ = temp_ + deltaQ;
+					temp_ = temp_ + deltaQ;
 
-						surf2Dwrite(temp_, s_b_QN, 16 * run_sum_, i);
-					}
-					run_sum_ += d_z_max_arms[arm_];
+					surf2Dwrite(temp_, s_b_QN, 16 * run_sum_, i);
 				}
+				run_sum_ += d_z_max_arms[arm_];
+			}
 
-				//printf("\nDestroying entanglement on chain %i. Arm %i is now unentangled  with with N=%f",i,arm,QNtailp.w + 1.0f);
-				//printf("\n deltaQ=%f\t%f\t%f",deltaQ.x, deltaQ.y, deltaQ.z);
-			}
-			float cr_time;
-			if (fetch_new_strent(tz - 2 + run_sum, oft)){
-				cr_time = d_new_cr_time[i];
-			}
-			else{
-				cr_time = tex2D(t_a_tcr, make_offset(tz - 2 + run_sum, oft), i);
-			}
-			if (cr_time!=0){
-				surf1Dwrite(log10f(d_universal_time + chain_heads[i].time - cr_time)+10,s_ft,i*sizeof(float));
-			}
-//			printf("\nDestruction by SD %f\t%f",d_universal_time + chain_heads[i].time - cr_time,cr_time);
+			//printf("\nDestroying entanglement on chain %i. Arm %i is now unentangled  with with N=%f",i,arm,QNtailp.w + 1.0f);
+			//printf("\n deltaQ=%f\t%f\t%f",deltaQ.x, deltaQ.y, deltaQ.z);
 		}
+		float cr_time;
+		if (fetch_new_strent(tz - 2 + run_sum, oft)) {
+			cr_time = d_new_cr_time[i];
+		}
+		else {
+			cr_time = tex2D(t_a_tcr, make_offset(tz - 2 + run_sum, oft), i);
+		}
+		if (cr_time != 0) {
+			surf1Dwrite(log10f(d_universal_time + chain_heads[i].time - cr_time) + 10, s_ft, i * sizeof(float));
+		}
+	} 
+	else if (k==3) {//  Creation by SD
+		float4 temp = tex2D(t_taucd_gauss_rand_SD, tau_CD_used_SD[i], i);
+		tau_CD_used_SD[i]++;
+		chain_heads[i].Z[arm]++;
+		d_new_tau_CD[i] = temp.w;
+		d_new_cr_time[i] = d_universal_time + chain_heads[i].time;
+
+		temp.w = QN1.w - 1.0f;
+
+		float sigma = __fsqrt_rn(__fdividef(temp.w, 3.0f));
+		temp.x *= sigma;
+		temp.y *= sigma;
+		temp.z *= sigma;
+		if (tz==1){
+			float4 temp_;
+			int run_sum_ = 0;
+			bool unent=true; //if all arms are unentangled -> set temp as (0,0,0)
+			float sumNinv = 0.0f;
+			for (int arm_=0; arm_<d_narms; arm_++){
+				int tz_ = chain_heads[i].Z[arm_];
+				if ((tz_>1) && (arm_!=arm)){//entangled arms
+					unent=false;
+
+					if (fetch_new_strent(0 + run_sum_, d_offset[i*d_narms + arm_]))
+						temp_ = new_strent;
+					else
+						temp_ = tex2D(t_a_QN, make_offset(0 + run_sum_, d_offset[i*d_narms + arm_]), i);
+
+					sumNinv += 1/temp_.w;
+				}
+				run_sum_ += d_z_max_arms[arm_];
+			}
+
+			float4 deltaQ = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+			deltaQ = temp / (-temp.w*sumNinv);
+			deltaQ.w = 0.0f;
+
+
+			run_sum_ = 0;
+			for (int arm_ = 0; arm_ < d_narms; arm_++) {
+				int tz_ = chain_heads[i].Z[arm_];
+				if ((tz_ > 1) && (arm_ != arm)) {//entangled arms
+					if (fetch_new_strent(0 + run_sum_, d_offset[i*d_narms + arm_]))
+						temp_ = new_strent;
+					else
+						temp_ = tex2D(t_a_QN, make_offset(0 + run_sum_, d_offset[i*d_narms + arm_]), i);
+
+					temp_ = temp_ + deltaQ;
+					//printf("\n writing... %f\t%f\t%f\t%f\t",temp_.x,temp_.y,temp_.z,temp_.w);
+					surf2Dwrite(temp_, s_b_QN, 16 * run_sum_, i);
+				}
+				run_sum_ += d_z_max_arms[arm_];
+			}
+
+			if(unent){
+				temp.x = 0.0f;
+				temp.y = 0.0f;
+				temp.z = 0.0f;
+			}
+			//printf("\nCreating entanglement on chain %i, on unentangled arm %i, with N=%f",i,arm,temp.w);
+		}
+		surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 1.0f), s_b_QN, 16 * j, i);
+		d_offset[ii] = offset_code(j, -1);
+		d_new_strent[i] = temp;
 	}
+	else if (k == 4) {
+		float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used_CD[i], i);
+		tau_CD_used_CD[i]++;
+		gpu_chain_heads[i].Z++;
+		d_new_tau_CD[i] = temp.w;
+		float newn = floorf(0.5f + __fdividef(pr * (QN1.w - 2.0f), wcdc)) + 1.0f;
+		temp.w = newn;
+		float sigma = __fsqrt_rn(__fdividef(newn * (QN1.w - newn), 3.0f * QN1.w));
+		float ration = __fdividef(newn, QN1.w);
+		temp.x *= sigma;
+		temp.y *= sigma;
+		temp.z *= sigma;
+		temp.x += QN1.x * ration;
+		temp.y += QN1.y * ration;
+		temp.z += QN1.z * ration;
+		surf2Dwrite(make_float4(QN1.x - temp.x, QN1.y - temp.y, QN1.z - temp.z, QN1.w - newn), s_b_QN, 16 * j, i);
+		d_offset[i] = offset_code(j, -1);
+		d_new_strent[i] = temp;
+	}
+
 	for (int u = 0; u<d_narms; u++) {
 		if (u != arm)
 			d_offset[i*d_narms + u] = offset_code(0xffff, +1);
