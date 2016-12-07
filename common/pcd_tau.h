@@ -107,7 +107,7 @@ struct p_cd_linear { //Generates \tau_CD lifetimes
 
 struct p_cd { //Generates \tau_CD lifetimes
 			  //uses analytical approximation to P_cd parameters
-	float A1, B1, A2, B2;
+	float A1, B1, A2, B2, normdt, Bdt;
 	float g, alpha_1, alpha_2, tau_0, tau_1, tau_2, tau_d;
 	float Nk;
 	Ran *ran;
@@ -127,6 +127,9 @@ struct p_cd { //Generates \tau_CD lifetimes
 		B1 = (powf(tau_2, alpha_2) - powf(tau_1, alpha_2)) / alpha_2 * powf(tau_1, alpha_1 - alpha_2);
 		A2 = (powf(tau_1, alpha_1 - 1) - powf(tau_0, alpha_1 - 1)) / (alpha_1 - 1);
 		B2 = (powf(tau_2, alpha_2 - 1) - powf(tau_1, alpha_2 - 1)) / (alpha_2 - 1) * powf(tau_1, alpha_1 - alpha_2);
+
+		Bdt = (1 - g)*(A2 + B2) / (A1 + B1);
+		normdt = Bdt + g / tau_d;
 	}
 	float tau_CD_f_t() {
 		float p = ran->flt();
@@ -149,14 +152,15 @@ struct p_cd { //Generates \tau_CD lifetimes
 	}
 	float tau_CD_f_d_t() {
 		float p = ran->flt();
-		if (p < (1.0f - g)) {
-			if (p < (1.0f - g)*A1 / (A1 + B1)) {
+		p = p * normdt;
+		if (p < Bdt) {
+			if (p < (1.0f - g)*A2 / (A1 + B1)){
 				//solve I
-				return powf(p * alpha_1 * (A1 + B1) / (1 - g) + powf(tau_0, alpha_1), 1.0f / alpha_1);
+				return powf(p * (alpha_1 - 1) * (A1 + B1) / (1 - g) + powf(tau_0, alpha_1 - 1), 1.0f / (alpha_1 - 1));
 			}
 			else {
 				//solve II
-				return powf(alpha_2 / powf(tau_1, alpha_1 - alpha_2) * (p * (A1 + B1) / (1 - g) - A1) + powf(tau_1, alpha_2), 1.0f / alpha_2);
+				return powf((alpha_2 - 1) / powf(tau_1, alpha_1 - alpha_2) * (p * (A1 + B1) / (1 - g) - A2) + powf(tau_1, alpha_2 - 1), 1.0f / (alpha_2 - 1));
 			}
 		}
 		else {

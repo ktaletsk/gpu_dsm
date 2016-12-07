@@ -22,6 +22,7 @@
 #include "correlator.h"
 #include <vector>
 #define max_sync_interval 1E5
+
 //variable arrays, that are common for all the blocks
 gpu_Ran *d_random_gens; // device random number generators
 gpu_Ran *d_random_gens2; //first is used to pick jump process, second is used for creation of new entanglements
@@ -35,6 +36,8 @@ int *d_tau_CD_used_CD;
 int *d_rand_used;
 int *d_value_found;
 int* d_shift_found;
+double* d_add_rand;
+
 
 // these arrays used by time evolution kernels
 cudaArray* d_a_QN; //device arrays for vector part of chain conformations
@@ -196,10 +199,10 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 
 				cudaStreamSynchronize(stream_calc2);
 
-				scan_kernel<<<dimGridFlat, dimBlockFlat,2*z_max*sizeof(double),stream_calc1>>>(chain_heads, d_rand_used, d_value_found, d_shift_found);
+				scan_kernel<<<dimGridFlat, dimBlockFlat,2*z_max*sizeof(double),stream_calc1>>>(chain_heads, d_rand_used, d_value_found, d_shift_found, d_add_rand);
 				CUT_CHECK_ERROR("kernel execution failed");
 
-				chain_kernel<type><<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_calc1>>>(chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_write_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD, steps_count % stressarray_count, d_value_found, d_shift_found);
+				chain_kernel<type><<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_calc1>>>(chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_write_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD, steps_count % stressarray_count, d_value_found, d_shift_found, d_add_rand);
 				CUT_CHECK_ERROR("kernel execution failed");
 
 				cudaUnbindTexture(t_a_QN);
@@ -230,10 +233,10 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 
 				cudaStreamSynchronize(stream_calc2);
 
-				scan_kernel<<<dimGridFlat, dimBlockFlat,2*z_max*sizeof(double),stream_calc1>>>(chain_heads, d_rand_used, d_value_found, d_shift_found);
+				scan_kernel<<<dimGridFlat, dimBlockFlat,2*z_max*sizeof(double),stream_calc1>>>(chain_heads, d_rand_used, d_value_found, d_shift_found, d_add_rand);
 				CUT_CHECK_ERROR("kernel execution failed");
 
-				chain_kernel<type><<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_calc1>>>(chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_write_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD, steps_count % stressarray_count, d_value_found, d_shift_found);
+				chain_kernel<type><<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_calc1>>>(chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_write_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD, steps_count % stressarray_count, d_value_found, d_shift_found, d_add_rand);
 				CUT_CHECK_ERROR("kernel execution failed");
 
 				cudaUnbindTexture(t_a_QN);

@@ -68,8 +68,6 @@ __constant__ int d_CD_flag;
 __constant__ float d_CD_create_prefact;
 __constant__ int d_correlator_res;
 
-#define PRINT_DEBUG false
-
 // delayed dynamics --- how does it work:
 // There are entanglement parallel portion of the code and chain parallel portion.
 // The entanglement parallel part applies flow deformation and calculates jump process probabilities.
@@ -139,7 +137,9 @@ __device__   __forceinline__ float4 kappa(const float4 QN, const float dt) {//Qx
 
 //The entanglement parallel part of the code
 //2D kernel: i- entanglement index j - chain index
-template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void strent_kernel(scalar_chains* chain_heads, float *tdt, int *d_offset, float4 *d_new_strent, float *d_new_tau_CD, float* d_new_cr_time)
+template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void strent_kernel(
+		scalar_chains* chain_heads, float *tdt, int *d_offset, float4 *d_new_strent, float *d_new_tau_CD,
+		float* d_new_cr_time)
 {
 	//Calculate kernel index
 	int i = blockIdx.x * blockDim.x + threadIdx.x;//strent index
@@ -178,12 +178,10 @@ template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_ker
 
 	float tcd;
 	if (d_CD_flag) { //If constraint dynamics is enabled
-		if (fetch_new_strent(i, oft)) {
+		if (fetch_new_strent(i, oft))
 			tcd = d_new_tau_CD[j];
-		}
-		else {
+		else
 			tcd = tex2D(t_a_tCD, make_offset(i, oft), j);
-		}
 	} else
 		tcd = 0;
 
@@ -249,7 +247,7 @@ template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_ker
 		//probability of Kuhn step shitt + probability of entanglement destruction by CD
 		// + probability of entanglement creation by CD
 	}
-	if(PRINT_DEBUG && j==0)	printf("\n%i\t%i\t%i\t%i\t%f\t%f\t%f\t%f\t%f\t%i\t%i", i, arm, ii, tz, QN.x, QN.y, QN.z, QN.w, tcd, make_offset(i, oft), fetch_new_strent(i, oft));
+	//printf("\n%i\t%i\t%i\t%f\t%f\t%f\t%f", arm, ii, tz, QN.x, QN.y, QN.z, QN.w);
 //	if (j==1)	printf("\n%i\t%i\t%i\t%i\t%i\t%f\t%f",j,i,arm,ii,tz,QN.w,d_universal_time + chain_heads[j].time);
 
 	//write updated chain conformation
@@ -428,7 +426,7 @@ template<int narms> __global__ void boundary2_kernel(scalar_chains* chain_heads,
 	}
 }
 
-__global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* found_index,  int* found_shift, double* add_rand) {
+__global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* found_index,  int* found_shift) {
 	extern __shared__ double s[];
 	//Calculate kernel index
 	int i = blockIdx.x * blockDim.x + threadIdx.x;//strent index
@@ -457,8 +455,8 @@ __global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* fou
 
 	//parallel scan in s (naive)
 	int pout = 0, pin = 1;
-	if (PRINT_DEBUG && j==0)	printf("\n%i\t%i\t%f\t%f\t%f\t%f",ii,arm,temp.x,temp.y,temp.z,temp.w);
-	s[pout*d_z_max+i] = d_CD_flag ? (double)temp.x + (double)temp.y + (double)temp.z + (double)temp.w : (double)temp.x + (double)temp.y;
+	//printf("\n%i\t%i\t%f\t%f\t%f\t%f",ii,arm,temp.x,temp.y,temp.z,temp.w);
+	s[pout*d_z_max+i] = (double)temp.x + (double)temp.y;
 	__syncthreads();
 	for (int offset = 1; offset < d_z_max; offset *= 2) {
 		pout = 1 - pout; // swap double buffer indices
@@ -475,26 +473,29 @@ __global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* fou
 	//search
 	float ran = tex2D(t_uniformrand, rand_used[j], j);
 	double x = s[pout*d_z_max+d_z_max-1]*(double)ran;
-	if (PRINT_DEBUG && i==0 && j == 0)
-		printf("\n sum of probs: %f", s[pout*d_z_max + d_z_max - 1]);
 	double left = (i==0)? 0.0f : s[pout*d_z_max + i - 1];
 	double right = s[pout*d_z_max + i];
 	bool xFound = (left < x) && (x <= right);
 	if (xFound){
 		found_index[j]=i;
-		if (x - left <= (double)temp.x)
+
+		if (x - left < temp.x)
 			found_shift[j] = 0;
-		else if (x - left <= (double)temp.x + (double)temp.y)
+		else if (x - left < temp.x + temp.y)
 			found_shift[j] = 1;
-		else if (x - left <= (double)temp.x + (double)temp.y + (double)temp.z)
+		else if (x - left < temp.x + temp.y + temp.z)
 			found_shift[j] = 2; //destruction by CD
-		else if (x-left <= (double)temp.x + (double)temp.y + (double)temp.z + (double)temp.w){
+		else
 			found_shift[j] = 4; //creation by CD
-			add_rand[j] = (x - left - (double)temp.x - (double)temp.y - (double)temp.z) / (double)temp.w;
-		}
-		else {
-			printf("\nnothing found\tchain=%i\tremainder=%f",j, x - left - (double)temp.x - (double)temp.y - (double)temp.z - (double)temp.w);
-		}
+
+		//if (temp.y == 0.0f)
+		//	found_shift[j]=1;
+		//else{
+		//	if (x-left > temp.x)
+		//		found_shift[j]=0;
+		//	else
+		//		found_shift[j]=1;
+		//}
 	}
 }
 
@@ -630,7 +631,7 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		float next_sync_time, int *d_offset, float4 *d_new_strent, 
 		float *d_new_tau_CD, float* d_new_cr_time, int *d_write_time, int correlator_type,
 		int *rand_used, int *tau_CD_used_CD, int *tau_CD_used_SD, int stress_index,
-		int* found_index, int* found_shift, double* add_rand)
+		int* found_index, int* found_shift)
 {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;//chain index
 
@@ -753,11 +754,10 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		if (k==0) { //shuffling left
 			QN1.w = QN1.w + 1;
 			QN2.w = QN2.w - 1;
-			if (PRINT_DEBUG && i == 0)	printf("\nShuffling left, arm %i, entanglement %i", arm,jj);
 		} else { //shuffling right
 			QN1.w = QN1.w - 1;
 			QN2.w = QN2.w + 1;
-			if (PRINT_DEBUG && i == 0)	printf("\nShuffling right, arm %i, entanglement %i", arm,jj);
+			//printf("\nShuffling right, arm %i", arm);
 		}
 
 		if (jj == 0) {//shuffling invoving branch-point
@@ -812,17 +812,13 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 	}
 	else if (k == 2) {
 		// Destruction by sliding dynamics
-		if (PRINT_DEBUG && i == 0)	printf("\nDestruction of entanglement, arm %i, entanglement %i", arm, jj);
+
 		chain_heads[i].Z[arm]--;  //decrease number of strands as entanglement is destroyed
+		float4 temp = make_float4(0.0f, 0.0f, 0.0f, QN1.w + QN2.w); //temporary variable for new strand
+		surf2Dwrite(temp, s_b_QN, 16 * (jj + run_sum), i);
+		d_offset[ii] = offset_code(jj + 1 + run_sum, +1);
 
-		float4 temp = make_float4(QN1.x + QN2.x, QN1.y + QN2.y, QN1.z + QN2.z, QN1.w + QN2.w); //temporary variable for new strand
-		if (jj == tz - 2) temp = make_float4(0.0f, 0.0f, 0.0f, QN1.w + QN2.w);
-
-		//float4 temp = make_float4(0.0f, 0.0f, 0.0f, QN1.w + QN2.w); //temporary variable for new strand
-		//surf2Dwrite(temp, s_b_QN, 16 * (jj + run_sum), i);
-		//d_offset[ii] = offset_code(jj + 1 + run_sum, +1);
-		float4 deltaQ;
-		if (chain_heads[i].Z[arm]==1) {
+		if (chain_heads[i].Z[arm] == 1) {
 			float4 temp_;
 			int run_sum_ = 0;
 			bool unent = true; //if all arms are unentangled -> set temp as (0,0,0)
@@ -842,7 +838,7 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 				run_sum_ += d_z_max_arms[arm_];
 			}
 
-			deltaQ = QN1 / (QN1.w*sumNinv);
+			float4 deltaQ = QN1 / (QN1.w*sumNinv);
 			deltaQ.w = 0.0f;
 
 			run_sum_ = 0;
@@ -864,60 +860,6 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 			//printf("\nDestroying entanglement on chain %i. Arm %i is now unentangled  with with N=%f",i,arm,QNtailp.w + 1.0f);
 			//printf("\n deltaQ=%f\t%f\t%f",deltaQ.x, deltaQ.y, deltaQ.z);
 		}
-		if (jj == 0) {
-			float4 temp_;
-			int run_sum_ = 0;
-			bool unent = true; //if all arms are unentangled -> set temp as (0,0,0)
-			float sumNinv = 0.0f;
-			float sumNinvnew = 0.0f;
-			for (int arm_ = 0; arm_<d_narms; arm_++) {
-				int tz_ = chain_heads[i].Z[arm_];
-				if ((tz_>1) && (arm_ != arm)) {//entangled arms
-					unent = false;
-
-					if (fetch_new_strent(0 + run_sum_, d_offset[i*d_narms + arm_]))
-						temp_ = new_strent;
-					else
-						temp_ = tex2D(t_a_QN, make_offset(0 + run_sum_, d_offset[i*d_narms + arm_]), i);
-
-					sumNinv += 1 / temp_.w;
-					sumNinvnew += 1 / temp_.w;
-				}
-				run_sum_ += d_z_max_arms[arm_];
-			}
-			sumNinvnew += __fdividef(1.0f, QN1.w + QN2.w);
-
-			deltaQ.x = __fdividef(__fdividef(QN2.x, QN1.w + QN2.w) - __fdividef(QN1.x * QN2.w, QN1.w * (QN1.w + QN2.w)), -sumNinvnew);
-			deltaQ.y = __fdividef(__fdividef(QN2.y, QN1.w + QN2.w) - __fdividef(QN1.y * QN2.w, QN1.w * (QN1.w + QN2.w)), -sumNinvnew);
-			deltaQ.z = __fdividef(__fdividef(QN2.z, QN1.w + QN2.w) - __fdividef(QN1.z * QN2.w, QN1.w * (QN1.w + QN2.w)), -sumNinvnew);
-			deltaQ.w = 0.0f;
-
-			if (PRINT_DEBUG && i == 0) printf("\nGaussian strand=%f\t%f\t%f\tsumNinv=%f\tdeltaQ=%f\t%f\t%f\t%f", temp.x, temp.y, temp.z, sumNinv, deltaQ.x, deltaQ.y, deltaQ.z, deltaQ.w);
-
-			run_sum_ = 0;
-			for (int arm_ = 0; arm_ < d_narms; arm_++) {
-				int tz_ = chain_heads[i].Z[arm_];
-				if ((tz_ > 1) && (arm_ != arm)) {//entangled arms
-					if (fetch_new_strent(0 + run_sum_, d_offset[i*d_narms + arm_]))
-						temp_ = new_strent;
-					else
-						temp_ = tex2D(t_a_QN, make_offset(0 + run_sum_, d_offset[i*d_narms + arm_]), i);
-
-					temp_ = temp_ + deltaQ;
-					//printf("\n writing... %f\t%f\t%f\t%f\t",temp_.x,temp_.y,temp_.z,temp_.w);
-					surf2Dwrite(temp_, s_b_QN, 16 * run_sum_, i);
-				}
-				run_sum_ += d_z_max_arms[arm_];
-			}
-
-			temp.x += deltaQ.x;
-			temp.y += deltaQ.y;
-			temp.z += deltaQ.z;
-		}
-
-		surf2Dwrite(temp, s_b_QN, 16 * (jj + 1 + run_sum), i);
-		d_offset[ii] = offset_code(jj + run_sum, +1);
-
 		float cr_time;
 		if (fetch_new_strent(tz - 2 + run_sum, oft)) {
 			cr_time = d_new_cr_time[i];
@@ -930,7 +872,6 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		}
 	} 
 	else if (k==3) {//  Creation by SD
-		if (PRINT_DEBUG && i == 0)	printf("\nCreation of entanglement by SD, arm %i, strent %i", arm, jj);
 		float4 temp = tex2D(t_taucd_gauss_rand_SD, tau_CD_used_SD[i], i);
 		tau_CD_used_SD[i]++;
 		chain_heads[i].Z[arm]++;
@@ -995,91 +936,24 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		d_offset[ii] = offset_code(j, -1);
 		d_new_strent[i] = temp;
 	}
-	else if (k == 4) {//Creation by CD
-		if (PRINT_DEBUG && i == 0)	printf("\nCreation of entanglement by CD, arm %i, strent %i", arm, jj);
-		float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used_CD[i], i);
+	else if (k == 4) {
+		/*float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used_CD[i], i);
 		tau_CD_used_CD[i]++;
 		chain_heads[i].Z[arm]++;
 		d_new_tau_CD[i] = temp.w;
-		float newn = floorf(0.5f + add_rand[i] * (QN1.w - 2.0f)) + 1.0f;
-		if (PRINT_DEBUG && i == 0)	printf("\nnewn=%f\tadd_rand[i]=%f", newn, add_rand[i]);
+		float newn = floorf(0.5f + __fdividef(pr * (QN1.w - 2.0f), wcdc)) + 1.0f;
 		temp.w = newn;
 		float sigma = __fsqrt_rn(__fdividef(newn * (QN1.w - newn), 3.0f * QN1.w));
 		float ration = __fdividef(newn, QN1.w);
-		
-
-		float4 deltaQ = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-		if (jj == 0) {//new strand near branch point
-			float4 temp_;
-			int run_sum_ = 0;
-			bool unent = true; //if all arms are unentangled -> set temp as (0,0,0)
-			float sumNinv = 0.0f;
-			float sumNinvnew = 0.0f;
-			for (int arm_ = 0; arm_<d_narms; arm_++) {
-				int tz_ = chain_heads[i].Z[arm_];
-				if ((tz_>1) && (arm_ != arm)) {//entangled arms
-					unent = false;
-
-					if (fetch_new_strent(0 + run_sum_, d_offset[i*d_narms + arm_]))
-						temp_ = new_strent;
-					else
-						temp_ = tex2D(t_a_QN, make_offset(0 + run_sum_, d_offset[i*d_narms + arm_]), i);
-
-					sumNinv += 1 / temp_.w;
-					sumNinvnew += 1 / temp_.w;
-				}
-				run_sum_ += d_z_max_arms[arm_];
-			}
-			sumNinvnew += 1 / newn;
-			sumNinv += 1 / QN1.w;
-			sigma = __fsqrt_rn(__fdividef(newn * (QN1.w - newn) * sumNinvnew, 3.0f * QN1.w * sumNinv));
-			float factor = (1.0f - __fdividef(1.0f, newn * sumNinvnew));
-
-			deltaQ.x = __fdividef(-temp.x * sigma, newn * sumNinvnew);
-			deltaQ.y = __fdividef(-temp.y * sigma, newn * sumNinvnew);
-			deltaQ.z = __fdividef(-temp.z * sigma, newn * sumNinvnew);
-			deltaQ.w = 0.0f;
-
-			if (PRINT_DEBUG && i == 0) printf("\nGaussian strand=%f\t%f\t%f\tnewn=%f\tsumNinv=%f\tdeltaQ=%f\t%f\t%f\t%f\tadd_rand=%f\tsigma=%f", temp.x, temp.y, temp.z, newn, sumNinv, deltaQ.x, deltaQ.y, deltaQ.z, deltaQ.w, add_rand[i], sigma);
-			sigma *= factor;
-			run_sum_ = 0;
-			for (int arm_ = 0; arm_ < d_narms; arm_++) {
-				int tz_ = chain_heads[i].Z[arm_];
-				if ((tz_ > 1) && (arm_ != arm)) {//entangled arms
-					if (fetch_new_strent(0 + run_sum_, d_offset[i*d_narms + arm_]))
-						temp_ = new_strent;
-					else
-						temp_ = tex2D(t_a_QN, make_offset(0 + run_sum_, d_offset[i*d_narms + arm_]), i);
-
-					temp_ = temp_ + deltaQ;
-					//printf("\n writing... %f\t%f\t%f\t%f\t",temp_.x,temp_.y,temp_.z,temp_.w);
-					surf2Dwrite(temp_, s_b_QN, 16 * run_sum_, i);
-				}
-				run_sum_ += d_z_max_arms[arm_];
-			}
-		}
-
-		if (jj == tz - 1) {
-			float sigma = __fsqrt_rn(__fdividef(newn, 3.0f));
-		}
-
 		temp.x *= sigma;
 		temp.y *= sigma;
 		temp.z *= sigma;
 		temp.x += QN1.x * ration;
 		temp.y += QN1.y * ration;
 		temp.z += QN1.z * ration;
-
 		surf2Dwrite(make_float4(QN1.x - temp.x, QN1.y - temp.y, QN1.z - temp.z, QN1.w - newn), s_b_QN, 16 * j, i);
-		if (jj == 0) {
-			surf2Dwrite(make_float4(QN1.x - temp.x + deltaQ.x, QN1.y - temp.y + deltaQ.y, QN1.z - temp.z + deltaQ.z, QN1.w - newn), s_b_QN, 16 * j, i);
-		}
-		if (jj == tz - 1) {
-			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QN1.w - newn), s_b_QN, 16 * j, i);
-		}
-
 		d_offset[ii] = offset_code(j, -1);
-		d_new_strent[i] = temp;
+		d_new_strent[i] = temp;*/
 	}
 
 	for (int u = 0; u<d_narms; u++) {

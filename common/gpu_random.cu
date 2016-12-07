@@ -42,7 +42,8 @@ extern bool PD_flag;
 
 //CD constants
 __constant__ float d_At, d_Ct, d_Dt, d_Adt, d_Bdt, d_Cdt, d_Ddt;
-__constant__ float d_g, d_alpha_1, d_alpha_2, d_tau_0, d_tau_1, d_tau_2, d_tau_d, d_tau_d_inv;
+__constant__ float d_A1, d_B1, d_A2, d_B2, d_normdt;
+__constant__ float d_g, d_alpha_1, d_alpha_2, d_tau_0, d_tau_1, d_tau_2, d_tau_d_inv;
 __constant__ bool d_PD_flag;
 
 //Polydispersity constatnts
@@ -77,14 +78,19 @@ void gpu_ran_init (p_cd* pcd) {
 	else {
 		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_g, &(pcd->g), sizeof(float)));
 		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_alpha_1, &(pcd->alpha_1), sizeof(float)));
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_alpha_1, &(pcd->alpha_2), sizeof(float)));
+		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_alpha_2, &(pcd->alpha_2), sizeof(float)));
 		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_0, &(pcd->tau_0), sizeof(float)));
 		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_1, &(pcd->tau_1), sizeof(float)));
 		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_2, &(pcd->tau_2), sizeof(float)));
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_d, &(pcd->tau_d), sizeof(float)));
 		float cdtemp = 1.0f / pcd->tau_d;
 		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_d_inv, &(cdtemp), sizeof(float)));
 
+		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_A1, &(pcd->A1), sizeof(float)));
+		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_B1, &(pcd->B1), sizeof(float)));
+		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_A2, &(pcd->A2), sizeof(float)));
+		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_B2, &(pcd->B2), sizeof(float)));
+		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Bdt, &(pcd->Bdt), sizeof(float)));
+		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_normdt, &(pcd->normdt), sizeof(float)));
 		//cdtemp = 1.0f * (pcd->c1) / (pcd->At);
 		//CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_At, &cdtemp, sizeof(float)));
 		//cdtemp = powf(pcd->tau_0, pcd->alpha);
@@ -93,8 +99,8 @@ void gpu_ran_init (p_cd* pcd) {
 		//CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Ct, &cdtemp, sizeof(float)));
 		//cdtemp = pcd->normdt * (pcd->c1) / (pcd->Adt);
 		//CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Adt, &cdtemp, sizeof(float)));
-		//cdtemp = pcd->Bdt / pcd->normdt;
-		//CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Bdt, &cdtemp, sizeof(float)));
+		//cdtemp = pcd->Bdt;
+		
 		//cdtemp = -1.0f / (pcd->alpha - 1.0f);
 		//CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Cdt, &cdtemp, sizeof(float)));
 		//cdtemp = powf(pcd->tau_0, pcd->alpha - 1.0f);
@@ -142,11 +148,29 @@ void gr_fill_surface_uniformrand(gpu_Ran *gr,int sz,int count, cudaArray* d_unif
 }
 
 //lifetime generation from uniform random number p
-__device__ __forceinline__ float d_tau_CD_f_d_t(float p, float d_Adt, float d_Bdt, float d_Cdt, float d_Ddt, float d_tau_d_inv) {
+__device__ __forceinline__ float d_tau_CD_f_d_t_linear(float p, float d_Adt, float d_Bdt, float d_Cdt, float d_Ddt, float d_tau_d_inv) {
 	return p < d_Bdt ? __powf(p * d_Adt + d_Ddt, d_Cdt) : d_tau_d_inv;
 }
-__device__ __forceinline__ float d_tau_CD_f_t(float p, float d_At, float d_Ct, float d_Dt, float d_tau_d_inv, float d_g) {
+__device__ __forceinline__ float d_tau_CD_f_t_linear(float p, float d_At, float d_Ct, float d_Dt, float d_tau_d_inv, float d_g) {
 	return p < 1.0f - d_g ? __powf(p * d_At + d_Dt, d_Ct) : d_tau_d_inv;
+}
+
+
+
+__device__ float d_tau_CD_f_d_t(float p, float A1, float B1, float A2, float B2, float alpha_1, float alpha_2, float tau_0, float tau_1, float tau_d_inv, float g, float normdt, float Bdt) {
+	p = p * normdt;
+	if (p < Bdt)
+		return p < (1.0f - g)*A2 / (A1 + B1) ? __powf(p * (alpha_1 - 1) * (A1 + B1) / (1 - g) + __powf(tau_0, alpha_1 - 1), -1.0f / (alpha_1 - 1)) : __powf((alpha_2 - 1) / __powf(tau_1, alpha_1 - alpha_2) * (p * (A1 + B1) / (1 - g) - A2) + __powf(tau_1, alpha_2 - 1), -1.0f / (alpha_2 - 1));
+	else
+		return tau_d_inv;
+}
+__device__ float d_tau_CD_f_t(float p, float A1, float B1, float A2, float B2, float alpha_1, float alpha_2, float tau_0, float tau_1, float tau_d_inv, float g) {
+	if (p < (1.0f - g)) {
+		return p < (1.0f - g)*A1 / (A1 + B1) ? __powf(p * alpha_1 * (A1 + B1) / (1 - g) + __powf(tau_0, alpha_1), -1.0f / alpha_1) : __powf(alpha_2 / __powf(tau_1, alpha_1 - alpha_2) * (p * (A1 + B1) / (1 - g) - A1) + __powf(tau_1, alpha_2), -1.0f / alpha_2);
+	}
+	else {
+		return tau_d_inv;
+	}
 }
 
 __device__ void p_cd_(float Be, float Nk, float *d_p_At, float *d_p_Ct, float *d_p_Dt, float *d_p_g, float *d_p_Adt, float *d_p_Bdt, float *d_p_Cdt, float *d_p_Ddt, float *d_p_tau_d_inv) {
@@ -199,7 +223,6 @@ __device__ void p_cd_(float Be, float Nk, float *d_p_At, float *d_p_Ct, float *d
 	*d_p_Ddt = powf(tau_0, alpha - 1.0f);
 }
 
-//
 __global__ __launch_bounds__(ran_tpd) void fill_surface_taucd_gauss_rand (gpu_Ran *state, int n, int count, bool SDCD_toggle){
 	float d_p_At, d_p_Ct, d_p_Dt, d_p_g, d_p_Adt, d_p_Bdt, d_p_Cdt, d_p_Ddt, d_p_tau_d_inv; //Dynamic fdt parameters for given Nk in polydisperse solution
 	int i=blockIdx.x*blockDim.x+threadIdx.x;
@@ -211,32 +234,11 @@ __global__ __launch_bounds__(ran_tpd) void fill_surface_taucd_gauss_rand (gpu_Ra
 		for (int j=0; j<count;j++){
 			//Pcd generation for new entanglements
 			tmp.x=curand_uniform (&localState); //Pick a uniform distributed random number
-			if (d_PD_flag){
-				if (SDCD_toggle == true){
-					float x = curand_uniform(&localState)/d_step;
-					int x_fl = floor(x)+1;
-					float di = x -(float)x_fl;
-					tmp.y=tex1D(t_gamma_table, x_fl)*(1-di)+tex1D(t_gamma_table, x_fl+1)*di;; //get molecular weight (M/mp) of background chain from table
-					p_cd_(d_Be, (tmp.y)*d_mp/d_Mk, &d_p_At, &d_p_Ct, &d_p_Dt, &d_p_g, &d_p_Adt, &d_p_Bdt, &d_p_Cdt, &d_p_Ddt, &d_p_tau_d_inv); //Calculate pcd parameters
-					tmp.w = d_tau_CD_f_t(tmp.x, d_p_At, d_p_Ct, d_p_Dt, d_p_tau_d_inv, d_p_g);
-				}
-				else{
-					float x = curand_uniform(&localState)/d_step_d;
-					int x_fl = floor(x) + 1;
-					float di = x - (float) x_fl;
-					tmp.y = tex1D(t_gamma_table_d, x_fl) * (1 - di)+ tex1D(t_gamma_table_d, x_fl + 1) * di;//get molecular weight (M/mp) of background chain from table
-					p_cd_(d_Be, (tmp.y)*d_mp/d_Mk, &d_p_At, &d_p_Ct, &d_p_Dt, &d_p_g, &d_p_Adt, &d_p_Bdt, &d_p_Cdt, &d_p_Ddt, &d_p_tau_d_inv); //Calculate pcd parameters
-					tmp.w = d_tau_CD_f_d_t(tmp.x, d_p_Adt, d_p_Bdt, d_p_Cdt, d_p_Ddt, d_p_tau_d_inv);
-				}
-			}
-			else{
-				if (SDCD_toggle == true){
-					tmp.w = d_tau_CD_f_t(tmp.x, d_At, d_Ct, d_Dt, d_tau_d_inv, d_g);
-				}
-				else
-					tmp.w = d_tau_CD_f_d_t(tmp.x, d_Adt, d_Bdt, d_Cdt, d_Ddt, d_tau_d_inv);
-			}
-
+			
+			if (SDCD_toggle == true)
+				tmp.w = d_tau_CD_f_t(tmp.x, d_A1, d_B1, d_A2, d_B2, d_alpha_1, d_alpha_2, d_tau_0, d_tau_1, d_tau_d_inv, d_g);
+			else
+				tmp.w = d_tau_CD_f_d_t(tmp.x, d_A1, d_B1, d_A2, d_B2, d_alpha_1, d_alpha_2, d_tau_0, d_tau_1, d_tau_d_inv, d_g, d_normdt, d_Bdt);
 			//Q vector generation for new entanglements
 			if (h==0.0f){
 				g2=curand_normal2(&localState);
@@ -270,33 +272,11 @@ __global__ __launch_bounds__(ran_tpd) void refill_surface_taucd_gauss_rand (gpu_
 		curandState localState = state[i];
 	    for (int j=0; j<cnt;j++){
 	    	tmp.x=curand_uniform (&localState);
-	    	if (d_PD_flag){
-				if (SDCD_toggle == true){
-					float x = curand_uniform(&localState)/d_step;
-					int x_fl = floor(x)+1;
-					float di = x -(float)x_fl;
-					tmp.y=tex1D(t_gamma_table, x_fl)*(1-di)+tex1D(t_gamma_table, x_fl+1)*di;; //get molecular weight (M/mp) of background chain from table
-					p_cd_(d_Be, (tmp.y)*d_mp/d_Mk, &d_p_At, &d_p_Ct, &d_p_Dt, &d_p_g, &d_p_Adt, &d_p_Bdt, &d_p_Cdt, &d_p_Ddt, &d_p_tau_d_inv); //Calculate pcd parameters
-					tmp.w = d_tau_CD_f_t(tmp.x, d_p_At, d_p_Ct, d_p_Dt, d_p_tau_d_inv, d_p_g);
-				}
-				else{
-					float x = curand_uniform(&localState)/d_step_d;
-					int x_fl = floor(x) + 1;
-					float di = x - (float) x_fl;
-					tmp.y = tex1D(t_gamma_table_d, x_fl) * (1 - di)+ tex1D(t_gamma_table_d, x_fl + 1) * di;//get molecular weight (M/mp) of background chain from table
-					p_cd_(d_Be, (tmp.y)*d_mp/d_Mk, &d_p_At, &d_p_Ct, &d_p_Dt, &d_p_g, &d_p_Adt, &d_p_Bdt, &d_p_Cdt, &d_p_Ddt, &d_p_tau_d_inv); //Calculate pcd parameters
-					tmp.w = d_tau_CD_f_d_t(tmp.x, d_p_Adt, d_p_Bdt, d_p_Cdt, d_p_Ddt, d_p_tau_d_inv);
-				}
-			}
-			else{
-				if (SDCD_toggle == true){
-					tmp.w=d_tau_CD_f_t(tmp.x, d_At, d_Ct, d_Dt, d_tau_d_inv, d_g);
-				}
-				else{
-					tmp.w=d_tau_CD_f_d_t(tmp.x, d_Adt, d_Bdt, d_Cdt, d_Ddt, d_tau_d_inv);
-				}
-			}
-
+	    	
+			if (SDCD_toggle == true)
+				tmp.w = d_tau_CD_f_t(tmp.x, d_A1, d_B1, d_A2, d_B2, d_alpha_1, d_alpha_2, d_tau_0, d_tau_1, d_tau_d_inv, d_g);
+			else
+				tmp.w = d_tau_CD_f_d_t(tmp.x, d_A1, d_B1, d_A2, d_B2, d_alpha_1, d_alpha_2, d_tau_0, d_tau_1, d_tau_d_inv, d_g, d_normdt, d_Bdt);
 			//Q vector generation for new entanglements
 			if (g==0.0f){
 				g2=curand_normal2(&localState);

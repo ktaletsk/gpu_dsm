@@ -194,6 +194,7 @@ void gpu_init(int seed, p_cd* pcd, int nsteps) {
 
 	cudaMalloc((void**) &d_value_found, sizeof(int) * rsz);
 	cudaMalloc((void**) &d_shift_found, sizeof(int) * rsz);
+	cudaMalloc((void**)&d_add_rand, sizeof(double) * rsz);
 
 	cudaMallocArray(&d_a_QN, &channelDesc4, z_max, rsz, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_a_tCD, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
@@ -384,7 +385,6 @@ int equilibrium_run(int res, double length, int s, int correlator_type, bool* ru
 	delete[] x;
 	return 0;
 }
-
 
 void save_to_file(char *filename) {
 	ofstream file(filename, ios::out | ios::binary);
@@ -619,6 +619,7 @@ void gpu_clean() {
 	cudaFree(d_tau_CD_used_CD);
 	cudaFree(d_rand_used);
 	cudaFree(d_value_found);
+	cudaFree(d_add_rand);
 	cudaFree(d_shift_found);
 	cudaFree(d_random_gens);
 	cudaFree(d_random_gens2);
