@@ -167,24 +167,24 @@ void chain_init(int* z, vector_chains data, int tnk, int z_max, bool dangling_be
 
 	//Generate characteristic entanglement lifetimes tau^CD
 	for (int k = 0; k < tz - 1; k++){
-		if (CD_flag != 0){
-			if (PD_flag) {//For polydisperse simulations
-				//Random molecular weight of entangled background chain (from GEX)
-				float MW = eran->flt()/step;//Get MW from table
-				int i = floor(MW)+1;
-				float di = MW - (float)i;
-				//Number of Kuhn steps in background chain
-				float Nk__ = (GEX_table[i]*(1-di)+GEX_table[i+1]*di) * mp / Mk;
-				tent_tau[k] = tau_dist(eran->flt(),Be, Nk__);
-			}
-			else{
+		//if (CD_flag != 0){
+		//	if (PD_flag) {//For polydisperse simulations
+		//		//Random molecular weight of entangled background chain (from GEX)
+		//		float MW = eran->flt()/step;//Get MW from table
+		//		int i = floor(MW)+1;
+		//		float di = MW - (float)i;
+		//		//Number of Kuhn steps in background chain
+		//		float Nk__ = (GEX_table[i]*(1-di)+GEX_table[i+1]*di) * mp / Mk;
+		//		tent_tau[k] = tau_dist(eran->flt(),Be, Nk__);
+		//	}
+		//	else{
 				//Lifetime of entanglement
 				tent_tau[k] = tau_dist(eran->flt(),Be, tnk);
-			}
-		}
-		else{
-			tent_tau[k] = 0.0f;
-		}
+		//	}
+		//}
+		//else{
+		//	tent_tau[k] = 0.0f;
+		//}
 	}
 
 	//Create arrays for storing (Ni,Qi) for every strand
@@ -201,15 +201,13 @@ void chain_init(int* z, vector_chains data, int tnk, int z_max, bool dangling_be
 	memset(data.QN, 0, sizeof(float) * z_max * 4);
 	memset(data.R1, 0, sizeof(float) * 4);
 
-	for (int k = 0; k < tz - 1; k++) { //all except first and last ent-t
+	for (int k = 0; k < tz - 1; k++) { //all except first and last strent
 		data.QN[k] = make_float4(Qxtmp[k], Qytmp[k], Qztmp[k], float(tN[k]));
 		data.tau_CD[k] = 1.0f / tent_tau[k];
+		//printf("\n%f", data.tau_CD[k]);
 		data.tau_cr[k] = 0.0f;
 	}
 
-	//Set first entanglement
-	data.tau_CD[0] = 1.0f / tent_tau[0];
-	data.tau_cr[0] = 0.0f;
 	//Set_dangling_ends
 	if (dangling_begin){
 		data.QN[0] = make_float4(0.0f, 0.0f, 0.0f, float(tN[0]));
