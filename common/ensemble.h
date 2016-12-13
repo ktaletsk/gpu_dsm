@@ -48,6 +48,7 @@ extern int NK;	//number of chain segments in each chain
 extern int z_max;	// max number of strand in chain (currently same as NK)
 extern int narms;
 extern int* NK_arms;
+extern int* indeces_arms;
 extern bool dbug;	//debug flag
 extern float kxx, kxy, kxz, kyx, kyy, kyz, kzx, kzy, kzz;	//deformation tensor
 extern bool PD_flag;

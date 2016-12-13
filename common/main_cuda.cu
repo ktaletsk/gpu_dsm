@@ -55,10 +55,12 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 	in >> Be;
 	in >> narms;
 	NK_arms = new int[narms];
+	indeces_arms = new int[narms];
 	NK = 0;
 	for (int i=0; i<narms; i++){
 		in >> NK_arms[i];
 		NK += NK_arms[i];
+		indeces_arms[i] = NK;
 	}
 	in >> N_cha;
 	in >> kxx >> kxy >> kxz >> kyx >> kyy >> kyz >> kzx >> kzy >> kzz;

@@ -36,7 +36,7 @@ int *d_tau_CD_used_CD;
 int *d_rand_used;
 int *d_value_found;
 int* d_shift_found;
-double* d_add_rand;
+float* d_add_rand;
 
 
 // these arrays used by time evolution kernels
@@ -137,7 +137,7 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 	dim3 dimGrid((z_max + dimBlock.x - 1) / dimBlock.x, (nc + dimBlock.y - 1) / dimBlock.y);
 
 	dim3 dimBlockFlat(z_max, 1);
-	dim3 dimGridFlat((z_max + dimBlockFlat.x - 1) / dimBlockFlat.x, (nc + dimBlockFlat.y - 1) / dimBlockFlat.y);
+	dim3 dimGridFlat((z_max + dimBlockFlat.x - 1) / dimBlockFlat.x, nc);
 
 	steps_count = 0;
 	activate_block();
@@ -212,7 +212,7 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 			CUT_CHECK_ERROR("kernel execution failed");
 			cudaStreamSynchronize(stream_calc2);
 			cudaStreamSynchronize(stream_calc3);
-			scan_kernel <<<dimGridFlat, dimBlockFlat, 2 * z_max * sizeof(double), stream_calc1 >>> (chain_heads, d_rand_used, d_value_found, d_shift_found, d_add_rand, reach_flag);
+			scan_kernel <<<dimGridFlat, dimBlockFlat, 2 * z_max * sizeof(int), stream_calc1 >>> (chain_heads, d_rand_used, d_value_found, d_shift_found, d_add_rand, reach_flag);
 			CUT_CHECK_ERROR("kernel execution failed");
 			cudaStreamSynchronize(stream_calc4);
 

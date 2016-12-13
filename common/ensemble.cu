@@ -67,6 +67,7 @@ int N_cha;
 int NK;
 int narms;
 int* NK_arms;
+int* indeces_arms;
 int z_max;
 float Be;
 float kxx, kxy, kxz, kyx, kyy, kyz, kzx, kzy, kzz;
@@ -156,6 +157,7 @@ void gpu_init(int seed, p_cd* pcd, int nsteps) {
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(dnk, &NK, sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_z_max, &z_max, sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_z_max_arms, NK_arms, sizeof(int)*narms));
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_indeces_arms, indeces_arms, sizeof(int)*narms));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(dnk_arms, NK_arms, sizeof(int)*narms));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_narms, &narms, sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_kappa_xx, &kxx, sizeof(float)));
@@ -194,7 +196,7 @@ void gpu_init(int seed, p_cd* pcd, int nsteps) {
 
 	cudaMalloc((void**) &d_value_found, sizeof(int) * rsz);
 	cudaMalloc((void**) &d_shift_found, sizeof(int) * rsz);
-	cudaMalloc((void**)&d_add_rand, sizeof(double) * rsz);
+	cudaMalloc((void**)&d_add_rand, sizeof(float) * rsz);
 
 	cudaMallocArray(&d_a_QN, &channelDesc4, z_max, rsz, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_a_tCD, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);

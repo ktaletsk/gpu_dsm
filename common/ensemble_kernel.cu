@@ -59,6 +59,7 @@ __constant__ int dnk;
 __constant__ int dnk_arms[100];
 __constant__ int d_z_max; //limits actual array size. might come useful for large beta values and for polydisperse systems
 __constant__ int d_z_max_arms[100];//limits for each arm
+__constant__ int d_indeces_arms[100];
 __constant__ int d_narms;
 __constant__ int dn_cha_per_call; //number of chains in this call. cannot be bigger than chains_per_call
 __constant__ float d_kappa_xx, d_kappa_xy, d_kappa_xz, d_kappa_yx, d_kappa_yy,d_kappa_yz, d_kappa_zx, d_kappa_zy, d_kappa_zz;
@@ -148,7 +149,6 @@ template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_ker
 	//Check if kernel index is outside boundaries
 	if ((j >= dn_cha_per_call) || (i >= d_z_max))
 		return;
-
 	int arm=0;
 	int run_sum=0;
 	for (int k=0; i>=run_sum; k++){
@@ -396,17 +396,15 @@ template<int narms> __global__ void boundary2_kernel(scalar_chains* chain_heads,
 	}
 }
 
-__global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* found_index,  int* found_shift, double* add_rand, float *reach_flag) {
-	extern __shared__ double s[];
+__global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* found_index,  int* found_shift, float* add_rand, float *reach_flag) {
+	extern __shared__ int s[];
 	//Calculate kernel index
 	int i = blockIdx.x * blockDim.x + threadIdx.x;//strent index
 	int j = blockIdx.y * blockDim.y + threadIdx.y;//chain index
 	//Check if kernel index is outside boundaries
-	if ((j >= dn_cha_per_call) || (i >= d_z_max) /*|| (reach_flag[j] != 0)*/)
-		return;
 
 	int arm, run_sum, ii, tz;
-	float4 temp;
+	float4 temp_ = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 
 	arm=0;
 	run_sum=0;
@@ -415,47 +413,68 @@ __global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* fou
 		run_sum+=d_z_max_arms[arm];
 	}
 //	clock_t t1 = clock();
-	tz = chain_heads[j].Z[arm]; //Current chain size
-	temp = make_float4(0.0f,0.0f,0.0f,0.0f);
 	ii = i-run_sum;
 
-	if ((ii >= 0) && (ii < tz)){
-		surf2Dread(&temp, s_sum_W, sizeof(float4)*i, j);
+	if ((ii >= 0) && (ii < chain_heads[j].Z[arm])){
+		surf2Dread(&temp_, s_sum_W, sizeof(float4)*i, j);
 	}
 
-	//parallel scan in s (naive)
-	int pout = 0, pin = 1;
-	s[pout*d_z_max+i] = d_CD_flag ? (double)temp.x + (double)temp.y + (double)temp.z + (double)temp.w : (double)temp.x + (double)temp.y;
+	int4 temp = make_int4((int)(10000.0f*temp_.x), (int)(10000.0f*temp_.y), (int)(10000.0f*temp_.z), (int)(10000.0f*temp_.w));
+	//parallel scan in s
+	int var = d_CD_flag ? temp.x + temp.y + temp.z + temp.w : temp.x + temp.y;
+	
+	//warp scan
+	for (int d = 1; d<32; d <<= 1) {
+		int var2 = __shfl_up(var, d);
+		if (i % 32 >= d)
+			var += var2;
+	}
+
+	if (i % 32 == 31) s[i / 32] = var;
 	__syncthreads();
-	for (int offset = 1; offset < d_z_max; offset *= 2) {
-		pout = 1 - pout; // swap double buffer indices
-		pin = 1 - pout;
 
-		if (i >= offset)
-		    s[pout*d_z_max + i] = s[pin*d_z_max + i] + s[pin*d_z_max + i - offset];
-		else
-			s[pout*d_z_max + i] = s[pin*d_z_max + i];
-		__syncthreads();
+	//scan of warp sums
+	if (i < 32) {
+		int var2 = 0.0f;
+		if (i < blockDim.x / 32)
+			var2 = s[i];
+		for (int d = 1; d<32; d <<= 1) {
+			float var3 = __shfl_up(var2, d);
+			if (i % 32 >= d) var2 += var3;
+		}
+		if (i < blockDim.x / 32) s[i] = var2;
 	}
-	surf2Dwrite((float)s[pout*d_z_max + i], s_sum_W_sorted, sizeof(float)*i, j);
+	__syncthreads();
+
+	if (i >= 32) var += s[i / 32 - 1];
+	
+	__syncthreads();
+	
+	s[i] = var;
+
+	__syncthreads();
+
+	surf2Dwrite((float)(s[i])/10000.0f, s_sum_W_sorted, sizeof(float)*i, j);
 
 	//search
 	float ran = tex2D(t_uniformrand, rand_used[j], j);
-	double x = s[pout*d_z_max+d_z_max-1]*(double)ran;
-	double left = (i==0)? 0.0f : s[pout*d_z_max + i - 1];
-	double right = s[pout*d_z_max + i];
-	bool xFound = (left < x) && (x <= right);
-	if (xFound){
-		found_index[j]=i;
-		if (x - left <= (double)temp.x)
-			found_shift[j] = 0;
-		else if (x - left <= (double)temp.x + (double)temp.y)
-			found_shift[j] = 1;
-		else if (x - left <= (double)temp.x + (double)temp.y + (double)temp.z)
-			found_shift[j] = 2; //destruction by CD
-		else if (x-left <= (double)temp.x + (double)temp.y + (double)temp.z + (double)temp.w){
+	int x = ceil((float)s[d_z_max-1]*ran);
+	int left = (i==0)? 0 : s[i - 1];
+	int right = s[i];
+
+	bool xFound = (left < x) && (x <= left + temp.x);
+	bool yFound = (left + temp.x < x) && (x <= left + temp.x + temp.y);
+	bool zFound = (left + temp.x + temp.y < x) && (x <= left + temp.x + temp.y + temp.z);
+	bool wFound = (left + temp.x + temp.y + temp.z < x) && (x <= left + temp.x + temp.y + temp.z + temp.w);
+
+	if (xFound || yFound || zFound || wFound) {
+		found_index[j] = i;
+		if (xFound)			found_shift[j] = 0;
+		else if (yFound)	found_shift[j] = 1;
+		else if (zFound)	found_shift[j] = 2; //destruction by CD
+		else if (wFound) {
 			found_shift[j] = 4; //creation by CD
-			add_rand[j] = (x - left - (double)temp.x - (double)temp.y - (double)temp.z) / (double)temp.w;
+			add_rand[j] = (float)(x - left - temp.x - temp.y - temp.z) / (float)temp.w;
 		}
 	}
 }
@@ -592,7 +611,7 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_con
 	float next_sync_time, int *d_offset, float4 *d_new_strent,
 	int *d_write_time, int correlator_type,
 	int *tau_CD_used_CD, int *tau_CD_used_SD, int stress_index,
-	int* found_index, int* found_shift, double* add_rand)
+	int* found_index, int* found_shift, float* add_rand)
 {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;//chain index
 	if (i >= dn_cha_per_call)
@@ -658,7 +677,7 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		float next_sync_time, int *d_offset, float4 *d_new_strent, 
 		float *d_new_tau_CD, float* d_new_cr_time, int *d_write_time, int correlator_type,
 		int *rand_used, int *tau_CD_used_CD, int *tau_CD_used_SD,
-		int* found_index, int* found_shift, double* add_rand)
+		int* found_index, int* found_shift, float* add_rand)
 {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;//chain index
 
@@ -690,6 +709,7 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 
 	int j = found_index[i];
 	int k = found_shift[i];
+	
 	int arm=0;
 	int run_sum=0;
 	for (arm=0; j>=run_sum+d_z_max_arms[arm]; arm++){
