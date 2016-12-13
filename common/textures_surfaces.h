@@ -37,14 +37,18 @@ texture<float, 2, cudaReadModeElementType> t_a_tcr;		// creation time
 texture<float4, 1, cudaReadModeElementType> t_a_R1;
 texture<float4, 2, cudaReadModeElementType> t_corr;
 
+texture<int, 2, cudaReadModeElementType> t_arm_index;
+
 surface<void,2> s_b_QN;// strents (N,Qx,Qy,Qz)
 surface<void,2> s_b_tCD;//tau_CD of ent-t
 surface<void, 2> s_b_tcr;//tau_CD of ent-t
 surface<void,1> s_b_R1;//R_1
 surface<void,2> s_corr;
+
+surface<void,2> s_arm_index;// strents (N,Qx,Qy,Qz)
  
 surface<void,2> s_W_SD_pm;// SD shift probablities
-surface<void,2> s_sum_W;// SD shift probablities
+surface<void,2> s_probs;// SD shift probablities
 surface<void,2> s_sum_W_sorted;
 
 surface<void,1> s_ft;//entanglement lifetimes statistics

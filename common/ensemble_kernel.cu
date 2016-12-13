@@ -159,6 +159,8 @@ template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_ker
 	int jj = j*d_narms+arm;
 
 	int tz = chain_heads[j].Z[arm]; //Current chain size
+	surf2Dwrite((int)(ii<tz), s_arm_index, 4 * i, j);
+
 	if (ii >= tz) //Check if entaglement index is over chain size
 		return;
 
@@ -180,7 +182,7 @@ template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_ker
 
 	//fetch next strent
 	if ((ii > 0) && (ii < tz - 1)) {
-		float4 wsh = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+		int4 wsh = make_int4(0, 0, 0, 0);
 		float4 QN2 = fetch_new_strent(i + 1, oft) ? d_new_strent[j] : tex2D(t_a_QN, make_offset(i + 1, oft), j); //Q for next strent
 
 		if (type==1){//transform
@@ -199,7 +201,7 @@ template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_ker
 			float f1 = (ii == 0) ? 2.0f * QN.w + 0.5f : QN.w;
 			float f2 = (ii == tz-2) ? 2.0f * QN2.w - 0.5f : QN2.w;
 			float friction = __fdividef(2.0f, f1 + f2);
-			wsh.x = friction * __powf(prefact1 * prefact2, 0.75f)* __expf(Q * sig1 - Q2 * sig2);
+			wsh.x = (int)(10000.0f*friction * __powf(prefact1 * prefact2, 0.75f)* __expf(Q * sig1 - Q2 * sig2));
 		}
 		if (QN.w > 1.0f) {//N=1 mean that shift is not possible, also ot will lead to dividing on zero error
 			float sig1 = __fdividef(0.75f, QN.w * (QN.w - 1.0f));
@@ -209,13 +211,13 @@ template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_ker
 			float f1 = (ii == 0) ? 2.0f * QN.w - 0.5f : QN.w;
 			float f2 = (ii == tz-2) ? 2.0f * QN2.w + 0.5f : QN2.w;
 			float friction = __fdividef(2.0f, f1 + f2);
-			wsh.y = friction * __powf(prefact1 * prefact2, 0.75f) * __expf(-Q * sig1 + Q2 * sig2);
+			wsh.y = (int)(10000.0f*friction * __powf(prefact1 * prefact2, 0.75f) * __expf(-Q * sig1 + Q2 * sig2));
 		}
-		if (d_CD_flag)	wsh.z = tcd;
-		if (d_CD_flag)	wsh.w = d_CD_create_prefact * (QN.w - 1.0f);
+		if (d_CD_flag)	wsh.z = (int)(10000.0f*tcd);
+		if (d_CD_flag)	wsh.w = (int)(10000.0f*d_CD_create_prefact * (QN.w - 1.0f));
 		
 
-		surf2Dwrite(wsh, s_sum_W, sizeof(float4)*i, j);
+		surf2Dwrite(wsh, s_probs, sizeof(int4)*i, j);
 		//probability of Kuhn step shitt + probability of entanglement destruction by CD
 		// + probability of entanglement creation by CD
 	}
@@ -247,7 +249,7 @@ __global__ void boundary1_kernel(scalar_chains* chain_heads, int *d_offset, floa
 	int tz = chain_heads[i].Z[arm];
 	uint oft = d_offset[ii];
 
-	float4 probs_z = make_float4(0.0f,0.0f,0.0f,0.0f);
+	int4 probs_z = make_int4(0,0,0,0);
 
 	if (fetch_new_strent(tz - 1 + run_sum, oft))
 		QNtail = new_strent;
@@ -255,7 +257,7 @@ __global__ void boundary1_kernel(scalar_chains* chain_heads, int *d_offset, floa
 		QNtail = tex2D(t_a_QN, make_offset((tz - 1)+ run_sum, oft), i);
 
 	if (tz == 1) {
-		probs_z.y = __fdividef(1.0f, (dBe * dnk_arms[arm]));//Creation at the end by SD
+		probs_z.y = (int)(10000.0f*__fdividef(1.0f, (dBe * dnk_arms[arm])));//Creation at the end by SD
 	} else {
 		if (QNtail.w == 1.0f) {//destruction by SD at the end
 			if (fetch_new_strent(tz - 2 + run_sum, oft))
@@ -263,14 +265,14 @@ __global__ void boundary1_kernel(scalar_chains* chain_heads, int *d_offset, floa
 			else
 				QNtailp = tex2D(t_a_QN, make_offset(tz - 2 + run_sum, oft), i);
 			float f1 = (tz == 2) ? QNtailp.w + 0.25f : 0.5f * QNtailp.w;
-			probs_z.x = __fdividef(1.0f, f1 + 0.75f);
+			probs_z.x = (int)(10000.0f*__fdividef(1.0f, f1 + 0.75f));
 		} else {//creation by SD at the end
-			probs_z.y = __fdividef(2.0f, dBe * (QNtail.w + 0.5f));
+			probs_z.y = (int)(10000.0f*__fdividef(2.0f, dBe * (QNtail.w + 0.5f)));
 		}
 	}
 
-	probs_z.w = d_CD_flag * d_CD_create_prefact * (QNtail.w - 1.0f);
-	surf2Dwrite(probs_z, s_sum_W, sizeof(float4)*(tz - 1+run_sum), i);
+	probs_z.w = d_CD_flag ? (int)(10000.0f*d_CD_create_prefact * (QNtail.w - 1.0f)) : 0;
+	surf2Dwrite(probs_z, s_probs, sizeof(int4)*(tz - 1+run_sum), i);
 }
 
 template<int narms> __global__ void boundary2_kernel(scalar_chains* chain_heads, int *d_offset, float4 *d_new_strent, float *d_new_tau_CD){
@@ -323,7 +325,7 @@ template<int narms> __global__ void boundary2_kernel(scalar_chains* chain_heads,
 			QN2 = tex2D(t_a_QN, make_offset(1 + run_sum, oft), i);
 
 		float Q2 = QN2.x * QN2.x + QN2.y * QN2.y + QN2.z * QN2.z;
-		float4 probs_1 = make_float4(0.0f,0.0f,0.0f,0.0f);
+		int4 probs_1 = make_int4(0,0,0,0);
 		//backward shift
 		if (QN2.w > 1.0f) { //N=1 mean that shift is not possible
 			upsum1 = 0.0f;
@@ -350,7 +352,7 @@ template<int narms> __global__ void boundary2_kernel(scalar_chains* chain_heads,
 			float f1 = QNhead_arms[arm].w;
 			float f2 = (tz == 2) ? 2.0f * QN2.w - 0.5f : QN2.w;
 			float friction = __fdividef(2.0f, f1 + f2);
-			probs_1.x = friction * __powf(__fdividef(prefact1 * prefact2 * downsum1,downsum2), 0.75f)* __expf(__fdividef(upsum1,downsum1) - __fdividef(upsum2,downsum2) - Q2 * sig2);
+			probs_1.x = (int)(10000.0f*friction * __powf(__fdividef(prefact1 * prefact2 * downsum1,downsum2), 0.75f)* __expf(__fdividef(upsum1,downsum1) - __fdividef(upsum2,downsum2) - Q2 * sig2));
 		}
 
 		//forward shift
@@ -379,20 +381,18 @@ template<int narms> __global__ void boundary2_kernel(scalar_chains* chain_heads,
 			float f1 = QNhead_arms[arm].w;
 			float f2 = (tz == 2) ? 2.0f * QN2.w - 0.5f : QN2.w;
 			float friction = __fdividef(2.0f, f1 + f2);
-			probs_1.y = friction * __powf(__fdividef(prefact1 * prefact2 * downsum1,downsum2), 0.75f)* __expf(__fdividef(upsum1,downsum1) - __fdividef(upsum2,downsum2) + Q2 * sig2);
+			probs_1.y = (int)(10000.0f*friction * __powf(__fdividef(prefact1 * prefact2 * downsum1,downsum2), 0.75f)* __expf(__fdividef(upsum1,downsum1) - __fdividef(upsum2,downsum2) + Q2 * sig2));
 		}
 		
 		float tcd = 0.0f;
 
 		if (d_CD_flag) { //If constraint dynamics is enabled
-			if (fetch_new_strent(run_sum, oft))
-				tcd = d_new_tau_CD[i];
-			else
-				tcd = tex2D(t_a_tCD, make_offset(run_sum, oft), i);
+			tcd = fetch_new_strent(run_sum, oft) ? d_new_tau_CD[i] : tex2D(t_a_tCD, make_offset(run_sum, oft), i);
 		}
-		probs_1.z = d_CD_flag * tcd;
-		probs_1.w = d_CD_flag * d_CD_create_prefact * (QNhead_arms[arm].w - 1.0f);
-		surf2Dwrite(probs_1, s_sum_W, sizeof(float4)*run_sum, i);
+
+		probs_1.z = d_CD_flag ? (int)(10000.0f*tcd) : 0;
+		probs_1.w = d_CD_flag ? (int)(10000.0f*d_CD_create_prefact * (QNhead_arms[arm].w - 1.0f)) : 0;
+		surf2Dwrite(probs_1, s_probs, sizeof(int4)*run_sum, i);
 	}
 }
 
@@ -403,23 +403,15 @@ __global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* fou
 	int j = blockIdx.y * blockDim.y + threadIdx.y;//chain index
 	//Check if kernel index is outside boundaries
 
-	int arm, run_sum, ii, tz;
-	float4 temp_ = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+	int4 temp = make_int4(0, 0, 0, 0);
 
-	arm=0;
-	run_sum=0;
+	int read_flag;
+	surf2Dread(&read_flag, s_arm_index, sizeof(int)*i, j);
 
-	for (arm=0; i>=run_sum+d_z_max_arms[arm]; arm++){
-		run_sum+=d_z_max_arms[arm];
-	}
-//	clock_t t1 = clock();
-	ii = i-run_sum;
-
-	if ((ii >= 0) && (ii < chain_heads[j].Z[arm])){
-		surf2Dread(&temp_, s_sum_W, sizeof(float4)*i, j);
+	if (read_flag){
+		surf2Dread(&temp, s_probs, sizeof(int4)*i, j);
 	}
 
-	int4 temp = make_int4((int)(10000.0f*temp_.x), (int)(10000.0f*temp_.y), (int)(10000.0f*temp_.z), (int)(10000.0f*temp_.w));
 	//parallel scan in s
 	int var = d_CD_flag ? temp.x + temp.y + temp.z + temp.w : temp.x + temp.y;
 	
@@ -451,9 +443,6 @@ __global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* fou
 	__syncthreads();
 	
 	s[i] = var;
-
-	__syncthreads();
-
 	surf2Dwrite((float)(s[i])/10000.0f, s_sum_W_sorted, sizeof(float)*i, j);
 
 	//search

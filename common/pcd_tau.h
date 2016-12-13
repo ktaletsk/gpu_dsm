@@ -136,17 +136,14 @@ struct p_cd { //Generates \tau_CD lifetimes
 		if (p < (1.0f - g)) {
 			if (p < (1.0f - g)*A1/(A1+B1)) {
 				//solve I
-				printf("\n%f", powf(p * alpha_1 * (A1 + B1) / (1 - g) + powf(tau_0, alpha_1), 1.0f / alpha_1));
 				return powf(p * alpha_1 * (A1+B1)/(1-g) + powf(tau_0, alpha_1), 1.0f / alpha_1);
 			}
 			else {
 				//solve II
-				printf("\n%f", powf(alpha_2 / powf(tau_1, alpha_1 - alpha_2) * (p * (A1 + B1) / (1 - g) - A1) + powf(tau_1, alpha_2), 1.0f / alpha_2));
 				return powf(alpha_2/ powf(tau_1, alpha_1 - alpha_2) * (p * (A1 + B1) / (1 - g) - A1) + powf(tau_1, alpha_2), 1.0f / alpha_2);
 			}
 		}
 		else {
-			printf("\n%f", tau_d);
 			return tau_d;
 		}
 	}

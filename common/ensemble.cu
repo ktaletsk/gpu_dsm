@@ -43,7 +43,7 @@ void random_textures_fill(int n_cha);
 
 #include "ensemble_block.cu"
 
-#define chains_per_call 5000
+#define chains_per_call 20000
 
 vector_chains chains; // host chain conformations
 // and only one array with scalar part chain conformation
@@ -216,9 +216,11 @@ void gpu_init(int seed, p_cd* pcd, int nsteps) {
 	cudaMallocArray(&d_stress, &channelDesc4, rsz * 2, 0, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_ft, &channelDesc1, rsz, 0, cudaArraySurfaceLoadStore);
 	cudaBindSurfaceToArray(s_stress, d_stress);
-	cudaBindSurfaceToArray(s_sum_W, d_sum_W);
+	cudaBindSurfaceToArray(s_probs, d_sum_W);
 	cudaBindSurfaceToArray(s_sum_W_sorted, d_sum_W_sorted);
 	cudaBindSurfaceToArray(s_ft, d_ft);
+
+	cudaMallocArray(&d_arm_index, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
 
 	cout << "\n";
 	cout << " GPU random generator init: \n";
@@ -612,6 +614,7 @@ void gpu_clean() {
 	cudaFreeArray(d_sum_W_sorted);
 	cudaFreeArray(d_ft);
 	cudaFreeArray(d_stress);
+	cudaFreeArray(d_arm_index);
 
 	cudaFreeArray(d_uniformrand);
 	cudaFreeArray(d_taucd_gauss_rand_CD);

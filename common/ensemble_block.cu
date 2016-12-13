@@ -51,6 +51,7 @@ cudaArray* d_b_R1;
 cudaArray* d_corr_a;
 cudaArray* d_corr_b;
 cudaArray* d_ft;
+cudaArray* d_arm_index;
 
 cudaArray* d_sum_W; // sum of probabilities for each entanglement
 cudaArray* d_sum_W_sorted;
@@ -79,7 +80,7 @@ void ensemble_block::init(int nc_, vector_chains chains_, scalar_chains* chain_h
 	//blank dynamics probabalities
 	float *buffer = new float[4 * z_max * nc];
 	memset(buffer, 0, sizeof(float4) * z_max * nc);
-	cudaMemcpy2DToArray(d_sum_W, 0, 0, buffer, z_max * sizeof(float), z_max * sizeof(float), nc, cudaMemcpyHostToDevice);
+	cudaMemcpy2DToArray(d_sum_W, 0, 0, buffer, z_max * sizeof(int), z_max * sizeof(int), nc, cudaMemcpyHostToDevice);
 	delete[] buffer;
 
 	float *buffer3 = new float[z_max * nc];
@@ -159,6 +160,9 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 	int Narms_ensemble = nc*narms;
 
 	bool texture_flag = true;
+
+	cudaBindSurfaceToArray(s_arm_index, d_arm_index);
+
 	//Loop begins
 	for (int i_sync = 0; i_sync < number_of_syncs; i_sync++) {
 		float sync_interval = max_sync_interval;
@@ -216,6 +220,9 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 			CUT_CHECK_ERROR("kernel execution failed");
 			cudaStreamSynchronize(stream_calc4);
 
+
+			cudaMemcpyAsync(rtbuffer, reach_flag, sizeof(float) * nc, cudaMemcpyDeviceToHost, stream_calc4);
+
 			chain_kernel<type> << <(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1 >> > (chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_write_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD, d_value_found, d_shift_found, d_add_rand);
 			//CUT_CHECK_ERROR("kernel execution failed");
 
@@ -224,15 +231,15 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 
 			steps_count++;
 
-			//copy entanglement lifetimes
-			//cudaStreamSynchronize(stream_calc1);
-			//cudaMemcpyFromArrayAsync(entbuffer, d_ft, 0, 0, sizeof(float) * nc, cudaMemcpyDeviceToHost, stream_calc1);
-			//cudaStreamSynchronize(stream_calc1);
-			//for (int i = 0; i < nc; i++){
-			//	if ((entbuffer[i]>0.0) && (entbuffer[i]<20.0)){
-			//		enttime_bins[floor(entbuffer[i]*1000)]++;
-			//	}
-			//}
+//			copy entanglement lifetimes
+			cudaStreamSynchronize(stream_calc1);
+			cudaMemcpyFromArrayAsync(entbuffer, d_ft, 0, 0, sizeof(float) * nc, cudaMemcpyDeviceToHost, stream_calc1);
+			cudaStreamSynchronize(stream_calc1);
+			for (int i = 0; i < nc; i++){
+				if ((entbuffer[i]>0.0) && (entbuffer[i]<20.0)){
+					enttime_bins[floor(entbuffer[i]*1000)]++;
+				}
+			}
 			//Should be shared between blocks...
 
 			// update progress bar
@@ -248,13 +255,12 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 //			}
 
 			// check for reached time
-			cudaMemcpyAsync(rtbuffer, reach_flag, sizeof(float) * nc, cudaMemcpyDeviceToHost, stream_calc1);
+//			cudaMemcpyAsync(rtbuffer, reach_flag, sizeof(float) * nc, cudaMemcpyDeviceToHost, stream_calc1);
 			cudaStreamSynchronize(stream_calc1);
 			float sumrt = 0;
 			for (int i = 0; i < nc; i++)
 				sumrt += rtbuffer[i];
 			reach_flag_all = (sumrt == nc);
-			
 
 			// check for rand refill
 			if (steps_count % uniformrandom_count == 0) {
@@ -335,14 +341,7 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 //			}
 //			cout << "\n" << temp / (double)(nsteps - i) / (double)nc;
 //		}
-		//Without time averaging
-//		for (int i=0; i < nsteps; i++){//lag time
-//			float temp = 0;
-//			for (int k=0; k<nc; k++){
-//				temp += (stress_average[i*nc+k].x - stress_average[k].x)*(stress_average[i*nc+k].x - stress_average[k].x)+(stress_average[i*nc+k].y - stress_average[k].y)*(stress_average[i*nc+k].y - stress_average[k].y) + (stress_average[i*nc+k].z - stress_average[k].z)*(stress_average[i*nc+k].z - stress_average[k].z);
-//			}
-//			cout << "\n" << temp / nc;
-//		}
+
 
 //		for (int i=0; i < nsteps; i++){//lag time
 //			cout << "\n" << stress_average[i].x << "\t" << stress_average[i].y << "\t" << stress_average[i].z;
