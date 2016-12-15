@@ -208,9 +208,9 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 
 			strent_kernel<type> <<<dimGrid, dimBlock, 0, stream_calc1>>> (chain_heads, d_dt, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time);
 			CUT_CHECK_ERROR("kernel execution failed");
-			boundary2_kernel<3> << <(Narms_ensemble + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc2 >> > (chain_heads, d_offset, d_new_strent, d_new_tau_CD);
+			boundary2_kernel<3> <<<(Narms_ensemble + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc2 >>> (chain_heads, d_offset, d_new_strent, d_new_tau_CD);
 			CUT_CHECK_ERROR("kernel execution failed");
-			boundary1_kernel << <(Narms_ensemble + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc3 >> > (chain_heads, d_offset, d_new_strent);
+			boundary1_kernel <<<(Narms_ensemble + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc3 >>> (chain_heads, d_offset, d_new_strent);
 			CUT_CHECK_ERROR("kernel execution failed");
 			chain_control_kernel<type> <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc4 >>> (chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_write_time, correlator_type, d_tau_CD_used_CD, d_tau_CD_used_SD, steps_count % stressarray_count, d_value_found, d_shift_found, d_add_rand);
 			CUT_CHECK_ERROR("kernel execution failed");
@@ -218,13 +218,17 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 			cudaStreamSynchronize(stream_calc3);
 			scan_kernel <<<dimGridFlat, dimBlockFlat, 2 * z_max * sizeof(int), stream_calc1 >>> (chain_heads, d_rand_used, d_value_found, d_shift_found, d_add_rand, reach_flag);
 			CUT_CHECK_ERROR("kernel execution failed");
+			
+			cudaMemcpyAsync(rtbuffer, reach_flag, sizeof(float) * nc, cudaMemcpyDeviceToHost, stream_calc4);
 			cudaStreamSynchronize(stream_calc4);
 
+			chain_kernel<type> <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1 >>> (chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_write_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD, d_value_found, d_shift_found, d_add_rand);
+			CUT_CHECK_ERROR("kernel execution failed");
 
-			cudaMemcpyAsync(rtbuffer, reach_flag, sizeof(float) * nc, cudaMemcpyDeviceToHost, stream_calc4);
-
-			chain_kernel<type> << <(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1 >> > (chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_write_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD, d_value_found, d_shift_found, d_add_rand);
-			//CUT_CHECK_ERROR("kernel execution failed");
+			float sumrt = 0;
+			for (int i = 0; i < nc; i++)
+				sumrt += rtbuffer[i];
+			reach_flag_all = (sumrt == nc);
 
 			cudaUnbindTexture(t_a_QN);
 			cudaUnbindTexture(t_a_tCD);
@@ -232,7 +236,6 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 			steps_count++;
 
 //			copy entanglement lifetimes
-			cudaStreamSynchronize(stream_calc1);
 			cudaMemcpyFromArrayAsync(entbuffer, d_ft, 0, 0, sizeof(float) * nc, cudaMemcpyDeviceToHost, stream_calc1);
 			cudaStreamSynchronize(stream_calc1);
 			for (int i = 0; i < nc; i++){
@@ -256,11 +259,6 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 
 			// check for reached time
 //			cudaMemcpyAsync(rtbuffer, reach_flag, sizeof(float) * nc, cudaMemcpyDeviceToHost, stream_calc1);
-			cudaStreamSynchronize(stream_calc1);
-			float sumrt = 0;
-			for (int i = 0; i < nc; i++)
-				sumrt += rtbuffer[i];
-			reach_flag_all = (sumrt == nc);
 
 			// check for rand refill
 			if (steps_count % uniformrandom_count == 0) {

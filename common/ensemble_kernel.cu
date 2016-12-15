@@ -713,7 +713,7 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 
 	if (jj == tz - 1) {//boundary cases
 		if (k == 0) {//destruction by SD at the end
-			k = 2;
+			k = 5;
 			jj--;
 			j--;
 		}
@@ -786,7 +786,7 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		surf2Dwrite(QN2, s_b_QN, 16 * (j + 1), i);
 		d_offset[ii] = offset_code(0xffff, +1);
 	}
-	else if (k == 2) {
+	else if (k == 2 || k == 5) {
 		// Destruction by sliding dynamics
 		chain_heads[i].Z[arm]--;  //decrease number of strands as entanglement is destroyed
 
@@ -885,15 +885,17 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		surf2Dwrite(temp, s_b_QN, 16 * (jj + 1 + run_sum), i);
 		d_offset[ii] = offset_code(jj + run_sum, +1);
 
-		float cr_time;
-		if (fetch_new_strent(jj + run_sum, oft)) {
-			cr_time = d_new_cr_time[i];
-		}
-		else {
-			cr_time = tex2D(t_a_tcr, make_offset(jj + run_sum, oft), i);
-		}
-		if (cr_time != 0) {
-			surf1Dwrite(log10f(d_universal_time + chain_heads[i].time - cr_time) + 10, s_ft, i * sizeof(float));
+		if (k==5){
+			float cr_time;
+			if (fetch_new_strent(jj + run_sum, oft)) {
+				cr_time = d_new_cr_time[i];
+			}
+			else {
+				cr_time = tex2D(t_a_tcr, make_offset(jj + run_sum, oft), i);
+			}
+			if (cr_time != 0) {
+				surf1Dwrite(log10f(d_universal_time + chain_heads[i].time - cr_time) + 10, s_ft, i * sizeof(float));
+			}
 		}
 	} 
 	else if (k==3) {//  Creation by SD
@@ -964,7 +966,8 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		tau_CD_used_CD[i]++;
 		chain_heads[i].Z[arm]++;
 		d_new_tau_CD[i] = temp.w;
-		d_new_cr_time[i] = d_universal_time + chain_heads[i].time;
+		// d_new_cr_time[i] = d_universal_time + chain_heads[i].time;
+		d_new_cr_time[i] = 0.0f;
 		float newn = floorf(0.5f + add_rand[i] * (QN1.w - 2.0f)) + 1.0f;
 		temp.w = newn;
 		float sigma = __fsqrt_rn(__fdividef(newn * (QN1.w - newn), 3.0f * QN1.w));
@@ -1049,9 +1052,7 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 	return;
 }
 
-__global__ __launch_bounds__(tpb_chain_kernel) //stress calculation
-void stress_calc(scalar_chains* chain_heads, float *tdt, int *d_offset,
-		float4 *d_new_strent, float4* QN, int size) {
+__global__ __launch_bounds__(tpb_chain_kernel) void stress_calc(scalar_chains* chain_heads, float *tdt, int *d_offset, float4 *d_new_strent, float4* QN, int size) {//stress calculation
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= dn_cha_per_call)
 		return;
