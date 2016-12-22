@@ -443,6 +443,7 @@ __global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* fou
 	__syncthreads();
 	
 	s[i] = var;
+		__syncthreads();
 	surf2Dwrite((float)(s[i])/10000.0f, s_sum_W_sorted, sizeof(float)*i, j);
 
 	//search
