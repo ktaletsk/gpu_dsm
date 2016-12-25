@@ -43,7 +43,7 @@ void random_textures_fill(int n_cha);
 
 #include "ensemble_block.cu"
 
-#define chains_per_call 20000
+#define chains_per_call 5000
 
 vector_chains chains; // host chain conformations
 // and only one array with scalar part chain conformation

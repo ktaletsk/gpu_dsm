@@ -442,6 +442,7 @@ __global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* fou
 	__syncthreads();
 	
 	s[i] = var;
+
 	__syncthreads();
 	surf2Dwrite((float)(s[i])/PROBS_CUTOFF, s_sum_W_sorted, sizeof(float)*i, j);
 
