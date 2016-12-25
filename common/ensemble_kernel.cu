@@ -71,6 +71,7 @@ __constant__ int d_correlator_res;
 
 #define PRINT_DEBUG false
 
+#define PROBS_CUTOFF 10000.0f
 // delayed dynamics --- how does it work:
 // There are entanglement parallel portion of the code and chain parallel portion.
 // The entanglement parallel part applies flow deformation and calculates jump process probabilities.
@@ -201,7 +202,7 @@ template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_ker
 			float f1 = (ii == 0) ? 2.0f * QN.w + 0.5f : QN.w;
 			float f2 = (ii == tz-2) ? 2.0f * QN2.w - 0.5f : QN2.w;
 			float friction = __fdividef(2.0f, f1 + f2);
-			wsh.x = (int)(10000.0f*friction * __powf(prefact1 * prefact2, 0.75f)* __expf(Q * sig1 - Q2 * sig2));
+			wsh.x = (int)(PROBS_CUTOFF*friction * __powf(prefact1 * prefact2, 0.75f)* __expf(Q * sig1 - Q2 * sig2));
 		}
 		if (QN.w > 1.0f) {//N=1 mean that shift is not possible, also ot will lead to dividing on zero error
 			float sig1 = __fdividef(0.75f, QN.w * (QN.w - 1.0f));
@@ -211,11 +212,10 @@ template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_ker
 			float f1 = (ii == 0) ? 2.0f * QN.w - 0.5f : QN.w;
 			float f2 = (ii == tz-2) ? 2.0f * QN2.w + 0.5f : QN2.w;
 			float friction = __fdividef(2.0f, f1 + f2);
-			wsh.y = (int)(10000.0f*friction * __powf(prefact1 * prefact2, 0.75f) * __expf(-Q * sig1 + Q2 * sig2));
+			wsh.y = (int)(PROBS_CUTOFF*friction * __powf(prefact1 * prefact2, 0.75f) * __expf(-Q * sig1 + Q2 * sig2));
 		}
-		if (d_CD_flag)	wsh.z = (int)(10000.0f*tcd);
-		if (d_CD_flag)	wsh.w = (int)(10000.0f*d_CD_create_prefact * (QN.w - 1.0f));
-		
+		if (d_CD_flag)	wsh.z = (int)(PROBS_CUTOFF*tcd);
+		if (d_CD_flag)	wsh.w = (int)(PROBS_CUTOFF*d_CD_create_prefact * (QN.w - 1.0f));
 
 		surf2Dwrite(wsh, s_probs, sizeof(int4)*i, j);
 		//probability of Kuhn step shitt + probability of entanglement destruction by CD
@@ -257,7 +257,7 @@ __global__ void boundary1_kernel(scalar_chains* chain_heads, int *d_offset, floa
 		QNtail = tex2D(t_a_QN, make_offset((tz - 1)+ run_sum, oft), i);
 
 	if (tz == 1) {
-		probs_z.y = (int)(10000.0f*__fdividef(1.0f, (dBe * dnk_arms[arm])));//Creation at the end by SD
+		probs_z.y = (int)(PROBS_CUTOFF*__fdividef(1.0f, (dBe * dnk_arms[arm])));//Creation at the end by SD
 	} else {
 		if (QNtail.w == 1.0f) {//destruction by SD at the end
 			if (fetch_new_strent(tz - 2 + run_sum, oft))
@@ -265,13 +265,13 @@ __global__ void boundary1_kernel(scalar_chains* chain_heads, int *d_offset, floa
 			else
 				QNtailp = tex2D(t_a_QN, make_offset(tz - 2 + run_sum, oft), i);
 			float f1 = (tz == 2) ? QNtailp.w + 0.25f : 0.5f * QNtailp.w;
-			probs_z.x = (int)(10000.0f*__fdividef(1.0f, f1 + 0.75f));
+			probs_z.x = (int)(PROBS_CUTOFF*__fdividef(1.0f, f1 + 0.75f));
 		} else {//creation by SD at the end
-			probs_z.y = (int)(10000.0f*__fdividef(2.0f, dBe * (QNtail.w + 0.5f)));
+			probs_z.y = (int)(PROBS_CUTOFF*__fdividef(2.0f, dBe * (QNtail.w + 0.5f)));
 		}
 	}
 
-	probs_z.w = d_CD_flag ? (int)(10000.0f*d_CD_create_prefact * (QNtail.w - 1.0f)) : 0;
+	probs_z.w = d_CD_flag ? (int)(PROBS_CUTOFF*d_CD_create_prefact * (QNtail.w - 1.0f)) : 0;
 	surf2Dwrite(probs_z, s_probs, sizeof(int4)*(tz - 1+run_sum), i);
 }
 
@@ -283,7 +283,6 @@ template<int narms> __global__ void boundary2_kernel(scalar_chains* chain_heads,
 
 	if (i >= dn_cha_per_call)
 		return;
-//	clock_t t1 = clock();
 	float4 QNhead_arms[narms]; // first strent
 	float4 new_strent = d_new_strent[i];
 	float sumW = 0;
@@ -352,7 +351,7 @@ template<int narms> __global__ void boundary2_kernel(scalar_chains* chain_heads,
 			float f1 = QNhead_arms[arm].w;
 			float f2 = (tz == 2) ? 2.0f * QN2.w - 0.5f : QN2.w;
 			float friction = __fdividef(2.0f, f1 + f2);
-			probs_1.x = (int)(10000.0f*friction * __powf(__fdividef(prefact1 * prefact2 * downsum1,downsum2), 0.75f)* __expf(__fdividef(upsum1,downsum1) - __fdividef(upsum2,downsum2) - Q2 * sig2));
+			probs_1.x = (int)(PROBS_CUTOFF*friction * __powf(__fdividef(prefact1 * prefact2 * downsum1,downsum2), 0.75f)* __expf(__fdividef(upsum1,downsum1) - __fdividef(upsum2,downsum2) - Q2 * sig2));
 		}
 
 		//forward shift
@@ -381,7 +380,7 @@ template<int narms> __global__ void boundary2_kernel(scalar_chains* chain_heads,
 			float f1 = QNhead_arms[arm].w;
 			float f2 = (tz == 2) ? 2.0f * QN2.w - 0.5f : QN2.w;
 			float friction = __fdividef(2.0f, f1 + f2);
-			probs_1.y = (int)(10000.0f*friction * __powf(__fdividef(prefact1 * prefact2 * downsum1,downsum2), 0.75f)* __expf(__fdividef(upsum1,downsum1) - __fdividef(upsum2,downsum2) + Q2 * sig2));
+			probs_1.y = (int)(PROBS_CUTOFF*friction * __powf(__fdividef(prefact1 * prefact2 * downsum1,downsum2), 0.75f)* __expf(__fdividef(upsum1,downsum1) - __fdividef(upsum2,downsum2) + Q2 * sig2));
 		}
 		
 		float tcd = 0.0f;
@@ -390,8 +389,8 @@ template<int narms> __global__ void boundary2_kernel(scalar_chains* chain_heads,
 			tcd = fetch_new_strent(run_sum, oft) ? d_new_tau_CD[i] : tex2D(t_a_tCD, make_offset(run_sum, oft), i);
 		}
 
-		probs_1.z = d_CD_flag ? (int)(10000.0f*tcd) : 0;
-		probs_1.w = d_CD_flag ? (int)(10000.0f*d_CD_create_prefact * (QNhead_arms[arm].w - 1.0f)) : 0;
+		probs_1.z = d_CD_flag ? (int)(PROBS_CUTOFF*tcd) : 0;
+		probs_1.w = d_CD_flag ? (int)(PROBS_CUTOFF*d_CD_create_prefact * (QNhead_arms[arm].w - 1.0f)) : 0;
 		surf2Dwrite(probs_1, s_probs, sizeof(int4)*run_sum, i);
 	}
 }
@@ -443,7 +442,8 @@ __global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* fou
 	__syncthreads();
 	
 	s[i] = var;
-	surf2Dwrite((float)(s[i])/10000.0f, s_sum_W_sorted, sizeof(float)*i, j);
+	__syncthreads();
+	surf2Dwrite((float)(s[i])/PROBS_CUTOFF, s_sum_W_sorted, sizeof(float)*i, j);
 
 	//search
 	float ran = tex2D(t_uniformrand, rand_used[j], j);
@@ -651,14 +651,6 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_con
 		//Update counter
 		d_write_time[i]++;
 	}
-	//check again to stop if necessary
-	if (d_universal_time + chain_heads[i].time > d_write_time[i] * d_correlator_res) {
-		for (int u = 0; u<d_narms; u++) {
-			d_offset[i*d_narms + u] = offset_code(0xffff, +1);
-		}
-		return;
-	}
-
 }
 
 template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_kernel(
@@ -675,6 +667,14 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 
 	surf1Dwrite(0.0f,s_ft,i*sizeof(float));
 	if (reach_flag[i]!=0) {
+		return;
+	}
+
+	//check again to stop if necessary
+	if (d_universal_time + chain_heads[i].time > d_write_time[i] * d_correlator_res) {
+		for (int u = 0; u<d_narms; u++) {
+			d_offset[i*d_narms + u] = offset_code(0xffff, +1);
+		}
 		return;
 	}
 
@@ -966,8 +966,8 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		tau_CD_used_CD[i]++;
 		chain_heads[i].Z[arm]++;
 		d_new_tau_CD[i] = temp.w;
-		// d_new_cr_time[i] = d_universal_time + chain_heads[i].time;
-		d_new_cr_time[i] = 0.0f;
+		d_new_cr_time[i] = d_universal_time + chain_heads[i].time;
+		//d_new_cr_time[i] = 0.0f;
 		float newn = floorf(0.5f + add_rand[i] * (QN1.w - 2.0f)) + 1.0f;
 		temp.w = newn;
 		float sigma = __fsqrt_rn(__fdividef(newn * (QN1.w - newn), 3.0f * QN1.w));
