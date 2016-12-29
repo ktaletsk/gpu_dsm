@@ -43,7 +43,7 @@ void random_textures_fill(int n_cha);
 
 #include "ensemble_block.cu"
 
-#define chains_per_call 5000
+#define chains_per_call 20000
 
 vector_chains chains; // host chain conformations
 // and only one array with scalar part chain conformation
@@ -554,6 +554,31 @@ void save_Q_distribution_to_file(string filename, bool cumulative) {
 			for (int i = 0; i < Q.size() / quant; i++) {
 				file << "\n" << Q[i * quant] << "\t" << P[i * quant];
 			}
+
+			//near branching point
+			std::vector<float> Q2;
+			std::vector<float> P2;
+
+			//Calculating strand vector lengths
+			for (int i = 0; i < N_cha; i++) {
+				float tt = sqrt(chain_index(i).QN[run_sum].x * chain_index(i).QN[run_sum].x + chain_index(i).QN[run_sum].y * chain_index(i).QN[run_sum].y + chain_index(i).QN[run_sum].z * chain_index(i).QN[run_sum].z);
+				Q2.push_back(tt);
+				if (tt < 0 || tt!=tt)
+					cout << "\nProblem detected at strand " << 0 << " of chain " << i << " length is equal " << tt;
+			}
+
+			//Sort vector lenghts
+			std::sort(Q2.begin(), Q2.end());
+
+			for(int i=0; i < Q2.size(); i++){
+				P2.push_back( (float)i / (float)Q2.size() );
+			}
+
+			file << "\nArm " << arm << " (near branching point)";
+			for (int i = 0; i < Q2.size() / quant; i++) {
+				file << "\n" << Q2[i * quant] << "\t" << P2[i * quant];
+			}
+
 			run_sum += NK_arms[arm];
 		}
 	} else

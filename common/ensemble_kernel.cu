@@ -835,7 +835,7 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 			}
 
 		}
-		if (jj == 0) {
+		else if (jj == 0) {
 			float4 temp_;
 			int run_sum_ = 0;
 			bool unent = true; //if all arms are unentangled -> set temp as (0,0,0)
