@@ -26,6 +26,8 @@
 #include "cuda_call.h"
 #include "textures_surfaces.h"
 #include "math.h"
+#include <sstream>
+#include <iomanip>
 
 using namespace std;
 
@@ -73,7 +75,7 @@ float Be;
 float kxx, kxy, kxz, kyx, kyy, kyz, kzx, kzy, kzz;
 bool PD_flag=0;
 
-bool dbug = false;	//true;
+bool dbug = false;
 
 //navigation
 vector_chains chain_index(const int i) { //absolute navigation i - is a global index of chains i:[0..N_cha-1]
@@ -405,11 +407,11 @@ void save_to_file(char *filename) {
 }
 
 void save_Z_distribution_to_file(string filename, bool cumulative) {
-	ofstream file(filename.c_str(), ios::out);
-	if (file.is_open()) {
-		//Calculation of Z distribution in ensemble
+	//Calculation of Z distribution in ensemble
 
-		for (int arm=0; arm < narms; arm++){
+	for (int arm=0; arm < narms; arm++){
+		ofstream file(filename_ID(filename + "_arm_" + static_cast<ostringstream*>( &(ostringstream() << (arm+1) ) )->str(), false), ios::out);
+		if (file.is_open()) {
 			//Search for maximum and minimum of Z
 			int Zmin = chain_heads[0].Z[arm];
 			int Zmax = chain_heads[0].Z[arm];
@@ -433,22 +435,24 @@ void save_Z_distribution_to_file(string filename, bool cumulative) {
 				}
 				P[j-Zmin] = (float) counter / N_cha;
 			}
-			file << "Arm " << arm;
 			for (int i = Zmin; i <= Zmax; i++){
-				file << "\n" << i << "\t" << P[i-Zmin];
+				file << i << "\t" << P[i-Zmin] << "\n";
 			}
-			file << "\n";
 			delete[] P;
+			file.close();
 		}
-	} else
+		else
 		cout << "file error\n";
+	}
+
 }
 
 void save_N_distribution_to_file(string filename, bool cumulative) {
-	ofstream file(filename.c_str(), ios::out);
-	if (file.is_open()) {
-		int run_sum = 0;
-		for (int arm=0; arm < narms; arm++){
+	int run_sum = 0;
+	for (int arm=0; arm < narms; arm++){
+		ofstream file(filename_ID(filename + "_arm_" + static_cast<ostringstream*>( &(ostringstream() << (arm+1) ) )->str(), false), ios::out);
+		if (file.is_open()) {
+
 			//Search for maximum and minimum of N across all strands in all chains
 			int Nmin = chain_index(0).QN[run_sum+1].w;
 			int Nmax = chain_index(0).QN[run_sum+1].w;
@@ -469,7 +473,6 @@ void save_N_distribution_to_file(string filename, bool cumulative) {
 
 			//Sum up coinciding N
 			float* P = new float[Nstr];
-			file << "\nArm " << arm;
 			for (int n = Nmin; n <= Nmax; n++) {
 				P[n]=0.0f;
 				int counter=0;
@@ -482,13 +485,20 @@ void save_N_distribution_to_file(string filename, bool cumulative) {
 					}
 				}
 				P[n] += (float)counter / Nstr;
-				file << "\n" << n << "\t" << P[n];
+				file << n << "\t" << P[n] << "\n";
 			}
+			delete[] P;
+			file.close();
+		}
+		else
+			cout << "file error\n";
 
+		ofstream file2(filename_ID(filename + "_arm_" + static_cast<ostringstream*>( &(ostringstream() << (arm+1) ) )->str() + "_bp", false), ios::out);
+		if (file2.is_open()) {
 			//Near branching point
-			Nmin = chain_index(0).QN[run_sum].w;
-			Nmax = chain_index(0).QN[run_sum].w;
-			Nstr = N_cha;
+			int Nmin = chain_index(0).QN[run_sum].w;
+			int Nmax = chain_index(0).QN[run_sum].w;
+			int Nstr = N_cha;
 			for (int i = 0; i < N_cha; i++) {
 				if (chain_index(i).QN[run_sum].w > Nmax)
 					Nmax = chain_index(i).QN[run_sum].w;
@@ -501,7 +511,6 @@ void save_N_distribution_to_file(string filename, bool cumulative) {
 
 			//Sum up coinciding N
 			float* P2 = new float[Nstr];
-			file << "\nArm " << arm << " (near branching point)";
 			for (int n = Nmin; n <= Nmax; n++) {
 				P2[n]=0.0f;
 				int counter=0;
@@ -512,22 +521,26 @@ void save_N_distribution_to_file(string filename, bool cumulative) {
 						counter++;
 				}
 				P2[n] += (float)counter / Nstr;
-				file << "\n" << n << "\t" << P2[n];
+				file2 << n << "\t" << P2[n] << "\n";
 			}
-			run_sum += NK_arms[arm];
-			delete[] P;
+			
 			delete[] P2;
+			file2.close();
 		}
-	} else
-		cout << "file error\n";
+		else
+			cout << "file error\n";
+
+		run_sum += NK_arms[arm];
+	}
+	
 	return;
 }
 
 void save_Q_distribution_to_file(string filename, bool cumulative) {
-	ofstream file(filename.c_str(), ios::out);
-	if (file.is_open()) {
-		int run_sum = 0;
-		for (int arm=0; arm < narms; arm++){
+	int run_sum = 0;
+	for (int arm=0; arm < narms; arm++){
+		ofstream file(filename_ID(filename + "_arm_" + static_cast<ostringstream*>( &(ostringstream() << (arm+1) ) )->str(), false), ios::out);
+		if (file.is_open()) {
 			std::vector<float> Q;
 			std::vector<float> P;
 
@@ -550,11 +563,15 @@ void save_Q_distribution_to_file(string filename, bool cumulative) {
 			}
 
 			int quant = 1;
-			file << "\nArm " << arm;
 			for (int i = 0; i < Q.size() / quant; i++) {
-				file << "\n" << Q[i * quant] << "\t" << P[i * quant];
+				file << Q[i * quant] << "\t" << P[i * quant] << "\n";
 			}
+			file.close();
+		} else
+			cout << "\nfile error";
 
+		ofstream file2(filename_ID(filename + "_arm_" + static_cast<ostringstream*>( &(ostringstream() << (arm+1) ) )->str() + "_bp", false), ios::out);
+		if (file2.is_open()) {
 			//near branching point
 			std::vector<float> Q2;
 			std::vector<float> P2;
@@ -574,15 +591,17 @@ void save_Q_distribution_to_file(string filename, bool cumulative) {
 				P2.push_back( (float)i / (float)Q2.size() );
 			}
 
-			file << "\nArm " << arm << " (near branching point)";
+			int quant = 1;
 			for (int i = 0; i < Q2.size() / quant; i++) {
-				file << "\n" << Q2[i * quant] << "\t" << P2[i * quant];
+				file2 << Q2[i * quant] << "\t" << P2[i * quant] << "\n";
 			}
+			file2.close();
+		} else
+			cout << "\nfile error";
 
-			run_sum += NK_arms[arm];
-		}
-	} else
-		cout << "\nfile error";
+		run_sum += NK_arms[arm];
+	}
+	
 }
 
 void load_from_file(char *filename) {

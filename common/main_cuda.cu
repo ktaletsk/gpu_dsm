@@ -126,9 +126,9 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 
 	if (distr) {		//Calculating distributions for Z,N,Q
 		cout << "\nSaving initial distribution to file...";
-		save_Z_distribution_to_file(filename_ID("distr_Z_initial", false), 0);
-		save_N_distribution_to_file(filename_ID("distr_N_initial", false), 0);
-		save_Q_distribution_to_file(filename_ID("distr_Q_initial", false), 1);
+		save_Z_distribution_to_file("distr_Z_initial", 0);
+		save_N_distribution_to_file("distr_N_initial", 0);
+		save_Q_distribution_to_file("distr_Q_initial", 1);
 	}
 
 	ctimer timer;
@@ -177,13 +177,13 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 	if (distr) {		//Calculating distributions for Z,N,Q
 		cout << "\nSaving distribution to file...";
 		if (CD_flag) {
-			save_Z_distribution_to_file(filename_ID("distr_Z", false), 0);
-			save_N_distribution_to_file(filename_ID("distr_N", false), 0);
-			save_Q_distribution_to_file(filename_ID("distr_Q", false), 1);
+			save_Z_distribution_to_file("distr_Z", 0);
+			save_N_distribution_to_file("distr_N", 0);
+			save_Q_distribution_to_file("distr_Q", 1);
 		} else {
-			save_Z_distribution_to_file(filename_ID("distr_Z", false), 0);
-			save_N_distribution_to_file(filename_ID("distr_N", false), 0);
-			save_Q_distribution_to_file(filename_ID("distr_Q", false), 1);
+			save_Z_distribution_to_file("distr_Z", 0);
+			save_N_distribution_to_file("distr_N", 0);
+			save_Q_distribution_to_file("distr_Q", 1);
 		}
 	}
 	gpu_clean();

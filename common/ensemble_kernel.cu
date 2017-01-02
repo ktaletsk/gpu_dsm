@@ -181,6 +181,8 @@ template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_ker
 		QN = kappa(QN, dt);
 	}
 
+	//printf("\ni=%i\tarm=%i\tstrent=%i\tQ=%f\t%f\t%f\tN=%f", i, arm, ii, QN.x, QN.y, QN.z, QN.w);
+
 	//fetch next strent
 	if ((ii > 0) && (ii < tz - 1)) {
 		int4 wsh = make_int4(0, 0, 0, 0);
@@ -792,10 +794,12 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		chain_heads[i].Z[arm]--;  //decrease number of strands as entanglement is destroyed
 
 		float4 temp = make_float4(QN1.x + QN2.x, QN1.y + QN2.y, QN1.z + QN2.z, QN1.w + QN2.w); //temporary variable for new strand
-		if (jj == tz - 2) temp = make_float4(0.0f, 0.0f, 0.0f, QN1.w + QN2.w);
+		if (jj == tz - 2){
+			temp = make_float4(0.0f, 0.0f, 0.0f, QN1.w + QN2.w);
+		}
 
 		float4 deltaQ;
-		if (chain_heads[i].Z[arm]==1) {
+		if (chain_heads[i].Z[arm]==1) { //arm go unentangled as a result of entanglement destruction
 			float4 temp_;
 			int run_sum_ = 0;
 			bool unent = true; //if all arms are unentangled -> set temp as (0,0,0)
@@ -972,8 +976,11 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		float newn = floorf(0.5f + add_rand[i] * (QN1.w - 2.0f)) + 1.0f;
 		temp.w = newn;
 		float sigma = __fsqrt_rn(__fdividef(newn * (QN1.w - newn), 3.0f * QN1.w));
+		if (jj == tz - 1) {
+			sigma = __fsqrt_rn(__fdividef(newn, 3.0f));
+		}
 		float ration = __fdividef(newn, QN1.w);
-		
+
 		float4 deltaQ = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 		if (jj == 0) {//new strand near branch point
 			float4 temp_;
@@ -1023,16 +1030,15 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 			}
 		}
 
-		if (jj == tz - 1) {
-			float sigma = __fsqrt_rn(__fdividef(newn, 3.0f));
-		}
-
 		temp.x *= sigma;
 		temp.y *= sigma;
 		temp.z *= sigma;
 		temp.x += QN1.x * ration;
 		temp.y += QN1.y * ration;
 		temp.z += QN1.z * ration;
+
+		// if (unent_cr)
+		// 	printf("\nQ=%f\t%f\t%f\tN=%f", temp.x, temp.y, temp.z, temp.w);
 
 		surf2Dwrite(make_float4(QN1.x - temp.x, QN1.y - temp.y, QN1.z - temp.z, QN1.w - newn), s_b_QN, 16 * j, i);
 		if (jj == 0) {
@@ -1043,6 +1049,7 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		}
 
 		d_offset[ii] = offset_code(j, -1);
+
 		d_new_strent[i] = temp;
 	}
 
