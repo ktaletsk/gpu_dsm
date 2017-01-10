@@ -19,7 +19,7 @@ OBJS =  cudautil.o gpu_random.o stress.o chain.o ensemble.o correlator.o gamma.o
 CC = nvcc
 
 #Gencode arguments
-SMS = 50
+SMS = 35
 
 ifeq ($(GENCODE_FLAGS),)
 # Generate SASS code for each SM architecture listed in $(SMS)

@@ -45,7 +45,7 @@ void random_textures_fill(int n_cha);
 
 #include "ensemble_block.cu"
 
-#define chains_per_call 20000
+#define chains_per_call 10000
 
 vector_chains chains; // host chain conformations
 // and only one array with scalar part chain conformation
@@ -393,14 +393,18 @@ int equilibrium_run(int res, double length, int s, int correlator_type, bool* ru
 }
 
 void save_to_file(char *filename) {
-	ofstream file(filename, ios::out | ios::binary);
-//	ofstream file(filename, ios::out);
+//	ofstream file(filename, ios::out | ios::binary);
+	ofstream file(filename, ios::out);
 	if (file.is_open()) {
-		file.write((char*) &N_cha, sizeof(int));
-
+		//file.write((char*) &N_cha, sizeof(int));
+		file << N_cha << "\n";
 		for (int i = 0; i < N_cha; i++) {
-			save_to_file(file, chain_index(i), chain_heads[i]);
+			//save_to_file(file, chain_index(i), chain_heads[i]);
+			print(file, chain_index_arm(i, 0), chain_heads[i], 0);
+			print(file, chain_index_arm(i, 1), chain_heads[i], 1);
+			print(file, chain_index_arm(i, 2), chain_heads[i], 2);
 		}
+		file.close();
 
 	} else
 		cout << "file error\n";

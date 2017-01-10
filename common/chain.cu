@@ -252,7 +252,7 @@ void converttoQhat(vector_chains datai, float4 Q1){
 
 void print(ostream& stream, const vector_chains c, const scalar_chains chead) {
 	stream<<"time "<<universal_time+chead.time<<'\n';
-	stream<<"Z: "<<chead.Z<<'\n';
+	stream<<"Z: "<<chead.Z[1]<<'\n';
 // 	stream<<"dummy: "<<chead.dummy<<'\n';//can be used for debug
 	stream << "N:  ";
 	for (int j = 0; j < chead.Z[1]; j++)
@@ -265,6 +265,25 @@ void print(ostream& stream, const vector_chains c, const scalar_chains chead) {
 		stream << c.QN[j].y << ' ';
 	stream << "\nQz: ";
 	for (int j = 0; j < chead.Z[1]; j++)
+		stream << c.QN[j].z << ' ';
+	stream << '\n';
+}
+
+void print(ostream& stream, const vector_chains c, const scalar_chains chead, int arm) {
+	stream << "arm: " << arm << '\n';
+	stream << "Z: " << chead.Z[arm] << '\n';
+	// 	stream<<"dummy: "<<chead.dummy<<'\n';//can be used for debug
+	stream << "N:  ";
+	for (int j = 0; j < chead.Z[arm]; j++)
+		stream << c.QN[j].w << ' ';
+	stream << "\nQx: ";
+	for (int j = 0; j < chead.Z[arm]; j++)
+		stream << c.QN[j].x << ' ';
+	stream << "\nQy: ";
+	for (int j = 0; j < chead.Z[arm]; j++)
+		stream << c.QN[j].y << ' ';
+	stream << "\nQz: ";
+	for (int j = 0; j < chead.Z[arm]; j++)
 		stream << c.QN[j].z << ' ';
 	stream << '\n';
 }

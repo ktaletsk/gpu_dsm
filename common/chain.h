@@ -76,6 +76,7 @@ void chain_init(int* z, vector_chains data, int tnk, int z_max, bool dangling_be
 void converttoQhat(vector_chains datai, float4 Q1);
 //outputs chain conformation
 void print(ostream& stream, const vector_chains c, const scalar_chains chead);
+void print(ostream& stream, const vector_chains c, const scalar_chains chead,int arm);
 
 void save_to_file(ostream& stream, const vector_chains c, const scalar_chains chead);
 void load_from_file(istream& stream, const vector_chains c, const scalar_chains *chead);

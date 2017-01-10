@@ -181,7 +181,7 @@ template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_ker
 		QN = kappa(QN, dt);
 	}
 
-	//printf("\ni=%i\tarm=%i\tstrent=%i\tQ=%f\t%f\t%f\tN=%f", i, arm, ii, QN.x, QN.y, QN.z, QN.w);
+	//printf("\ni=%i\tarm=%i\tstrent=%i\tQ=%f\t%f\t%f\tN=%f\tT=%f", i, arm, ii, QN.x, QN.y, QN.z, QN.w, d_universal_time + chain_heads[j].time);
 
 	//fetch next strent
 	if ((ii > 0) && (ii < tz - 1)) {
@@ -397,7 +397,7 @@ template<int narms> __global__ void boundary2_kernel(scalar_chains* chain_heads,
 	}
 }
 
-__global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* found_index,  int* found_shift, float* add_rand, float *reach_flag) {
+__global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* found_index,  int* found_shift, float* add_rand) {
 	extern __shared__ int s[];
 	//Calculate kernel index
 	int i = blockIdx.x * blockDim.x + threadIdx.x;//strent index
@@ -601,9 +601,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void flow_stress(corr_device gpu_
 template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_control_kernel(
 	scalar_chains* chain_heads, float *tdt, float *reach_flag,
 	float next_sync_time, int *d_offset, float4 *d_new_strent,
-	int *d_write_time, int correlator_type,
-	int *tau_CD_used_CD, int *tau_CD_used_SD, int stress_index,
-	int* found_index, int* found_shift, float* add_rand)
+	int *d_write_time, int correlator_type, int stress_index)
 {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;//chain index
 	if (i >= dn_cha_per_call)
@@ -618,6 +616,7 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_con
 
 	if (((chain_heads[i].time >= next_sync_time) && (d_universal_time + next_sync_time <= d_write_time[i] * d_correlator_res)) || (chain_heads[i].stall_flag != 0)) {
 		reach_flag[i] = 1;
+		//printf("\nreach_flag[i]=%f\ttime=%f", reach_flag[i], d_universal_time + chain_heads[i].time);
 		chain_heads[i].time -= next_sync_time;
 		tdt[i] = 0.0f;
 		for (int u = 0; u<d_narms; u++) {
@@ -738,9 +737,11 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		if (k==0) { //shuffling left
 			QN1.w = QN1.w + 1;
 			QN2.w = QN2.w - 1;
+			//printf("\nShift left: arm %i\tstrent%i", arm, jj);
 		} else { //shuffling right
 			QN1.w = QN1.w - 1;
 			QN2.w = QN2.w + 1;
+			//printf("\nShift right: arm %i\tstrent%i", arm, jj);
 		}
 
 		if (jj == 0) {//shuffling invoving branch-point
@@ -790,6 +791,7 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		d_offset[ii] = offset_code(0xffff, +1);
 	}
 	else if (k == 2 || k == 5) {
+		//printf("\nDestruction of entanglement: arm %i\tstrent%i", arm, jj);
 		// Destruction by sliding dynamics
 		chain_heads[i].Z[arm]--;  //decrease number of strands as entanglement is destroyed
 
@@ -904,6 +906,7 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		}
 	} 
 	else if (k==3) {//  Creation by SD
+		//printf("\nCreation by SD: arm %i\tstrent%i", arm, jj);
 		float4 temp = tex2D(t_taucd_gauss_rand_SD, tau_CD_used_SD[i], i);
 		tau_CD_used_SD[i]++;
 		chain_heads[i].Z[arm]++;
@@ -967,6 +970,7 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		d_new_strent[i] = temp;
 	}
 	else if (k == 4) {//Creation by CD
+		//printf("\nCreation by CD: arm %i\tstrent%i",arm,jj);
 		float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used_CD[i], i);
 		tau_CD_used_CD[i]++;
 		chain_heads[i].Z[arm]++;
