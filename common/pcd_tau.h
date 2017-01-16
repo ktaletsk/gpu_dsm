@@ -106,13 +106,11 @@ struct p_cd_linear { //Generates \tau_CD lifetimes
 };
 
 struct p_cd { //Generates \tau_CD lifetimes
-			  //uses analytical approximation to P_cd parameters
 	float A1, B1, A2, B2, normdt, Bdt;
 	float g, alpha_1, alpha_2, tau_0, tau_1, tau_2, tau_d;
 	float Nk;
 	Ran *ran;
 	p_cd(float Be, float NK, Ran *tran) {
-		//init parameters from analytical fits
 		Nk = NK;
 		ran = tran;
 		g = 0.0603976f;
@@ -123,6 +121,21 @@ struct p_cd { //Generates \tau_CD lifetimes
 		tau_2 = 450294.0f;
 		tau_d = 452485.f;
 
+		init_consts();
+	}
+	p_cd(float g_, float a_1, float a_2, float t_0, float t_1, float t_2, float t_d, Ran *tran) {
+		ran = tran;
+		g = g_;
+		alpha_1 = a_1;
+		alpha_2 = a_2;
+		tau_0 = t_0;
+		tau_1 = t_1;
+		tau_2 = t_2;
+		tau_d = t_d;
+
+		init_consts();
+	}
+	void init_consts() {
 		A1 = (powf(tau_1, alpha_1) - powf(tau_0, alpha_1)) / alpha_1;
 		B1 = (powf(tau_2, alpha_2) - powf(tau_1, alpha_2)) / alpha_2 * powf(tau_1, alpha_1 - alpha_2);
 		A2 = (powf(tau_1, alpha_1 - 1) - powf(tau_0, alpha_1 - 1)) / (alpha_1 - 1);

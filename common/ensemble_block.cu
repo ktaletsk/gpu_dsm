@@ -321,11 +321,19 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 	cudaStreamDestroy(stream_update);
 	cudaStreamDestroy(stream_calc1);
 
+	//output entanglement lifetime distribution
+	unsigned long long enttime_sum = 0;
+	for (int it = 0; it < enttime_bins.size(); ++it) {
+		enttime_sum += enttime_bins[it];
+	}
+
 	ofstream lifetime_file;
 	lifetime_file.open(filename_ID("fdt", false));
+	unsigned long long enttime_run_sum = 0;
 	for (int it = 0; it < enttime_bins.size(); ++it){
 		if (enttime_bins[it] != 0){
-			lifetime_file << it << '\t' << enttime_bins[it] << '\n';
+			enttime_run_sum += enttime_bins[it];
+			lifetime_file << powf(10.0f,it/1000.0f-10.0f) << '\t' << 1.0f - (float)enttime_run_sum / (float)enttime_sum << '\n';
 		}
 	}
 	lifetime_file.close();

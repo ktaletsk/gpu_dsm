@@ -145,7 +145,6 @@ void host_chains_init(Ran* eran) {
 		for (int arm = 0; arm<narms; arm++) {
 			converttoQhat(chain_index_arm(i, arm), aver_branch_point);
 		}
-		//I need to find average position of branch-point and substract it instead of Q1
 	}
 	cout << "done\n";
 }

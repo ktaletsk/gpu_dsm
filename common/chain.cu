@@ -26,6 +26,8 @@ extern float step;
 extern float mp,Mk;
 extern float* GEX_table;
 
+extern p_cd* pcd;
+
 inline void operator+=(float4 &a, float4 b) {
 	a.x += b.x;
 	a.y += b.y;
@@ -131,16 +133,17 @@ __host__ __device__ float tau_dist_linear(float p,float Be, float Nk) {
 	}
 }
 
-__host__ __device__ float tau_dist(float p, float Be, float Nk) {
+float tau_dist(float p, float Be, float Nk) {
 	float A1, B1;
 	float g, alpha_1, alpha_2, tau_0, tau_1, tau_2, tau_d;
-	g = 0.0603976f;
-	alpha_1 = 0.281379f;
-	alpha_2 = -0.188025f;
-	tau_0 = 0.271977f;
-	tau_1 = 428.864f;
-	tau_2 = 450294.0f;
-	tau_d = 452485.f;
+
+	g = pcd->g;
+	alpha_1 = pcd->alpha_1;
+	alpha_2 = pcd->alpha_2;
+	tau_0 = pcd->tau_0;
+	tau_1 = pcd->tau_1;
+	tau_2 = pcd->tau_2;
+	tau_d = pcd->tau_d;
 
 	A1 = (powf(tau_1, alpha_1) - powf(tau_0, alpha_1)) / alpha_1;
 	B1 = (powf(tau_2, alpha_2) - powf(tau_1, alpha_2)) / alpha_2 * powf(tau_1, alpha_1 - alpha_2);
@@ -270,21 +273,39 @@ void print(ostream& stream, const vector_chains c, const scalar_chains chead) {
 }
 
 void print(ostream& stream, const vector_chains c, const scalar_chains chead, int arm) {
-	stream << "arm: " << arm << '\n';
-	stream << "Z: " << chead.Z[arm] << '\n';
+	// stream << "arm: " << arm << '\n';
+	// stream << "Z: " << chead.Z[arm] << '\n';
 	// 	stream<<"dummy: "<<chead.dummy<<'\n';//can be used for debug
-	stream << "N:  ";
-	for (int j = 0; j < chead.Z[arm]; j++)
-		stream << c.QN[j].w << ' ';
-	stream << "\nQx: ";
-	for (int j = 0; j < chead.Z[arm]; j++)
-		stream << c.QN[j].x << ' ';
-	stream << "\nQy: ";
-	for (int j = 0; j < chead.Z[arm]; j++)
-		stream << c.QN[j].y << ' ';
-	stream << "\nQz: ";
-	for (int j = 0; j < chead.Z[arm]; j++)
-		stream << c.QN[j].z << ' ';
+	// stream << "N:  ";
+	//for (int j = 0; j < chead.Z[arm]; j++)
+	//	stream << c.QN[j].w << ' ';
+	//stream << "\nQx: ";
+	//for (int j = 0; j < chead.Z[arm]; j++)
+	//	stream << c.QN[j].x << ' ';
+	//stream << "\nQy: ";
+	//for (int j = 0; j < chead.Z[arm]; j++)
+	//	stream << c.QN[j].y << ' ';
+	//stream << "\nQz: ";
+	//for (int j = 0; j < chead.Z[arm]; j++)
+	//	stream << c.QN[j].z << ' ';
+	//stream << '\n';
+
+	float4 cumulative = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+	for (int j = 0; j < chead.Z[arm]; j++) {
+		for (int k = 0; k < c.QN[j].w; k++) {
+			//print sigma^2
+			if (j == 0 || j == chead.Z[arm] - 1)
+				stream << c.QN[j].w / 3.0f;
+			else
+				stream << (float)(k+1) * (1.0f - (float)(k+1) / c.QN[j].w) / 3.0f;
+			stream << '\t';
+			//print r_i'
+			stream << cumulative.x + c.QN[j].x * (float)(k+1) / c.QN[j].w << '\t' << cumulative.y + c.QN[j].y * (float)(k + 1) / c.QN[j].w << '\t' << cumulative.z + c.QN[j].z * (float)(k + 1) / c.QN[j].w << '\t';
+		}
+		cumulative.x += c.QN[j].x;
+		cumulative.y += c.QN[j].y;
+		cumulative.z += c.QN[j].z;
+	}
 	stream << '\n';
 }
 

@@ -28,12 +28,13 @@
 
 extern float a,b,mp,Mk;
 extern void make_gamma_table (float a, float b);
+p_cd *pcd;
 
 using namespace std;
 
 int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int device_ID, bool distr, int* progress_bar) {
 	Ran eran(1);
-	p_cd *pcd;
+	
 
 	int equilibrium_type = 0;
 	double simulation_time;
@@ -111,7 +112,20 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 	//Initialize random
 	eran.seed(job_ID * N_cha);
 
-	pcd = new p_cd(Be, NK, &eran);
+	ifstream pcd_file;
+	pcd_file.open("pcd.dat");
+	float g, alpha_1, alpha_2, tau_0, tau_1, tau_2, tau_d;
+	pcd_file >> g;
+	pcd_file >> alpha_1;
+	pcd_file >> alpha_2;
+	pcd_file >> tau_0;
+	pcd_file >> tau_1;
+	pcd_file >> tau_2;
+	pcd_file >> tau_d;
+	pcd_file.close();
+
+	//pcd = new p_cd(Be, NK, &eran);
+	pcd = new p_cd(g, alpha_1, alpha_2, tau_0, tau_1, tau_2, tau_d, &eran); //initialize with fitted values to do iterations (unless we obtain analytic expression)
 
 	if (loadfile != NULL) {	//load chain conformations from file
 		cout << "loading chain conformations from " << loadfile << "..";
