@@ -1,0 +1,17 @@
+0.12953
+0.20847
+-0.355719
+0.319677
+269.812
+4442.68
+6945.59
+
+! Input file for entanglement lifetime distribution
+!Line by line description of input:
+! 1)  g
+! 2)  alpha_1
+! 3)  alpha_2
+! 4)  tau_0
+! 5)  tau_1
+! 6)  tau_2
+! 7)  tau_d
