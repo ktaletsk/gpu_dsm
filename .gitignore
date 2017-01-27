@@ -12,3 +12,8 @@ gpu_dsm
 /CLI/gpu_DSM.lib
 /CLI/gpu_DSM.exp
 
+/gpu_dsm.sln
+/gpu_dsm.vcxproj.filters
+/gpu_dsm.vcxproj
+/gpu_dsm.VC.VC.opendb
+/gpu_dsm.VC.db
