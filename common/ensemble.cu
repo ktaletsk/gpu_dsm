@@ -28,6 +28,8 @@
 #include "math.h"
 #include <sstream>
 #include <iomanip>
+#include <set>			// std::set
+#include <algorithm>    // std::min
 
 using namespace std;
 
@@ -83,6 +85,7 @@ vector_chains chain_index(const int i) { //absolute navigation i - is a global i
 	ptr.QN = &(chains.QN[z_max * i]);
 	ptr.tau_CD = &(chains.tau_CD[z_max * i]);
 	ptr.tau_cr = &(chains.tau_cr[z_max * i]);
+	ptr.pair_chain = &(chains.pair_chain[z_max * i]);
 	ptr.R1 = &(chains.R1[i]);
 	return ptr;
 }
@@ -95,6 +98,7 @@ vector_chains chain_index_arm(const int i, const int arm) { //absolute navigatio
 	ptr.QN = &(chains.QN[z_max * i + shift]);
 	ptr.tau_CD = &(chains.tau_CD[z_max * i + shift]);
 	ptr.tau_cr = &(chains.tau_cr[z_max * i + shift]);
+	ptr.pair_chain = &(chains.pair_chain[z_max * i + shift]);
 	ptr.R1 = &(chains.R1[i]);
 	return ptr;
 }
@@ -106,6 +110,7 @@ vector_chains chain_index(const int bi, const int i) {    //block navigation
 	ptr.QN = &(chains.QN[z_max * (bi * chains_per_call + i)]);
 	ptr.tau_CD = &(chains.tau_CD[z_max * (bi * chains_per_call)]);
 	ptr.tau_cr = &(chains.tau_cr[z_max * (bi * chains_per_call)]);
+	ptr.pair_chain = &(chains.pair_chain[z_max * (bi * chains_per_call)]);
 	ptr.R1 = &(chains.R1[bi * chains_per_call + i]);
 	return ptr;
 }
@@ -122,6 +127,7 @@ void chains_malloc() {
 	cudaMallocManaged((void**)&(chains.QN), sizeof(float4) * N_cha * z_max);
 	cudaMallocManaged((void**)&(chains.tau_CD), sizeof(float4) * N_cha * z_max);
 	cudaMallocManaged((void**)&(chains.tau_cr), sizeof(float4) * N_cha * z_max);
+	cudaMallocManaged((void**)&(chains.pair_chain), sizeof(int) * N_cha * z_max);
 	cudaMallocManaged((void**)&(chains.R1), sizeof(float4) * N_cha);
 }
 
@@ -129,9 +135,15 @@ void host_chains_init(Ran* eran) {
 	chains_malloc();
 	cout << "generating chain conformations on host..";
 	universal_time=0.0;
+	std::vector<int> Zlist;
+	std::vector<int> Entlist;
+	std::set<std::pair<int, int>> Pairlist;
 	for (int i = 0; i < N_cha; i++) {
+		Zlist.push_back(0);
+
 		for (int arm=0; arm<narms; arm++){
 			chain_init(&(chain_heads[i].Z[arm]), chain_index_arm(i,arm), NK_arms[arm], NK_arms[arm], false, PD_flag, eran);
+			Zlist.back() += chain_heads[i].Z[arm]-1;
 		}
 
 		float4 aver_branch_point=make_float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -146,6 +158,119 @@ void host_chains_init(Ran* eran) {
 			converttoQhat(chain_index_arm(i, arm), aver_branch_point);
 		}
 	}
+
+	int Z_total = 0;
+	cout << "Total number of entanglements: ";
+	for (unsigned i = 0; i<Zlist.size(); i++)
+		Z_total += Zlist[i];
+
+	while (Z_total % 2 != 0) {
+		Z_total -= Zlist.back();
+		Zlist.back() = 0;
+
+		//repeat initialization of the last chain
+
+		for (int arm = 0; arm<narms; arm++) {
+			chain_init(&(chain_heads[N_cha-1].Z[arm]), chain_index_arm(N_cha - 1, arm), NK_arms[arm], NK_arms[arm], false, PD_flag, eran);
+			Zlist.back() += chain_heads[N_cha - 1].Z[arm] - 1;
+		}
+
+		float4 aver_branch_point = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+		float aver_sum = 0.0f;
+		for (int arm = 0; arm<narms; arm++) {
+			aver_branch_point = aver_branch_point + chain_index_arm(N_cha - 1, arm).QN[0] / chain_index_arm(N_cha - 1, arm).QN[0].w;
+			aver_sum += 1 / chain_index_arm(N_cha - 1, arm).QN[0].w;
+		}
+		aver_branch_point = aver_branch_point / aver_sum;
+
+		for (int arm = 0; arm<narms; arm++) {
+			converttoQhat(chain_index_arm(N_cha - 1, arm), aver_branch_point);
+		}
+		Z_total += Zlist.back();
+	}
+
+	cout << "Number of entanglements in ensemble chains:\n";
+	for (unsigned i = 0; i<Zlist.size(); i++)
+		cout << ' ' << Zlist[i];
+	cout << '\n';
+	cout << Z_total << '\n';
+
+	for (unsigned i = 0; i < Zlist.size(); i++) {
+		for (unsigned j = 0; j < Zlist[i]; j++) {
+			Entlist.push_back(i);
+		}
+	}
+
+	for (unsigned i = 0; i < Entlist.size(); i++) {
+		cout << ' ' << Entlist[i];
+	}
+
+	//randomly shuffle the list
+	std::random_shuffle(Entlist.begin(), Entlist.end());
+	cout << "Randomly shuffled list of entanglements:\n";
+	for (unsigned i = 0; i < Entlist.size(); i++) {
+		cout << ' ' << Entlist[i];
+	}
+
+	std::pair <int, int> p;
+
+	while (Entlist.size() > 0) {
+		int i = 0;
+		int j = 1;
+		bool found_pair = false;
+		while (found_pair == false) {
+			p = std::make_pair(std::min(Entlist[i], Entlist[j]), std::max(Entlist[i], Entlist[j]));
+			if (Pairlist.count(p) == 0 && p.first!=p.second) {
+				Pairlist.insert(p);
+				std::cout << "Pair: " << p.first << " " << p.second << std::endl;
+				// erase first and j elements:
+				Entlist.erase(Entlist.begin() + j);
+				Entlist.erase(Entlist.begin());
+				found_pair = true;
+			}
+			else {
+				j++;
+			}
+		}
+	}
+
+	//Save pairing information to chains
+	for (int i = 0; i < N_cha; i++) {
+		//check pairs with other chains
+		std::vector<int> Connectedlist;
+		for (int j = 0; j < N_cha; j++) {
+			p = std::make_pair(std::min(i,j), std::max(i, j));
+			if (Pairlist.count(p) == 1)
+				Connectedlist.push_back(j); //save chains (j) connected to this chain (i)
+		}
+
+		//randomly shuffle Connectedlist
+		std::random_shuffle(Connectedlist.begin(), Connectedlist.end());
+
+		cout << "Chain " << i << " connected to chains:";
+		for (unsigned k = 0; k < Connectedlist.size(); k++) {
+			cout << ' ' << Connectedlist[k];
+		}
+		cout << "\n";
+		
+		//divide in N_arms parts
+		int run_sum = 0;
+		for (int arm = 0; arm < narms; arm++) {
+			vector<int> Connectedarmlist(Connectedlist.begin() + run_sum, Connectedlist.begin() + run_sum + chain_heads[i].Z[arm]-1);
+			cout << "Arm " << arm << " connected to chains:";
+			for (unsigned k = 0; k < Connectedarmlist.size(); k++) {
+				cout << ' ' << Connectedarmlist[k];
+			}
+			cout << "\n";
+			
+			//initialize pair_chain in vector_chains
+			pair_chains(Connectedarmlist.data(), chain_heads[i].Z[arm], chain_index_arm(i,arm));
+			
+			run_sum += chain_heads[i].Z[arm]-1;
+		}
+		
+	}
+
 	cout << "done\n";
 }
 
@@ -204,6 +329,7 @@ void gpu_init(int seed, p_cd* pcd, int nsteps) {
 	cudaMallocArray(&d_a_tcr, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_a_R1, &channelDesc4, rsz, 1, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_corr_a, &channelDesc4, rsz, stressarray_count, cudaArraySurfaceLoadStore);
+	cudaMallocArray(&d_a_pair_chains, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
 
 
 	cudaMallocArray(&d_b_QN, &channelDesc4, z_max, rsz, cudaArraySurfaceLoadStore);
@@ -211,6 +337,7 @@ void gpu_init(int seed, p_cd* pcd, int nsteps) {
 	cudaMallocArray(&d_b_tcr, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_b_R1, &channelDesc4, rsz, 1, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_corr_b, &channelDesc4, rsz, stressarray_count, cudaArraySurfaceLoadStore);
+	cudaMallocArray(&d_b_pair_chains, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
 
 	cudaMallocArray(&d_sum_W, &channelDesc4, z_max, rsz, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_sum_W_sorted, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
@@ -237,6 +364,25 @@ void gpu_init(int seed, p_cd* pcd, int nsteps) {
 
 	cout << "  preparing random number sequence..";
 	random_textures_fill(rsz);
+
+	cout << "  creating arrays for pairing information..";
+	cudaMallocManaged((void**)&d_end_list, sizeof(int) * rsz * narms);
+	cudaMemset(d_end_list, 0, sizeof(int) * rsz * narms);
+	cudaMallocManaged((void**)&d_end_counter, sizeof(int) * rsz * narms);
+	cudaMemset(d_end_counter, 0, sizeof(int) * rsz * narms);
+	cudaMallocManaged((void**)&d_destroy_list, sizeof(int) * rsz * narms * 10);
+	cudaMemset(d_destroy_list, 0, sizeof(int) * rsz * narms * 10);
+	cudaMallocManaged((void**)&d_destroy_counter, sizeof(int) * rsz * narms);
+	cudaMemset(d_destroy_counter, 0, sizeof(int) * rsz * narms);
+
+	cudaMallocManaged((void**)&d_destroy_list_2, sizeof(int) * rsz * 10);
+	cudaMemset(d_destroy_list_2, 0, sizeof(int) * rsz * 10);
+	cudaMallocManaged((void**)&d_destroy_counter_2, sizeof(int) * rsz);
+	cudaMemset(d_destroy_counter_2, 0, sizeof(int) * rsz);
+
+	cudaMallocManaged((void**)&d_create_counter, sizeof(int) * rsz * narms);
+	cudaMemset(d_create_counter, 0, sizeof(int) * rsz * narms);
+
 	cout << ".done\n";
 	cout << " GPU random generator init done.\n";
 	cout << "\n";
@@ -650,9 +796,11 @@ void gpu_clean() {
 	cudaFreeArray(d_a_QN);
 	cudaFreeArray(d_a_tCD);
 	cudaFreeArray(d_a_tcr);
+	cudaFreeArray(d_a_pair_chains);
 	cudaFreeArray(d_b_QN);
 	cudaFreeArray(d_b_tCD);
 	cudaFreeArray(d_b_tcr);
+	cudaFreeArray(d_b_pair_chains);
 	cudaFreeArray(d_a_R1);
 	cudaFreeArray(d_b_R1);
 	cudaFreeArray(d_corr_a);

@@ -175,6 +175,8 @@ template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_ker
 
 	float t_cr = fetch_new_strent(i, oft) ? d_new_cr_time[j] : tex2D(t_a_tcr, make_offset(i, oft), j);
 
+	float pair = fetch_new_strent(i, oft) ? -1.0f : tex2D(t_a_pair, make_offset(i, oft), j);
+
 	float dt;
 	if (type==1){//transform
 		dt = tdt[j];
@@ -228,8 +230,61 @@ template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_ker
 	surf2Dwrite(QN, s_b_QN, 16 * i, j);
 	surf2Dwrite(tcd, s_b_tCD, 4 * i, j);
 	surf2Dwrite(t_cr, s_b_tcr, 4 * i, j);
+	surf2Dwrite(pair, s_b_pair, 4 * i, j);
 }
 
+template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void strent_doi_sync_kernel(scalar_chains* chain_heads, float *tdt, int *d_offset, float4 *d_new_strent, float *d_new_tau_CD, float* d_new_cr_time, int* d_destroy_list_2, int* d_destroy_counter_2, int* found_index, int add_steps_count) {
+	//Calculate kernel index
+	int i = blockIdx.x * blockDim.x + threadIdx.x;//strent index
+	int j = blockIdx.y * blockDim.y + threadIdx.y;//chain index
+
+	//Check if kernel index is outside boundaries
+	if ((j >= dn_cha_per_call) || (i >= d_z_max))
+		return;
+	int arm = 0;
+	int run_sum = 0;
+	for (int k = 0; i >= run_sum; k++) {
+		run_sum += d_z_max_arms[k];
+		arm = k;
+	}
+	int ii = i - run_sum + d_z_max_arms[arm];
+	int jj = j*d_narms + arm;
+
+	int tz = chain_heads[j].Z[arm]; //Current chain size
+	surf2Dwrite((int)(ii<tz), s_arm_index, 4 * i, j);
+
+	if (ii >= tz) //Check if entaglement index is over chain size
+		return;
+
+	//When new entaglements are created we need to shift index +1(destruction, skip one strent), 0(nothing happens) or -1(new strent created before)
+	int oft = d_offset[jj]; //Offset for current chain
+
+	float4 QN = fetch_new_strent(i, oft) ? d_new_strent[j] : tex2D(t_a_QN, make_offset(i, oft), j);
+
+	float tcd = 0;
+	if (d_CD_flag)	tcd = fetch_new_strent(i, oft) ? d_new_tau_CD[j] : tex2D(t_a_tCD, make_offset(i, oft), j);
+
+	float t_cr = fetch_new_strent(i, oft) ? d_new_cr_time[j] : tex2D(t_a_tcr, make_offset(i, oft), j);
+
+	float pair = fetch_new_strent(i, oft) ? -1.0f : tex2D(t_a_pair, make_offset(i, oft), j);
+
+	if (d_destroy_counter_2[j] > add_steps_count && d_destroy_list_2[10 * j + add_steps_count] == pair) {
+		printf("\n Destroying entanglement on chain %i arm %i position %i which was paired with chain %i to be destroyed", j, arm, ii, d_destroy_list_2[10 * j + 0]);
+		found_index[j] = i;
+	}
+
+	float dt;
+	if (type == 1) {//transform
+		dt = tdt[j];
+		QN = kappa(QN, dt);
+	}
+
+	//write updated chain conformation
+	surf2Dwrite(QN, s_b_QN, 16 * i, j);
+	surf2Dwrite(tcd, s_b_tCD, 4 * i, j);
+	surf2Dwrite(t_cr, s_b_tcr, 4 * i, j);
+	surf2Dwrite(pair, s_b_pair, 4 * i, j);
+}
 __global__ void boundary1_kernel(scalar_chains* chain_heads, int *d_offset, float4 *d_new_strent){
 	//calculate probabilities at the ends of arms
 	int ii = blockIdx.x * blockDim.x + threadIdx.x;//arm index in ensemble
@@ -660,7 +715,9 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		float next_sync_time, int *d_offset, float4 *d_new_strent, 
 		float *d_new_tau_CD, float* d_new_cr_time, int *d_write_time, int correlator_type,
 		int *rand_used, int *tau_CD_used_CD, int *tau_CD_used_SD,
-		int* found_index, int* found_shift, float* add_rand)
+		int* found_index, int* found_shift, float* add_rand,
+		int* d_end_list, int* d_end_counter, int* d_destroy_list,
+		int* d_destroy_counter, int* d_create_counter)
 {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;//chain index
 
@@ -726,6 +783,7 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 
 	float4 QN1 = fetch_new_strent(j, oft) ? new_strent : tex2D(t_a_QN, make_offset(j, oft), i);
 	float4 QN2 = fetch_new_strent(j+1, oft) ? new_strent : tex2D(t_a_QN, make_offset(j + 1, oft), i);
+	float pair = fetch_new_strent(j, oft) ? -1.0f : tex2D(t_a_pair, make_offset(j, oft), i);
 
 	if (type == 1) {
 		QN1 = kappa(QN1, olddt);
@@ -794,7 +852,20 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		//printf("\nDestruction of entanglement: arm %i\tstrent%i", arm, jj);
 		// Destruction by sliding dynamics
 		chain_heads[i].Z[arm]--;  //decrease number of strands as entanglement is destroyed
+		if (d_end_list[d_narms * i + arm] & 0x1 == 1) { //destruction of short-lived entanglement
+			d_end_list[d_narms * i + arm] = (d_end_list[d_narms * i + arm] - 1) >> 1;
+			d_end_counter[d_narms * i + arm]--;
+			d_create_counter[d_narms * i + arm]--;
+		}
+		else { //destruction of long-lived entanglement
+			d_end_list[d_narms * i + arm] = d_end_list[d_narms * i + arm] << 1;
+			d_end_counter[d_narms * i + arm]++;
 
+			d_destroy_list[10 * d_narms * i + 10 * arm + d_destroy_counter[d_narms * i + arm]] = pair;
+			d_destroy_counter[d_narms * i + arm]++;
+		}
+		//printf("\n0\t%i\t%i\t%i\t%i\t%f", i, arm, d_end_list[d_narms * i + arm], d_end_counter[d_narms * i + arm], pair);
+		
 		float4 temp = make_float4(QN1.x + QN2.x, QN1.y + QN2.y, QN1.z + QN2.z, QN1.w + QN2.w); //temporary variable for new strand
 		if (jj == tz - 2){
 			temp = make_float4(0.0f, 0.0f, 0.0f, QN1.w + QN2.w);
@@ -912,6 +983,11 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		chain_heads[i].Z[arm]++;
 		d_new_tau_CD[i] = temp.w;
 		d_new_cr_time[i] = d_universal_time + chain_heads[i].time;
+		
+		d_end_list[d_narms * i + arm] = d_end_list[d_narms * i + arm]*2 + 1;
+		d_end_counter[d_narms * i + arm]++;
+		d_create_counter[d_narms * i + arm]++;
+		//printf("\n1\t%i\t%i\t%i\t%i", i, arm, d_end_list[d_narms * i + arm], d_end_counter[d_narms * i + arm]);
 
 		temp.w = QN1.w - 1.0f;
 
@@ -1062,6 +1138,143 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 			d_offset[i*d_narms + u] = offset_code(0xffff, +1);
 	}
 	return;
+}
+
+template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_doi_sync_kernel(
+	scalar_chains* chain_heads, float *tdt,
+	float next_sync_time, int *d_offset, float4 *d_new_strent,
+	float *d_new_tau_CD, float* d_new_cr_time, int* found_index,
+	int* d_end_list, int* d_end_counter, int* d_destroy_list_2,
+	int* d_destroy_counter_2) {
+
+	int i = blockIdx.x * blockDim.x + threadIdx.x;//chain index
+
+	if (i >= dn_cha_per_call)
+		return;
+
+	if (found_index[i] == -1)
+		return;
+
+	//printf("\n First ent on chain %i to be destroyed: %i", i, d_destroy_list_2[10 * i]);
+
+	float4 new_strent = d_new_strent[i];
+	int j = found_index[i];
+
+	int arm = 0;
+	int run_sum = 0;
+	for (arm = 0; j >= run_sum + d_z_max_arms[arm]; arm++) {
+		run_sum += d_z_max_arms[arm];
+	}
+	int jj = j - run_sum;
+	int ii = i*d_narms + arm;
+
+	//setup local variables
+	int tz = chain_heads[i].Z[arm];
+	uint oft = d_offset[ii];
+
+	float4 QN1 = fetch_new_strent(j, oft) ? new_strent : tex2D(t_a_QN, make_offset(j, oft), i);
+	float4 QN2 = fetch_new_strent(j + 1, oft) ? new_strent : tex2D(t_a_QN, make_offset(j + 1, oft), i);
+	
+	// Destroy entanglement
+
+	chain_heads[i].Z[arm]--;  //decrease number of strands as entanglement is destroyed
+
+	float4 temp = make_float4(QN1.x + QN2.x, QN1.y + QN2.y, QN1.z + QN2.z, QN1.w + QN2.w); //temporary variable for new strand
+	if (jj == tz - 2) {
+		temp = make_float4(0.0f, 0.0f, 0.0f, QN1.w + QN2.w);
+	}
+
+	float4 deltaQ;
+	if (chain_heads[i].Z[arm] == 1) { //arm go unentangled as a result of entanglement destruction
+		float4 temp_;
+		int run_sum_ = 0;
+		bool unent = true; //if all arms are unentangled -> set temp as (0,0,0)
+		float sumNinv = 0.0f;
+		for (int arm_ = 0; arm_ < d_narms; arm_++) {
+			int tz_ = chain_heads[i].Z[arm_];
+			if ((tz_ > 1) && (arm_ != arm)) {//entangled arms
+				unent = false;
+
+				if (fetch_new_strent(0 + run_sum_, d_offset[i*d_narms + arm_]))
+					temp_ = new_strent;
+				else
+					temp_ = tex2D(t_a_QN, make_offset(0 + run_sum_, d_offset[i*d_narms + arm_]), i);
+
+				sumNinv += 1 / temp_.w;
+			}
+			run_sum_ += d_z_max_arms[arm_];
+		}
+
+		deltaQ = QN1 / (QN1.w*sumNinv);
+		deltaQ.w = 0.0f;
+
+		run_sum_ = 0;
+		for (int arm_ = 0; arm_ < d_narms; arm_++) {
+			int tz_ = chain_heads[i].Z[arm_];
+			if ((tz_ > 1) && (arm_ != arm)) {//entangled arms
+				if (fetch_new_strent(0 + run_sum_, d_offset[i*d_narms + arm_]))
+					temp_ = new_strent;
+				else
+					temp_ = tex2D(t_a_QN, make_offset(0 + run_sum_, d_offset[i*d_narms + arm_]), i);
+
+				temp_ = temp_ + deltaQ;
+
+				surf2Dwrite(temp_, s_b_QN, 16 * run_sum_, i);
+			}
+			run_sum_ += d_z_max_arms[arm_];
+		}
+
+	}
+	else if (jj == 0) {
+		float4 temp_;
+		int run_sum_ = 0;
+		bool unent = true; //if all arms are unentangled -> set temp as (0,0,0)
+		float sumNinv = 0.0f;
+		float sumNinvnew = 0.0f;
+		for (int arm_ = 0; arm_ < d_narms; arm_++) {
+			int tz_ = chain_heads[i].Z[arm_];
+			if ((tz_ > 1) && (arm_ != arm)) {//entangled arms
+				unent = false;
+
+				if (fetch_new_strent(0 + run_sum_, d_offset[i*d_narms + arm_]))
+					temp_ = new_strent;
+				else
+					temp_ = tex2D(t_a_QN, make_offset(0 + run_sum_, d_offset[i*d_narms + arm_]), i);
+
+				sumNinv += 1 / temp_.w;
+				sumNinvnew += 1 / temp_.w;
+			}
+			run_sum_ += d_z_max_arms[arm_];
+		}
+		sumNinvnew += __fdividef(1.0f, QN1.w + QN2.w);
+
+		deltaQ.x = __fdividef(__fdividef(QN2.x, QN1.w + QN2.w) - __fdividef(QN1.x * QN2.w, QN1.w * (QN1.w + QN2.w)), -sumNinvnew);
+		deltaQ.y = __fdividef(__fdividef(QN2.y, QN1.w + QN2.w) - __fdividef(QN1.y * QN2.w, QN1.w * (QN1.w + QN2.w)), -sumNinvnew);
+		deltaQ.z = __fdividef(__fdividef(QN2.z, QN1.w + QN2.w) - __fdividef(QN1.z * QN2.w, QN1.w * (QN1.w + QN2.w)), -sumNinvnew);
+		deltaQ.w = 0.0f;
+
+		run_sum_ = 0;
+		for (int arm_ = 0; arm_ < d_narms; arm_++) {
+			int tz_ = chain_heads[i].Z[arm_];
+			if ((tz_ > 1) && (arm_ != arm)) {//entangled arms
+				if (fetch_new_strent(0 + run_sum_, d_offset[i*d_narms + arm_]))
+					temp_ = new_strent;
+				else
+					temp_ = tex2D(t_a_QN, make_offset(0 + run_sum_, d_offset[i*d_narms + arm_]), i);
+
+				temp_ = temp_ + deltaQ;
+				surf2Dwrite(temp_, s_b_QN, 16 * run_sum_, i);
+			}
+			run_sum_ += d_z_max_arms[arm_];
+		}
+
+		temp.x += deltaQ.x;
+		temp.y += deltaQ.y;
+		temp.z += deltaQ.z;
+
+		surf2Dwrite(temp, s_b_QN, 16 * (jj + 1 + run_sum), i);
+		d_offset[ii] = offset_code(jj + run_sum, +1);
+	}
 }
 
 __global__ __launch_bounds__(tpb_chain_kernel) void stress_calc(scalar_chains* chain_heads, float *tdt, int *d_offset, float4 *d_new_strent, float4* QN, int size) {//stress calculation

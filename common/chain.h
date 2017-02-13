@@ -39,6 +39,7 @@ typedef struct vector_chains {//actually there are only Z-1 tau_CD and only Z-2 
 	float4 *QN;	//number of chain segments in the strand and the strand connector vector
 	float *tau_CD;				//CD lifetime
 	float *tau_cr;
+	float *pair_chain;
 	float4 *R1; //Position of the first entanglement in fixed frame
 } sstrentp;
 
@@ -74,6 +75,7 @@ extern double universal_time;
 //init chain conformation
 void chain_init(int* z, vector_chains data, int tnk, int z_max, bool dangling_begin, bool PD_flag, Ran* eran);	//z_max is maximum number of entaglements. purpose - truncate z distribution for optimization. NOTE: not tested
 void converttoQhat(vector_chains datai, float4 Q1);
+void pair_chains(int* connectedarm, int z, vector_chains data);
 //outputs chain conformation
 void print(ostream& stream, const vector_chains c, const scalar_chains chead);
 void print(ostream& stream, const vector_chains c, const scalar_chains chead,int arm);

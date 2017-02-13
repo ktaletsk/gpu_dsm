@@ -253,6 +253,14 @@ void converttoQhat(vector_chains datai, float4 Q1){
 //	printf("\n%f\t%f\t%f",datai.QN[0].x,datai.QN[0].y,datai.QN[0].z);
 }
 
+void pair_chains(int* connectedarm, int z, vector_chains data) {
+	for (int k = 0; k < z - 1; k++) {
+		data.pair_chain[k] = (float)connectedarm[k];
+	}
+	cout << "\n";
+	return;
+}
+
 void print(ostream& stream, const vector_chains c, const scalar_chains chead) {
 	stream<<"time "<<universal_time+chead.time<<'\n';
 	stream<<"Z: "<<chead.Z[1]<<'\n';
