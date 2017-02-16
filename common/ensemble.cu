@@ -383,6 +383,10 @@ void gpu_init(int seed, p_cd* pcd, int nsteps) {
 	cudaMallocManaged((void**)&d_create_counter, sizeof(int) * rsz * narms);
 	cudaMemset(d_create_counter, 0, sizeof(int) * rsz * narms);
 
+	cudaMallocManaged((void**)&d_doi_weights, sizeof(int) * rsz * rsz);
+	cudaMemset(d_doi_weights, 0, sizeof(int) * rsz * rsz);
+
+
 	cout << ".done\n";
 	cout << " GPU random generator init done.\n";
 	cout << "\n";

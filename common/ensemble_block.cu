@@ -44,6 +44,7 @@ int* d_destroy_counter;
 int* d_destroy_list_2;	// list of paired chains for destroyed entanglements at the end of each arm in ensemble
 int* d_destroy_counter_2;
 int* d_create_counter;
+int* d_doi_weights;
 
 // these arrays used by time evolution kernels
 cudaArray* d_a_QN; //device arrays for vector part of chain conformations
@@ -170,6 +171,9 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 	bool texture_flag = true;
 
 	cudaBindSurfaceToArray(s_arm_index, d_arm_index);
+
+	//random number generator for pairing chains
+	Ran eran_2(2);
 
 	//Loop begins
 	for (int i_sync = 0; i_sync < number_of_syncs; i_sync++) {
@@ -341,6 +345,7 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 		cudaMemset(d_destroy_list, 0, sizeof(int) * nc * narms * 10);
 		cudaMemset(d_destroy_counter, 0, sizeof(int) * nc * narms);
 
+		std::vector<std::pair<int, int>> NewPairs;
 		//Number of new entanglements created by every arm in the ensemble
 		cout << "Number of new entanglements created by every arm in the ensemble\n";
 		for (int i = 0; i < nc; i++) {
@@ -348,8 +353,19 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 			for (int arm = 0; arm < narms; arm++)
 				create_counter += d_create_counter[i*narms + arm];
 			cout << "Chain " << i << "\tCounter " << create_counter << "\n";
+			for (int c = 0; c < create_counter; c++) {
+				NewPairs.push_back(std::make_pair(i, -1));
+			}
 		}
 		cudaMemset(d_create_counter, 0, sizeof(int) * nc * narms);
+
+
+		cout << "\nFull list of new pairs\n";
+		for (unsigned i = 0; i < NewPairs.size(); i++) {
+			cout << NewPairs[i].first << " " << NewPairs[i].second << "\n";
+		}
+
+		std::random_shuffle(NewPairs.begin(), NewPairs.end());
 
 		cout << "Now making " << n_destroy_iterations << " destroy iterations\n";
 		// Destroy second parts of entanglement pairs
@@ -385,7 +401,7 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 			cudaMemset(d_value_found, -1, sizeof(int) * nc);
 			strent_doi_sync_kernel<type> <<<dimGrid, dimBlock, 0, stream_calc1 >>> (chain_heads, d_dt, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_destroy_list_2, d_destroy_counter_2, d_value_found, add_steps_count);
 			CUT_CHECK_ERROR("kernel execution failed");
-			chain_doi_sync_kernel<type> <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1 >>> (chain_heads, d_dt, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_value_found, d_end_list, d_end_counter, d_destroy_list_2, d_destroy_counter_2);
+			chain_doi_destroy_kernel<type> <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1 >>> (chain_heads, d_dt, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_value_found, d_end_list, d_end_counter, d_destroy_list_2, d_destroy_counter_2);
 			CUT_CHECK_ERROR("kernel execution failed");
 			cudaDeviceSynchronize();
 
@@ -395,6 +411,140 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 		// Search for pairs for new entanglements
 		add_steps_count = 0;
 
+		//initialize weights
+		for (int i = 0; i < nc; i++) {
+			int weight = 0;
+			for (int arm = 0; arm < narms; arm++) {
+				weight += NK_arms[arm] - chain_heads[i].Z[arm];
+			}
+			for (int j = 0; j < nc; j++) {
+				if (j != i)
+					d_doi_weights[nc*i + j] = weight;
+			}
+		}
+
+		if (!((steps_count + add_steps_count) & 0x00000001)) { //For odd number of steps
+
+			cudaBindTextureToArray(t_a_QN, d_a_QN, channelDesc4);
+			cudaBindSurfaceToArray(s_b_QN, d_b_QN);
+			cudaBindTextureToArray(t_a_tCD, d_a_tCD, channelDesc1);
+			cudaBindSurfaceToArray(s_b_tCD, d_b_tCD);
+			cudaBindTextureToArray(t_a_tcr, d_a_tcr, channelDesc1);
+			cudaBindSurfaceToArray(s_b_tcr, d_b_tcr);
+			cudaBindTextureToArray(t_a_pair, d_a_pair_chains, channelDesc1);
+			cudaBindSurfaceToArray(s_b_pair, d_b_pair_chains);
+			cudaBindTextureToArray(t_a_R1, d_a_R1, channelDesc4);
+			cudaBindSurfaceToArray(s_b_R1, d_b_R1);
+		}
+		else { //For even number of steps
+			cudaBindTextureToArray(t_a_QN, d_b_QN, channelDesc4);
+			cudaBindSurfaceToArray(s_b_QN, d_a_QN);
+			cudaBindTextureToArray(t_a_tCD, d_b_tCD, channelDesc1);
+			cudaBindSurfaceToArray(s_b_tCD, d_a_tCD);
+			cudaBindTextureToArray(t_a_tcr, d_b_tcr, channelDesc1);
+			cudaBindSurfaceToArray(s_b_tcr, d_a_tcr);
+			cudaBindTextureToArray(t_a_pair, d_b_pair_chains, channelDesc1);
+			cudaBindSurfaceToArray(s_b_pair, d_a_pair_chains);
+			cudaBindTextureToArray(t_a_R1, d_b_R1, channelDesc4);
+			cudaBindSurfaceToArray(s_b_R1, d_a_R1);
+		}
+
+		//restrict double pairing of chains
+		strent_doi_sync_2_kernel<type> <<<dimGrid, dimBlock, 0, stream_calc1 >>> (chain_heads, d_dt, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_doi_weights);
+		CUT_CHECK_ERROR("kernel execution failed");
+
+		cudaStreamSynchronize(stream_calc1);
+
+		cout << "\nCreating new pairs";
+
+		cudaMemset(d_destroy_list_2, 0, sizeof(int) * nc * 10);
+		cudaMemset(d_destroy_counter_2, 0, sizeof(int) * nc);
+
+		for (unsigned pair = 0; pair < NewPairs.size(); pair++) {
+			int sum_weights = 0;
+			int sum_weights_2 = 0;
+			for (int i = 0; i < nc; i++) {
+				sum_weights += d_doi_weights[nc*i + NewPairs[pair].first];
+			}
+			float r = eran_2.flt();
+			int new_dynamic_pair;
+			for (new_dynamic_pair = 0; new_dynamic_pair < nc && sum_weights_2 < (float)sum_weights * r; new_dynamic_pair++) {
+				sum_weights_2 += d_doi_weights[nc*new_dynamic_pair + NewPairs[pair].first];
+			}
+			new_dynamic_pair--;
+			NewPairs[pair].second = new_dynamic_pair;
+			cout << "\nNew pair <" << NewPairs[pair].first << "," << NewPairs[pair].second << ">";
+
+			//update weights
+			for (int i = 0; i < nc; i++) {
+				if (d_doi_weights[nc*new_dynamic_pair + i] != 0)
+					d_doi_weights[nc*new_dynamic_pair + i]--;
+			}
+			d_doi_weights[nc*NewPairs[pair].first + new_dynamic_pair] = 0;
+			d_doi_weights[nc*new_dynamic_pair + NewPairs[pair].first] = 0;
+
+			d_destroy_list_2[10 * NewPairs[pair].first + d_destroy_counter_2[NewPairs[pair].first]] = new_dynamic_pair;
+			d_destroy_counter_2[NewPairs[pair].first]++;
+		}
+
+		//apply found pairs to the first part of pair
+		chain_doi_label_pairs_kernel<type> <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1 >>> (chain_heads, d_dt, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_rand_used, d_value_found, d_end_list, d_end_counter, d_destroy_list_2, d_destroy_counter_2, d_doi_weights);
+		CUT_CHECK_ERROR("kernel execution failed");
+
+		//creeate list of pairs to link
+		cout << "\nCreate new entanglements to complete the pair on the following chains:\n";
+		cudaMemset(d_destroy_list_2, 0, sizeof(int) * nc * 10);
+		cudaMemset(d_destroy_counter_2, 0, sizeof(int) * nc);
+
+		for (unsigned pair = 0; pair < NewPairs.size(); pair++) {
+			for (int i = 0; i < nc; i++) {
+				if (NewPairs[pair].second == i) {
+					d_destroy_list_2[10 * NewPairs[pair].second + d_destroy_counter_2[NewPairs[pair].second]]=NewPairs[pair].first;
+					d_destroy_counter_2[NewPairs[pair].second]++;
+				}		
+			}
+		}
+
+		int n_create_iterations = 0;
+		for (int i = 0; i < nc; i++) {
+			cout << "\nChain " << i << " ";
+			for (int c = 0; c < d_destroy_counter_2[i]; c++) {
+				cout << d_destroy_list_2[10 * i + c] << " ";
+			}
+			if (d_destroy_counter_2[i] > n_create_iterations)
+				n_create_iterations = d_destroy_counter_2[i];
+		}
+		n_create_iterations = n_create_iterations + (n_create_iterations + 1) % 2;
+		add_steps_count++;
+
+		//start creating second halves of pairs
+		cout << "Now making " << n_create_iterations << " create iterations\n";
+		while (add_steps_count < n_destroy_iterations) {
+			cout << "\nIteration " << add_steps_count << "\n";
+			if (!((steps_count + add_steps_count) & 0x00000001)) { //For odd number of steps
+
+				cudaBindTextureToArray(t_a_QN, d_a_QN, channelDesc4);
+				cudaBindSurfaceToArray(s_b_QN, d_b_QN);
+				cudaBindTextureToArray(t_a_tcr, d_a_tcr, channelDesc1);
+				cudaBindSurfaceToArray(s_b_tcr, d_b_tcr);
+				cudaBindTextureToArray(t_a_pair, d_a_pair_chains, channelDesc1);
+				cudaBindSurfaceToArray(s_b_pair, d_b_pair_chains);
+			}
+			else { //For even number of steps
+				cudaBindTextureToArray(t_a_QN, d_b_QN, channelDesc4);
+				cudaBindSurfaceToArray(s_b_QN, d_a_QN);
+				cudaBindTextureToArray(t_a_tcr, d_b_tcr, channelDesc1);
+				cudaBindSurfaceToArray(s_b_tcr, d_a_tcr);
+				cudaBindTextureToArray(t_a_pair, d_b_pair_chains, channelDesc1);
+				cudaBindSurfaceToArray(s_b_pair, d_a_pair_chains);
+			}
+			strent_doi_sync_3_kernel<type> <<< dimGrid, dimBlock, 0, stream_calc1 >>> (chain_heads, d_dt, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time);
+			CUT_CHECK_ERROR("kernel execution failed");
+			chain_doi_create_kernel<type> << <(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1 >> > (chain_heads, d_dt, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_rand_used, d_destroy_list_2, d_destroy_counter_2, add_steps_count-1);
+			CUT_CHECK_ERROR("kernel execution failed");
+			cudaDeviceSynchronize();
+			add_steps_count++;
+		}
 
 	}	//loop ends
 
