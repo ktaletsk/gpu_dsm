@@ -160,7 +160,7 @@ void host_chains_init(Ran* eran) {
 	}
 
 	int Z_total = 0;
-	cout << "Total number of entanglements: ";
+	//cout << "Total number of entanglements: ";
 	for (unsigned i = 0; i<Zlist.size(); i++)
 		Z_total += Zlist[i];
 
@@ -189,11 +189,11 @@ void host_chains_init(Ran* eran) {
 		Z_total += Zlist.back();
 	}
 
-	cout << "Number of entanglements in ensemble chains:\n";
-	for (unsigned i = 0; i<Zlist.size(); i++)
-		cout << ' ' << Zlist[i];
-	cout << '\n';
-	cout << Z_total << '\n';
+	//cout << "Number of entanglements in ensemble chains:\n";
+	//for (unsigned i = 0; i<Zlist.size(); i++)
+	//	cout << ' ' << Zlist[i];
+	//cout << '\n';
+	//cout << Z_total << '\n';
 
 	for (unsigned i = 0; i < Zlist.size(); i++) {
 		for (unsigned j = 0; j < Zlist[i]; j++) {
@@ -201,16 +201,16 @@ void host_chains_init(Ran* eran) {
 		}
 	}
 
-	for (unsigned i = 0; i < Entlist.size(); i++) {
-		cout << ' ' << Entlist[i];
-	}
+	//for (unsigned i = 0; i < Entlist.size(); i++) {
+	//	cout << ' ' << Entlist[i];
+	//}
 
 	//randomly shuffle the list
-	std::random_shuffle(Entlist.begin(), Entlist.end());
-	cout << "Randomly shuffled list of entanglements:\n";
-	for (unsigned i = 0; i < Entlist.size(); i++) {
-		cout << ' ' << Entlist[i];
-	}
+	random_s(Entlist.begin(), Entlist.end(), eran);
+	//cout << "Randomly shuffled list of entanglements:\n";
+	//for (unsigned i = 0; i < Entlist.size(); i++) {
+	//	cout << ' ' << Entlist[i];
+	//}
 
 	std::pair <int, int> p;
 
@@ -222,7 +222,7 @@ void host_chains_init(Ran* eran) {
 			p = std::make_pair(std::min(Entlist[i], Entlist[j]), std::max(Entlist[i], Entlist[j]));
 			if (Pairlist.count(p) == 0 && p.first!=p.second) {
 				Pairlist.insert(p);
-				std::cout << "Pair: " << p.first << " " << p.second << std::endl;
+				//std::cout << "Pair: " << p.first << " " << p.second << std::endl;
 				// erase first and j elements:
 				Entlist.erase(Entlist.begin() + j);
 				Entlist.erase(Entlist.begin());
@@ -245,23 +245,23 @@ void host_chains_init(Ran* eran) {
 		}
 
 		//randomly shuffle Connectedlist
-		std::random_shuffle(Connectedlist.begin(), Connectedlist.end());
+		random_s(Connectedlist.begin(), Connectedlist.end(), eran);
 
-		cout << "Chain " << i << " connected to chains:";
-		for (unsigned k = 0; k < Connectedlist.size(); k++) {
-			cout << ' ' << Connectedlist[k];
-		}
-		cout << "\n";
+		//cout << "Chain " << i << " connected to chains:";
+		//for (unsigned k = 0; k < Connectedlist.size(); k++) {
+		//	cout << ' ' << Connectedlist[k];
+		//}
+		//cout << "\n";
 		
 		//divide in N_arms parts
 		int run_sum = 0;
 		for (int arm = 0; arm < narms; arm++) {
 			vector<int> Connectedarmlist(Connectedlist.begin() + run_sum, Connectedlist.begin() + run_sum + chain_heads[i].Z[arm]-1);
-			cout << "Arm " << arm << " connected to chains:";
-			for (unsigned k = 0; k < Connectedarmlist.size(); k++) {
-				cout << ' ' << Connectedarmlist[k];
-			}
-			cout << "\n";
+			//cout << "Arm " << arm << " connected to chains:";
+			//for (unsigned k = 0; k < Connectedarmlist.size(); k++) {
+			//	cout << ' ' << Connectedarmlist[k];
+			//}
+			//cout << "\n";
 			
 			//initialize pair_chain in vector_chains
 			pair_chains(Connectedarmlist.data(), chain_heads[i].Z[arm], chain_index_arm(i,arm));
@@ -787,6 +787,7 @@ void gpu_clean() {
 	cudaFree(chains.tau_CD);
 	cudaFree(chains.tau_cr);
 	cudaFree(chains.R1);
+	cudaFree(chains.pair_chain);
 
 	cudaFree(chain_heads);
 
@@ -814,6 +815,15 @@ void gpu_clean() {
 	cudaFreeArray(d_ft);
 	cudaFreeArray(d_stress);
 	cudaFreeArray(d_arm_index);
+
+	cudaFree(d_end_list);
+	cudaFree(d_end_counter);
+	cudaFree(d_destroy_list);
+	cudaFree(d_destroy_counter);
+	cudaFree(d_destroy_list_2);
+	cudaFree(d_destroy_counter_2);
+	cudaFree(d_create_counter);
+	cudaFree(d_doi_weights);
 
 	cudaFreeArray(d_uniformrand);
 	cudaFreeArray(d_taucd_gauss_rand_CD);

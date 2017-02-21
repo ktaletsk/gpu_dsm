@@ -257,7 +257,7 @@ void pair_chains(int* connectedarm, int z, vector_chains data) {
 	for (int k = 0; k < z - 1; k++) {
 		data.pair_chain[k] = (float)connectedarm[k];
 	}
-	cout << "\n";
+	//cout << "\n";
 	return;
 }
 
