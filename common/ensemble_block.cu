@@ -394,7 +394,7 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 		cudaMemset(d_destroy_list, 0, sizeof(int) * nc * narms * 10);
 		cudaMemset(d_destroy_counter, 0, sizeof(int) * nc * narms);
 
-		std::vector<std::pair<int, int>> NewPairs;
+		std::vector<std::pair<int, int> > NewPairs;
 		//Number of new entanglements created by every arm in the ensemble
 		//cout << "Number of new entanglements created by every arm in the ensemble\n";
 		for (int i = 0; i < nc; i++) {
