@@ -1542,6 +1542,25 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_doi
 	return;
 }
 
+__global__ void chain_doi_initial_weights(
+	scalar_chains* chain_heads, int* d_doi_weights
+) {
+	int i = blockIdx.x * blockDim.x + threadIdx.x;//chain index
+
+	if (i >= dn_cha_per_call)
+		return;
+
+	int weight = 0;
+	for (int arm = 0; arm < d_narms; arm++) {
+		weight += dnk_arms[arm] - chain_heads[i].Z[arm];
+	}
+
+	for (int j = 0; j < dn_cha_per_call; j++) {
+		if (j != i)
+			d_doi_weights[dn_cha_per_call*i + j] = weight;
+	}
+}
+
 template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_doi_label_pairs_kernel(
 	scalar_chains* chain_heads, float *tdt,
 	float next_sync_time, int *d_offset, float4 *d_new_strent,

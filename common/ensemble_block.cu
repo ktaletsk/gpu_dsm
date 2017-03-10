@@ -21,6 +21,7 @@
 #include "ensemble_block.h"
 #include "correlator.h"
 #include <vector>
+#include "timer.h"
 #define max_sync_interval 1 //Doi-Takimoto requires synchronising every timestep
 
 //variable arrays, that are common for all the blocks
@@ -452,8 +453,7 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 			CUT_CHECK_ERROR("kernel execution failed");
 			chain_doi_destroy_kernel<type> <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1 >>> (chain_heads, d_dt, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_value_found, d_end_list, d_end_counter, d_destroy_list_2, d_destroy_counter_2);
 			CUT_CHECK_ERROR("kernel execution failed");
-			cudaStreamSynchronize(stream_calc1);
-
+			
 			cudaUnbindTexture(t_a_QN);
 			cudaUnbindTexture(t_a_tCD);
 			cudaUnbindTexture(t_a_tcr);
@@ -467,16 +467,8 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 		add_steps_count = 0;
 
 		//initialize weights
-		for (int i = 0; i < nc; i++) {
-			int weight = 0;
-			for (int arm = 0; arm < narms; arm++) {
-				weight += NK_arms[arm] - chain_heads[i].Z[arm];
-			}
-			for (int j = 0; j < nc; j++) {
-				if (j != i)
-					d_doi_weights[nc*i + j] = weight;
-			}
-		}
+		chain_doi_initial_weights <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1 >>> (chain_heads, d_doi_weights);
+		CUT_CHECK_ERROR("kernel execution failed");
 
 		//cout << "\na/b " << !((steps_count + add_steps_count) & 0x00000001);
 		if (!((steps_count + add_steps_count) & 0x00000001)) { //For odd number of steps
@@ -510,15 +502,14 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 		CUT_CHECK_ERROR("kernel execution failed");
 
 		cudaStreamSynchronize(stream_calc1);
-		//cudaDeviceSynchronize();
 
-		//cout << "\n Weight for chain 39 with chain 72: " << d_doi_weights[nc * 39 + 72] << "\n";
-		//cout << "\n Weight for chain 72 with chain 39: " << d_doi_weights[nc * 72 + 39] << "\n";
 		//cout << "\nCreating new pairs";
 
 		cudaMemset(d_destroy_list_2, 0, sizeof(int) * nc * 10);
 		cudaMemset(d_destroy_counter_2, 0, sizeof(int) * nc);
 
+		//ctimer timer_2;
+		//timer_2.start();
 		for (unsigned pair = 0; pair < NewPairs.size(); pair++) {
 			int sum_weights = 0;
 			int sum_weights_2 = 0;
@@ -529,8 +520,6 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 			int new_dynamic_pair;
 			for (new_dynamic_pair = 0; new_dynamic_pair < nc && sum_weights_2 < (float)sum_weights * r; new_dynamic_pair++) {
 				sum_weights_2 += d_doi_weights[nc*new_dynamic_pair + NewPairs[pair].first];
-				//if (NewPairs[pair].first == 39)
-				//	cout << "\n " << new_dynamic_pair << " " << d_doi_weights[nc*new_dynamic_pair + NewPairs[pair].first] << " " << sum_weights_2;
 			}
 			new_dynamic_pair--;
 			NewPairs[pair].second = new_dynamic_pair;
@@ -544,18 +533,12 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 			d_doi_weights[nc*NewPairs[pair].first + new_dynamic_pair] = 0;
 			d_doi_weights[nc*new_dynamic_pair + NewPairs[pair].first] = 0;
 
+			//add to list and update counter
 			d_destroy_list_2[10 * NewPairs[pair].first + d_destroy_counter_2[NewPairs[pair].first]] = new_dynamic_pair;
 			d_destroy_counter_2[NewPairs[pair].first]++;
 		}
-		//cout << "\n Weight for chain 39 with chain 72: " << d_doi_weights[nc * 39 + 72] << "\n";
-		//cout << "\n Weight for chain 72 with chain 39: " << d_doi_weights[nc * 72 + 39] << "\n";
-		//cout << "\n List of pairs for chain 39: " << d_destroy_list_2[10 * 39] << "\n";
-
-		//cout << "\nList of new pairs ";
-		//for (int count = 0; count < d_destroy_counter_2[39]; count++) {
-		//	cout << d_destroy_list_2[10*39+count] << " ";
-		//}
-		//cout << "\n";
+		//timer_2.stop();
+		//cout << "Loop time: " << timer_2.elapsedTime() << " milliseconds\n";
 
 		//apply found pairs to the first part of pair
 		chain_doi_label_pairs_kernel<type> <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1 >>> (chain_heads, d_dt, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_new_pair, d_rand_used, d_value_found, d_end_list, d_end_counter, d_destroy_list_2, d_destroy_counter_2, d_doi_weights);
