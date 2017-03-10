@@ -137,7 +137,7 @@ void host_chains_init(Ran* eran) {
 	universal_time=0.0;
 	std::vector<int> Zlist;
 	std::vector<int> Entlist;
-	std::set<std::pair<int, int>> Pairlist;
+	std::set<std::pair<int, int> > Pairlist;
 	for (int i = 0; i < N_cha; i++) {
 		Zlist.push_back(0);
 
