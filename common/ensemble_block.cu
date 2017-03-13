@@ -518,17 +518,7 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 			d_destroy_counter_2[NewPairs[pair].second]++;
 		}
 
-		//int n_create_iterations = 0;
-		//for (int i = 0; i < nc; i++) {
-		//	//cout << "\nCreate pair on chain " << i << " with ";
-		//	//for (int c = 0; c < d_destroy_counter_2[i]; c++) {
-		//	//	cout << d_destroy_list_2[10 * i + c] << " ";
-		//	//}
-		//	//cout << "\n";
-		//	if (d_destroy_counter_2[i] > n_create_iterations)
-		//		n_create_iterations = d_destroy_counter_2[i];
-		//}
-		n_create_iterations = n_create_iterations + 3 + (n_create_iterations + 1) % 2;
+		n_create_iterations = n_create_iterations + 1 + (n_create_iterations + 1) % 2;
 		add_steps_count++;
 
 		//cudaDeviceSynchronize();

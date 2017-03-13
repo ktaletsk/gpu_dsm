@@ -1586,14 +1586,15 @@ __global__ void chain_doi_scan_weights(
 
 	d_destroy_list_2[10 * i + counter] = new_dynamic_pair;
 
+	__syncthreads();
 	//update weights
 
-	for (int j = 0; j < dn_cha_per_call; j++) {
-		if (d_doi_weights[dn_cha_per_call*new_dynamic_pair + j] != 0)
-			d_doi_weights[dn_cha_per_call*new_dynamic_pair + j]--;
-	}
-
 	if (counter < d_destroy_counter_2[i]) {
+		//for (int j = 0; j < dn_cha_per_call; j++) {
+		//	if (d_doi_weights[dn_cha_per_call*new_dynamic_pair + j] != 0)
+		//		d_doi_weights[dn_cha_per_call*new_dynamic_pair + j]--;
+		//}
+
 		d_doi_weights[dn_cha_per_call*i + new_dynamic_pair] = 0;
 		d_doi_weights[dn_cha_per_call*new_dynamic_pair + i] = 0;
 	}
