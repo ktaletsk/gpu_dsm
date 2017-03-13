@@ -1566,7 +1566,7 @@ __global__ void chain_doi_scan_weights(
 ) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;//chain index
 
-	if (i >= dn_cha_per_call)
+	if (i >= dn_cha_per_call || counter >= d_destroy_counter_2[i])
 		return;
 
 	int sum_weights = 0;
@@ -1589,15 +1589,13 @@ __global__ void chain_doi_scan_weights(
 	__syncthreads();
 	//update weights
 
-	if (counter < d_destroy_counter_2[i]) {
-		//for (int j = 0; j < dn_cha_per_call; j++) {
-		//	if (d_doi_weights[dn_cha_per_call*new_dynamic_pair + j] != 0)
-		//		d_doi_weights[dn_cha_per_call*new_dynamic_pair + j]--;
-		//}
+	//for (int j = 0; j < dn_cha_per_call; j++) {
+	//	if (d_doi_weights[dn_cha_per_call*new_dynamic_pair + j] != 0)
+	//		d_doi_weights[dn_cha_per_call*new_dynamic_pair + j]--;
+	//}
 
-		d_doi_weights[dn_cha_per_call*i + new_dynamic_pair] = 0;
-		d_doi_weights[dn_cha_per_call*new_dynamic_pair + i] = 0;
-	}
+	d_doi_weights[dn_cha_per_call*i + new_dynamic_pair] = 0;
+	d_doi_weights[dn_cha_per_call*new_dynamic_pair + i] = 0;
 
 	//printf("\n%i\t%i\t%i", i, new_dynamic_pair, counter);
 }

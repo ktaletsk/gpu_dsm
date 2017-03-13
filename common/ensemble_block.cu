@@ -477,24 +477,14 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 		for (int i = 0; i < nc; i++) {
 			if (d_destroy_counter_2[i] > n_create_iterations)
 				n_create_iterations = d_destroy_counter_2[i];
-			//cout << "\nCreate " << d_destroy_counter_2[i] << " pairs with chain " << i;
 		}
-		//cout << "\nNeed iterations: " << n_create_iterations;
-
 		cudaStreamSynchronize(stream_calc1);
+
 		//scan_weights_kernel
 		for (int counter = 0; counter < n_create_iterations; counter++) {
-			chain_doi_scan_weights << <(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1 >> > (chain_heads, d_rand_used, d_doi_weights, d_destroy_list_2, d_destroy_counter_2, counter);
+			chain_doi_scan_weights <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1 >>> (chain_heads, d_rand_used, d_doi_weights, d_destroy_list_2, d_destroy_counter_2, counter);
 		}
 		cudaStreamSynchronize(stream_calc1);
-	
-		//update weights
-		//for (int i = 0; i < nc; i++) {
-		//	if (d_doi_weights[nc*new_dynamic_pair + i] != 0)
-		//		d_doi_weights[nc*new_dynamic_pair + i]--;
-		//}
-		//d_doi_weights[nc*NewPairs[pair].first + new_dynamic_pair] = 0;
-		//d_doi_weights[nc*new_dynamic_pair + NewPairs[pair].first] = 0;
 
 		//apply found pairs to the first part of pair
 		chain_doi_label_pairs_kernel<type> <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1 >>> (chain_heads, d_dt, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_new_pair, d_rand_used, d_value_found, d_end_list, d_end_counter, d_destroy_list_2, d_destroy_counter_2, d_doi_weights);
@@ -513,20 +503,12 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 		cudaMemset(d_destroy_list_2, 0, sizeof(int) * nc * 10);
 		cudaMemset(d_destroy_counter_2, 0, sizeof(int) * nc);
 
-		for (unsigned pair = 0; pair < NewPairs.size(); pair++) {
-			d_destroy_list_2[10 * NewPairs[pair].second + d_destroy_counter_2[NewPairs[pair].second]]=NewPairs[pair].first;
-			d_destroy_counter_2[NewPairs[pair].second]++;
-		}
-
 		n_create_iterations = n_create_iterations + 1 + (n_create_iterations + 1) % 2;
 		add_steps_count++;
-
-		//cudaDeviceSynchronize();
 		cudaStreamSynchronize(stream_calc1);
+
 		//start creating second halves of pairs
-		//cout << "\nNow making " << n_create_iterations << " create iterations\n";
 		while (add_steps_count < n_create_iterations) {
-			//cout << "\nIteration " << add_steps_count << " a/b " << !((steps_count + add_steps_count) & 0x00000001) << "\n";
 			if (!((steps_count + add_steps_count) & 0x00000001)) { //For odd number of steps
 
 				cudaBindTextureToArray(t_a_QN, d_a_QN, channelDesc4);
