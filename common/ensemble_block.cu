@@ -338,39 +338,6 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 		
 		cudaMemset(d_end_list, 0, sizeof(int) * nc * narms);
 		cudaMemset(d_end_counter, 0, sizeof(int) * nc * narms);
-		
-		
-		//for (int ch = 0; ch < nc; ch++) {
-		//	cout << "\nPairs of chain " << ch << " with: ";
-		//	for (int arm = 0; arm < narms; arm++) {
-		//		for (int k = 0; k < d_destroy_counter[narms * ch + arm]; k++) {
-		//			cout << d_destroy_list[10 * (ch*narms + arm) + k] << " ";
-		//		}
-		//	}
-		//	cout << "was destroyed";
-		//}
-		
-		//////////////////////// THIS PART IS PROBABLY NOT WORKING CORRECTLY
-
-		//cout << "\nEntanglements to be destroyed on the\n";
-		//int n_destroy_iterations = 0;
-		//for (int ch = 0; ch < nc; ch++) {
-		//	//cout << "Chain " << ch << "\tWith chains ";
-		//	for (int i = 0; i < nc; i++) {
-		//		for (int arm = 0; arm < narms; arm++) {
-		//			for (int k = 0; k < d_destroy_counter[narms * i + arm]; k++)
-		//				if (d_destroy_list[10 * (narms*i + arm) + k] == ch) {
-		//					//cout << i << " ";
-		//					d_destroy_list_2[10*ch + d_destroy_counter_2[ch]]=i;
-		//					d_destroy_counter_2[ch]++;
-		//				}
-		//		}
-		//	}
-		//	if (d_destroy_counter_2[ch] > n_destroy_iterations)
-		//		n_destroy_iterations = d_destroy_counter_2[ch];
-		//	//cout << "\n";
-		//}
-		//////////////////////
 
 		cudaMemset(d_destroy_list_2, 0, sizeof(int) * nc * 10);
 		cudaMemset(d_destroy_counter_2, 0, sizeof(int) * nc);
@@ -408,12 +375,6 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 			}
 		}
 		cudaMemset(d_create_counter, 0, sizeof(int) * nc * narms);
-
-
-		//cout << "\nFull list of new pairs\n";
-		//for (unsigned i = 0; i < NewPairs.size(); i++) {
-		//	cout << NewPairs[i].first << " " << NewPairs[i].second << "\n";
-		//}
 
 		random_s(NewPairs.begin(), NewPairs.end(), &eran_2);
 
@@ -508,37 +469,32 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 		cudaMemset(d_destroy_list_2, 0, sizeof(int) * nc * 10);
 		cudaMemset(d_destroy_counter_2, 0, sizeof(int) * nc);
 
-		//ctimer timer_2;
-		//timer_2.start();
 		for (unsigned pair = 0; pair < NewPairs.size(); pair++) {
-			int sum_weights = 0;
-			int sum_weights_2 = 0;
-			for (int i = 0; i < nc; i++) {
-				sum_weights += d_doi_weights[nc*i + NewPairs[pair].first];
-			}
-			float r = eran_2.flt();
-			int new_dynamic_pair;
-			for (new_dynamic_pair = 0; new_dynamic_pair < nc && sum_weights_2 < (float)sum_weights * r; new_dynamic_pair++) {
-				sum_weights_2 += d_doi_weights[nc*new_dynamic_pair + NewPairs[pair].first];
-			}
-			new_dynamic_pair--;
-			NewPairs[pair].second = new_dynamic_pair;
-			//cout << "\nNew pair <" << NewPairs[pair].first << "," << NewPairs[pair].second << ">";
-
-			//update weights
-			for (int i = 0; i < nc; i++) {
-				if (d_doi_weights[nc*new_dynamic_pair + i] != 0)
-					d_doi_weights[nc*new_dynamic_pair + i]--;
-			}
-			d_doi_weights[nc*NewPairs[pair].first + new_dynamic_pair] = 0;
-			d_doi_weights[nc*new_dynamic_pair + NewPairs[pair].first] = 0;
-
-			//add to list and update counter
-			d_destroy_list_2[10 * NewPairs[pair].first + d_destroy_counter_2[NewPairs[pair].first]] = new_dynamic_pair;
 			d_destroy_counter_2[NewPairs[pair].first]++;
 		}
-		//timer_2.stop();
-		//cout << "Loop time: " << timer_2.elapsedTime() << " milliseconds\n";
+
+		int n_create_iterations = 0;
+		for (int i = 0; i < nc; i++) {
+			if (d_destroy_counter_2[i] > n_create_iterations)
+				n_create_iterations = d_destroy_counter_2[i];
+			//cout << "\nCreate " << d_destroy_counter_2[i] << " pairs with chain " << i;
+		}
+		//cout << "\nNeed iterations: " << n_create_iterations;
+
+		cudaStreamSynchronize(stream_calc1);
+		//scan_weights_kernel
+		for (int counter = 0; counter < n_create_iterations; counter++) {
+			chain_doi_scan_weights << <(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1 >> > (chain_heads, d_rand_used, d_doi_weights, d_destroy_list_2, d_destroy_counter_2, counter);
+		}
+		cudaStreamSynchronize(stream_calc1);
+	
+		//update weights
+		//for (int i = 0; i < nc; i++) {
+		//	if (d_doi_weights[nc*new_dynamic_pair + i] != 0)
+		//		d_doi_weights[nc*new_dynamic_pair + i]--;
+		//}
+		//d_doi_weights[nc*NewPairs[pair].first + new_dynamic_pair] = 0;
+		//d_doi_weights[nc*new_dynamic_pair + NewPairs[pair].first] = 0;
 
 		//apply found pairs to the first part of pair
 		chain_doi_label_pairs_kernel<type> <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1 >>> (chain_heads, d_dt, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_new_pair, d_rand_used, d_value_found, d_end_list, d_end_counter, d_destroy_list_2, d_destroy_counter_2, d_doi_weights);
@@ -558,24 +514,20 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 		cudaMemset(d_destroy_counter_2, 0, sizeof(int) * nc);
 
 		for (unsigned pair = 0; pair < NewPairs.size(); pair++) {
-			for (int i = 0; i < nc; i++) {
-				if (NewPairs[pair].second == i) {
-					d_destroy_list_2[10 * NewPairs[pair].second + d_destroy_counter_2[NewPairs[pair].second]]=NewPairs[pair].first;
-					d_destroy_counter_2[NewPairs[pair].second]++;
-				}		
-			}
+			d_destroy_list_2[10 * NewPairs[pair].second + d_destroy_counter_2[NewPairs[pair].second]]=NewPairs[pair].first;
+			d_destroy_counter_2[NewPairs[pair].second]++;
 		}
 
-		int n_create_iterations = 0;
-		for (int i = 0; i < nc; i++) {
-			//cout << "\nCreate pair on chain " << i << " with ";
-			//for (int c = 0; c < d_destroy_counter_2[i]; c++) {
-			//	cout << d_destroy_list_2[10 * i + c] << " ";
-			//}
-			//cout << "\n";
-			if (d_destroy_counter_2[i] > n_create_iterations)
-				n_create_iterations = d_destroy_counter_2[i];
-		}
+		//int n_create_iterations = 0;
+		//for (int i = 0; i < nc; i++) {
+		//	//cout << "\nCreate pair on chain " << i << " with ";
+		//	//for (int c = 0; c < d_destroy_counter_2[i]; c++) {
+		//	//	cout << d_destroy_list_2[10 * i + c] << " ";
+		//	//}
+		//	//cout << "\n";
+		//	if (d_destroy_counter_2[i] > n_create_iterations)
+		//		n_create_iterations = d_destroy_counter_2[i];
+		//}
 		n_create_iterations = n_create_iterations + 3 + (n_create_iterations + 1) % 2;
 		add_steps_count++;
 
@@ -655,7 +607,7 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 
 	ofstream lifetime_file;
 	lifetime_file.open(filename_ID("fdt", false));
-	unsigned long long enttime_run_sum = 0;
+	//unsigned long long enttime_run_sum = 0;
 	for (int it = 0; it < enttime_bins.size(); ++it){
 		if (enttime_bins[it] != 0){
 			//enttime_run_sum += enttime_bins[it];

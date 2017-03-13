@@ -1561,6 +1561,47 @@ __global__ void chain_doi_initial_weights(
 	}
 }
 
+__global__ void chain_doi_scan_weights(
+	scalar_chains* chain_heads, int *rand_used, int* d_doi_weights, int* d_destroy_list_2, int* d_destroy_counter_2, int counter
+) {
+	int i = blockIdx.x * blockDim.x + threadIdx.x;//chain index
+
+	if (i >= dn_cha_per_call)
+		return;
+
+	int sum_weights = 0;
+	int sum_weights_2 = 0;
+
+	for (int j = 0; j < dn_cha_per_call; j++) {
+		sum_weights += d_doi_weights[dn_cha_per_call*j + i];
+	}
+	
+	float r = tex2D(t_uniformrand, rand_used[i], i);
+
+	int new_dynamic_pair;
+	for (new_dynamic_pair = 0; new_dynamic_pair < dn_cha_per_call && sum_weights_2 < (float)sum_weights * r; new_dynamic_pair++) {
+		sum_weights_2 += d_doi_weights[dn_cha_per_call*new_dynamic_pair + i];
+	}
+	new_dynamic_pair--;
+
+	d_destroy_list_2[10 * i + counter] = new_dynamic_pair;
+
+	//update weights
+
+	for (int j = 0; j < dn_cha_per_call; j++) {
+		if (d_doi_weights[dn_cha_per_call*new_dynamic_pair + j] != 0)
+			d_doi_weights[dn_cha_per_call*new_dynamic_pair + j]--;
+	}
+
+	if (counter < d_destroy_counter_2[i]) {
+		d_doi_weights[dn_cha_per_call*i + new_dynamic_pair] = 0;
+		d_doi_weights[dn_cha_per_call*new_dynamic_pair + i] = 0;
+	}
+
+	//printf("\n%i\t%i\t%i", i, new_dynamic_pair, counter);
+}
+
+
 template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_doi_label_pairs_kernel(
 	scalar_chains* chain_heads, float *tdt,
 	float next_sync_time, int *d_offset, float4 *d_new_strent,
