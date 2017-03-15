@@ -380,6 +380,11 @@ void gpu_init(int seed, p_cd* pcd, int nsteps) {
 	cudaMallocManaged((void**)&d_destroy_counter_2, sizeof(int) * rsz);
 	cudaMemset(d_destroy_counter_2, 0, sizeof(int) * rsz);
 
+	cudaMallocManaged((void**)&d_create_list_2, sizeof(int) * rsz * 10);
+	cudaMemset(d_create_list_2, 0, sizeof(int) * rsz * 10);
+	cudaMallocManaged((void**)&d_create_counter_2, sizeof(int) * rsz);
+	cudaMemset(d_create_counter_2, 0, sizeof(int) * rsz);
+
 	cudaMallocManaged((void**)&d_create_counter, sizeof(int) * rsz * narms);
 	cudaMemset(d_create_counter, 0, sizeof(int) * rsz * narms);
 
@@ -822,6 +827,8 @@ void gpu_clean() {
 	cudaFree(d_destroy_counter);
 	cudaFree(d_destroy_list_2);
 	cudaFree(d_destroy_counter_2);
+	cudaFree(d_create_list_2);
+	cudaFree(d_create_counter_2);
 	cudaFree(d_create_counter);
 	cudaFree(d_doi_weights);
 

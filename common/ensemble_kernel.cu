@@ -1577,6 +1577,7 @@ __global__ void chain_doi_scan_weights(
 	}
 	
 	float r = tex2D(t_uniformrand, rand_used[i], i);
+	rand_used[i]++;
 
 	int new_dynamic_pair;
 	for (new_dynamic_pair = 0; new_dynamic_pair < dn_cha_per_call && sum_weights_2 < (float)sum_weights * r; new_dynamic_pair++) {

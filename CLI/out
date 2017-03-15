@@ -1,0 +1,200 @@
+device Count 1 
+Using device 0: GeForce GTX 960M
+
+simulation parameters:
+NK	Beta	N_cha
+39	1	100
+deformation tensor:
+0	0	0
+0	0	0
+0	0	0
+G(t) calculation is on
+simulation time, sync time
+1	1
+generating chain conformations on host..done
+preparing GPU random number generator parameters..
+device random number generator parameters done
+preparing GPU chain conformations..
+ device constants done
+
+ GPU random generator init: 
+  device random generators 1 seeding...done
+  device random generators 2 seeding...done
+  preparing random number sequence..  creating arrays for pairing information...done
+ GPU random generator init done.
+
+ Number of ensemble blocks 1
+number of correlator levels	0
+
+  copying chains to device block 1. chains in the ensemble block 100
+ device chains done
+init done
+G(t) calc...
+
+Pair <0,89>
+Pair <1,96>
+Pair <2,38>
+Pair <3,60>
+Pair <7,4>
+Pair <9,75>
+Pair <10,44>
+Pair <11,13>
+Pair <12,17>
+Pair <12,25>
+Pair <13,11>
+Pair <14,47>
+Pair <16,95>
+Pair <17,77>
+Pair <18,84>
+Pair <19,50>
+Pair <20,3>
+Pair <22,57>
+Pair <23,7>
+Pair <24,92>
+Pair <25,35>
+Pair <28,73>
+Pair <29,59>
+Pair <29,24>
+Pair <31,95>
+Pair <32,94>
+Pair <33,63>
+Pair <35,21>
+Pair <37,25>
+Pair <37,95>
+Pair <38,26>
+Pair <39,78>
+Pair <40,54>
+Pair <40,53>
+Pair <40,28>
+Pair <41,58>
+Pair <43,19>
+Pair <45,73>
+Pair <48,3>
+Pair <48,55>
+Pair <49,77>
+Pair <50,24>
+Pair <50,8>
+Pair <53,37>
+Pair <53,49>
+Pair <57,67>
+Pair <57,6>
+Pair <58,52>
+Pair <60,15>
+Pair <60,39>
+Pair <62,90>
+Pair <62,53>
+Pair <63,19>
+Pair <65,11>
+Pair <65,4>
+Pair <67,60>
+Pair <67,43>
+Pair <68,52>
+Pair <69,53>
+Pair <69,11>
+Pair <70,81>
+Pair <72,15>
+Pair <74,30>
+Pair <75,64>
+Pair <75,86>
+Pair <77,53>
+Pair <77,5>
+Pair <82,6>
+Pair <83,13>
+Pair <84,81>
+Pair <88,33>
+Pair <88,67>
+Pair <89,15>
+Pair <89,84>
+Pair <90,80>
+Pair <91,12>
+Pair <91,65>
+Pair <92,4>
+Pair <95,22>
+Pair <95,42>
+Pair <97,37>
+Pair <97,42>
+Inverse pairs:
+Pair <3,20>
+Pair <3,48>
+Pair <4,7>
+Pair <4,65>
+Pair <4,92>
+Pair <5,77>
+Pair <6,57>
+Pair <6,82>
+Pair <7,23>
+Pair <8,50>
+Pair <11,13>
+Pair <11,65>
+Pair <11,69>
+Pair <12,91>
+Pair <13,11>
+Pair <13,83>
+Pair <15,60>
+Pair <15,72>
+Pair <15,89>
+Pair <17,12>
+Pair <19,43>
+Pair <19,63>
+Pair <21,35>
+Pair <22,95>
+Pair <24,29>
+Pair <24,50>
+Pair <25,12>
+Pair <25,37>
+Pair <26,38>
+Pair <28,40>
+Pair <30,74>
+Pair <33,88>
+Pair <35,25>
+Pair <37,53>
+Pair <37,97>
+Pair <38,2>
+Pair <39,60>
+Pair <42,95>
+Pair <42,97>
+Pair <43,67>
+Pair <44,10>
+Pair <47,14>
+Pair <49,53>
+Pair <50,19>
+Pair <52,58>
+Pair <52,68>
+Pair <53,40>
+Pair <53,62>
+Pair <53,69>
+Pair <53,77>
+Pair <54,40>
+Pair <55,48>
+Pair <57,22>
+Pair <58,41>
+Pair <59,29>
+Pair <60,3>
+Pair <60,67>
+Pair <63,33>
+Pair <64,75>
+Pair <65,91>
+Pair <67,57>
+Pair <67,88>
+Pair <73,28>
+Pair <73,45>
+Pair <75,9>
+Pair <77,17>
+Pair <77,49>
+Pair <78,39>
+Pair <80,90>
+Pair <81,70>
+Pair <81,84>
+Pair <84,18>
+Pair <84,89>
+Pair <86,75>
+Pair <89,0>
+Pair <90,62>
+Pair <92,24>
+Pair <94,32>
+Pair <95,16>
+Pair <95,31>
+Pair <95,37>
+Pair <96,1>
+Memory cleanup.. done.
+Calculation time: 16 milliseconds
