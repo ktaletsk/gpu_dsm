@@ -44,6 +44,7 @@ vector_chains chain_index(const int bi, const int i);	//block navigation
 extern double universal_time;//since chain_head do not store universal time due to SP issues
 	                   //see chain.h chain_head for explanation
 extern int N_cha;	// number of chains
+extern int z_fixed; //fixed number of strands on the first arm -- for CG model
 extern int NK;	//number of chain segments in each chain
 extern int z_max;	// max number of strand in chain (currently same as NK)
 extern int narms;

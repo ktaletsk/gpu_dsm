@@ -126,16 +126,22 @@ __global__ __launch_bounds__(ran_tpd) void fill_surface_rand (gpu_Ran *state,int
 }
 
 //
-__global__ __launch_bounds__(ran_tpd) void array_seed (gpu_Ran *gr,int sz,int seed_offset){
-	int i=blockIdx.x*blockDim.x+threadIdx.x;
-	if (i<sz) curand_init(seed_offset, i, 0, &gr[i]);
+__global__ void array_seed (gpu_Ran *gr,int sz,int seed_offset){
+	int i = blockIdx.x * blockDim.x + threadIdx.x;
+	if (i < sz) {
+		curand_init(seed_offset, i, 0, &gr[i]);
+		//printf("\n%i\t%i",i, seed_offset);
+	}
+	
 }
 
 //
-void gr_array_seed (gpu_Ran *gr,int sz, int seed_offset){      
-	array_seed<<<(sz+ ran_tpd-1)/ ran_tpd, ran_tpd>>>(gr,sz, seed_offset);
+void gr_array_seed (gpu_Ran *gr,int sz, int seed_offset){
+	CUT_CHECK_ERROR("kernel execution failed");
+	array_seed<<<(sz+ 128-1)/ 128, 128>>>(gr, sz, seed_offset);
 	CUT_CHECK_ERROR("kernel execution failed");
  	cudaDeviceSynchronize();
+	CUT_CHECK_ERROR("kernel execution failed");
 }
 
 //

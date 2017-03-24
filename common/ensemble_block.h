@@ -20,6 +20,7 @@
 
 #include "chain.h"
 #include "correlator.h"
+#include <vector>
 
 class ensemble_block {
 	//chain conformations on host (CPU)
@@ -46,9 +47,8 @@ class ensemble_block {
 
 public:
 	void init(int nc, vector_chains chains, scalar_chains* chain_heads, int nsteps);
-	template<int type> int time_step(double reach_time, int correlator_type, bool* run_flag, int *progress_bar);
-
-	int equilibrium_calc(double length, int correlator_type, bool* run_flag, int *progress_bar, int np, float* t, float* x);
+	template<int type> int time_step(double reach_time, int correlator_type, bool* run_flag, int *progress_bar, vector<float> * jump_times);
+	int equilibrium_calc(double length, int correlator_type, bool* run_flag, int *progress_bar, int np, float* t, float* x, vector<float> * jump_times);
 	void transfer_to_device(); //copies chain conformations to device from host
 	void transfer_from_device(); //copies chain conformations from device to host
 	stress_plus calc_stress(int *r_chain_count); //calculates average stress over chains in the block, also return number of healthy chains

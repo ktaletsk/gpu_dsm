@@ -161,10 +161,18 @@ float tau_dist(float p, float Be, float Nk) {
 	}
 }
 
-void chain_init(int* z, vector_chains data, int tnk, int z_max, bool dangling_begin, bool PD_flag, Ran* eran) {
+void chain_init(int* z, vector_chains data, int tnk, int z_max, bool dangling_begin, bool PD_flag, Ran* eran, int fixed_z) {
 	//Choose z for the chain
-	int tz = z_dist_truncated(tnk, z_max, eran);   //z distribution
+	int tz;
+	if (fixed_z == 0) {
+		tz = z_dist_truncated(tnk, z_max, eran);   //z distribution
+		
+	}
+	else {
+		tz = fixed_z;
+	}
 	*z = tz;
+	
 	//Create temporary array for characteristic entanglement lifetime tau^CD
 	float *tent_tau = new float[tz - 1];
 

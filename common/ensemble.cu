@@ -45,7 +45,7 @@ void random_textures_fill(int n_cha);
 
 #include "ensemble_block.cu"
 
-#define chains_per_call 10000
+#define chains_per_call 1000
 
 vector_chains chains; // host chain conformations
 // and only one array with scalar part chain conformation
@@ -67,6 +67,7 @@ double universal_time;//since chain_head do not store universal time due to SP i
 		      	  	  //see chain.h chain_head for explanation
 int N_cha;
 int NK;
+int z_fixed;
 int narms;
 int* NK_arms;
 int* indeces_arms;
@@ -131,7 +132,7 @@ void host_chains_init(Ran* eran) {
 	universal_time=0.0;
 	for (int i = 0; i < N_cha; i++) {
 		for (int arm=0; arm<narms; arm++){
-			chain_init(&(chain_heads[i].Z[arm]), chain_index_arm(i,arm), NK_arms[arm], NK_arms[arm], false, PD_flag, eran);
+			chain_init(&(chain_heads[i].Z[arm]), chain_index_arm(i,arm), NK_arms[arm], NK_arms[arm], false, PD_flag, eran, arm%narms == 0 ? z_fixed : 0);
 		}
 
 		float4 aver_branch_point=make_float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -156,6 +157,7 @@ void gpu_init(int seed, p_cd* pcd, int nsteps) {
 	//Copy host constants from host to device
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(dBe, &Be, sizeof(float)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(dnk, &NK, sizeof(int)));
+	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_z_fixed, &z_fixed, sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_z_max, &z_max, sizeof(int)));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_z_max_arms, NK_arms, sizeof(int)*narms));
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_indeces_arms, indeces_arms, sizeof(int)*narms));
@@ -228,10 +230,16 @@ void gpu_init(int seed, p_cd* pcd, int nsteps) {
 	cout << "  device random generators 1 seeding..";
 	cudaMalloc(&d_random_gens, sizeof(gpu_Ran) * rsz);
 
+	CUT_CHECK_ERROR("kernel execution failed");
 	gr_array_seed(d_random_gens, rsz, seed * rsz); //
+	CUT_CHECK_ERROR("kernel execution failed");
 	cout << ".done\n";
 	cout << "  device random generators 2 seeding..";
+	
+	
 	cudaMalloc(&d_random_gens2, sizeof(gpu_Ran) * rsz);
+
+	CUT_CHECK_ERROR("kernel execution failed");
 	gr_array_seed(d_random_gens2, rsz, (seed + 1) * rsz);
 	cout << ".done\n";
 
@@ -245,23 +253,14 @@ void gpu_init(int seed, p_cd* pcd, int nsteps) {
 	chain_blocks_number = (N_cha + chains_per_call - 1) / chains_per_call;
 	cout << " Number of ensemble blocks " << chain_blocks_number << '\n';
 
+	//chain_blocks - array of blocks
 	chain_blocks = new ensemble_block[chain_blocks_number];
 	for (int i = 0; i < chain_blocks_number - 1; i++) {
 		chain_blocks[i].init(chains_per_call, chain_index(i, 0), &(chain_heads[i * chains_per_call]), nsteps);
 	}
 	chain_blocks[chain_blocks_number - 1].init((N_cha - 1) % chains_per_call + 1, chain_index(chain_blocks_number - 1, 0), &(chain_heads[(chain_blocks_number - 1) * chains_per_call]), nsteps);
 
-	//chain_blocks - array of blocks
-//	chain_blocks = new ensemble_call_block[chain_blocks_number];
-//	for (int i = 0; i < chain_blocks_number - 1; i++) {
-//		init_call_block(&(chain_blocks[i]), chains_per_call, chain_index(i, 0), &(chain_heads[i * chains_per_call]),s);
-//		cout << "  copying chains to device block " << i + 1 << ". chains in the ensemble block " << chains_per_call << '\n';
-//	}
-//	init_call_block(&(chain_blocks[chain_blocks_number - 1]), (N_cha - 1) % chains_per_call + 1, chain_index(chain_blocks_number - 1, 0), &(chain_heads[(chain_blocks_number - 1) * chains_per_call]),s);
-
-	cout << "  copying chains to device block " << chain_blocks_number << ". chains in the ensemble block " << (N_cha - 1) % chains_per_call + 1 << '\n';
 	cout << " device chains done\n";
-
 	cout << "init done\n";
 }
 
@@ -338,7 +337,7 @@ void random_textures_refill(int n_cha, cudaStream_t stream_calc) {
 int flow_run(int res, double length, bool* run_flag, int *progress_bar) {
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(res), sizeof(int))); //Copy timestep for calculation
 	for (int i = 0; i < chain_blocks_number; i++) {
-		if(chain_blocks[i].time_step<1>(length,2,run_flag,progress_bar)==-1) return -1;
+		if(chain_blocks[i].time_step<1>(length,2,run_flag,progress_bar, false)==-1) return -1;
 	}
 	universal_time=length;
 	return 0;
@@ -347,7 +346,7 @@ int flow_run(int res, double length, bool* run_flag, int *progress_bar) {
 int msd_run(int res, double length, bool* run_flag, int *progress_bar) {
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_correlator_res, &(res), sizeof(int))); //Copy timestep for calculation
 	for (int i = 0; i < chain_blocks_number; i++) {
-		if(chain_blocks[i].time_step<0>(length,1,run_flag,progress_bar)==-1) return -1;
+		if(chain_blocks[i].time_step<0>(length,1,run_flag,progress_bar, false)==-1) return -1;
 	}
 	universal_time=length;
 	return 0;
@@ -372,20 +371,47 @@ int equilibrium_run(int res, double length, int s, int correlator_type, bool* ru
 		x[j] = 0.0f;
 	}
 
+	std::vector<float> jump_times;
+
 	for (int i = 0; i < chain_blocks_number; i++){
-		chain_blocks[i].equilibrium_calc(length, correlator_type, run_flag, progress_bar, np, t, x);
+		chain_blocks[i].equilibrium_calc(length, correlator_type, run_flag, progress_bar, np, t, x, &jump_times);
 	}
 
-	ofstream correlator_file;
-	if(correlator_type==0)	correlator_file.open(filename_ID("G",false));
-	if(correlator_type==1)	correlator_file.open(filename_ID("MSD",false));
-	cout << "\n";
-	int actual_np = (np - correlator_size + floor(length/((float)res*pow((float)correlator_res,(s-1)))));
-	for (int j = 0; j < actual_np; j++) {
-		cout << t[j] << '\t' << x[j] << '\n';
-		correlator_file << t[j] << '\t' << x[j] << '\n';
+	std::sort(jump_times.begin(), jump_times.end(), [](float i, float j) { return abs(i) < abs(j); });
+
+	ofstream rates_file;
+	std::string fname = "rates_";
+	rates_file.open(filename_ID(fname.append(std::to_string(z_fixed)), false));
+	int n0 = N_cha;
+	int np1 = 0;
+	int nm1 = 0;
+
+	for (std::vector<float>::iterator it = jump_times.begin(); it != jump_times.end(); ++it) {
+		if (*it > 0.0) {
+			rates_file << *it << "\t";
+			np1++;
+		}
+		else {
+			rates_file << -(*it) << "\t";
+			nm1++;
+		}
+		n0--;
+		rates_file << float(n0) / float(N_cha) << "\t" << float(np1) / float(N_cha) << "\t" << float(nm1) / float(N_cha) << "\n";
 	}
-	correlator_file.close();
+
+	rates_file.close();
+
+
+	//ofstream correlator_file;
+	//if(correlator_type==0)	correlator_file.open(filename_ID("G",false));
+	//if(correlator_type==1)	correlator_file.open(filename_ID("MSD",false));
+	//cout << "\n";
+	//int actual_np = (np - correlator_size + floor(length/((float)res*pow((float)correlator_res,(s-1)))));
+	//for (int j = 0; j < actual_np; j++) {
+	//	cout << t[j] << '\t' << x[j] << '\n';
+	//	correlator_file << t[j] << '\t' << x[j] << '\n';
+	//}
+	//correlator_file.close();
 	delete[] t;
 	delete[] x;
 	return 0;
@@ -633,12 +659,13 @@ void gpu_clean() {
 
 	delete[] chain_blocks;
 
+
 	cudaFree(chains.QN);
 	cudaFree(chains.tau_CD);
 	cudaFree(chains.tau_cr);
 	cudaFree(chains.R1);
 
-	cudaFree(chain_heads);
+	//cudaFree(chain_heads);
 
 	if (PD_flag){
 		delete[] GEX_table;

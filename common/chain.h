@@ -45,7 +45,7 @@ typedef struct vector_chains {//actually there are only Z-1 tau_CD and only Z-2 
 //this structure contains scalar variables of chain conformation
 typedef struct scalar_chains {//chain header
 	int* Z;//number of strands (for each arm)
-	double time;//time since last ensemble synchronization/time_step.
+	float time;//time since last ensemble synchronization/time_step.
 		   //Single precision float works only up to time~=1E7.
 		   //For time 1E7 dt/time can be below single precision resolution,
 		   //which leads to detailed balance issues
@@ -72,7 +72,7 @@ extern double universal_time;
 //};
 
 //init chain conformation
-void chain_init(int* z, vector_chains data, int tnk, int z_max, bool dangling_begin, bool PD_flag, Ran* eran);	//z_max is maximum number of entaglements. purpose - truncate z distribution for optimization. NOTE: not tested
+void chain_init(int* z, vector_chains data, int tnk, int z_max, bool dangling_begin, bool PD_flag, Ran* eran, int fixed_z);	//z_max is maximum number of entaglements. purpose - truncate z distribution for optimization. NOTE: not tested
 void converttoQhat(vector_chains datai, float4 Q1);
 //outputs chain conformation
 void print(ostream& stream, const vector_chains c, const scalar_chains chead);

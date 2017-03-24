@@ -63,6 +63,7 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 		NK += NK_arms[i];
 		indeces_arms[i] = NK;
 	}
+	in >> z_fixed;
 	in >> N_cha;
 	in >> kxx >> kxy >> kxz >> kyx >> kyy >> kyz >> kzx >> kzy >> kzz;
 	in >> CD_flag;	//Computation mode: 0-only SD / 1-SD+CD
