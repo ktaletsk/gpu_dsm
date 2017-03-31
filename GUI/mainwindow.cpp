@@ -1,4 +1,4 @@
-// Copyright 2015 Marat Andreev, Konstantin Taletskiy, Maria Katzarova
+// Copyright 2017 Marat Andreev, Konstantin Taletskiy, Maria Katzarova
 //
 // This file is part of gpu_dsm.
 //

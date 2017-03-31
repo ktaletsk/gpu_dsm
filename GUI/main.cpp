@@ -1,4 +1,4 @@
-// Copyright 2015 Marat Andreev, Konstantin Taletskiy, Maria Katzarova
+// Copyright 2017 Marat Andreev, Konstantin Taletskiy, Maria Katzarova
 //
 // This file is part of gpu_dsm.
 //
@@ -25,6 +25,8 @@ int main(int argc, char *argv[])
 {
     int gpu_status = gpu_check();
 
+    //Check if any parameters passed to program
+    //It allows to run the same executable in GUI (no parameters) or command-line form
     if (argc > 1) { //Console mode
         qDebug() << "console mode";
         int progress_bar = 0;
@@ -70,6 +72,7 @@ int main(int argc, char *argv[])
         QApplication a(argc, argv);
         a.setStyle("fusion");
 
+	//if no GPU is present, exit with the error message
         if(gpu_status==-1)
         {
             QMessageBox::information(0,"GPU check report",QString("You don't have NVIDIA GPU"));
