@@ -49,6 +49,7 @@ typedef struct scalar_chains {//chain header
 		   //Single precision float works only up to time~=1E7.
 		   //For time 1E7 dt/time can be below single precision resolution,
 		   //which leads to detailed balance issues
+    float time_compensation; //For Kahan summation
 	float dummy;// dummy field for 16 byte alignment
 	int stall_flag;//algorithm crash flag
 } scalar_chains;

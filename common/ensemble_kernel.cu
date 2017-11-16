@@ -695,7 +695,16 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 	if (isnan(tdt[i]))	chain_heads[i].stall_flag = 2;
 	if (isinf(tdt[i]))	chain_heads[i].stall_flag = 3;
 	
-	chain_heads[i].time += tdt[i];//update time
+    //I suspect, it can be a bug here, because large number of floats are added without compenstation
+    ////////////////////////////////////////////////////
+	//chain_heads[i].time += tdt[i];//update time
+	////////////////////////////////////////////////////
+	//Use Kahan summation algorithm
+	float y =  tdt[i] - chain_heads[i].time_compensation;
+	float t = chain_heads[i].time + y;
+  	chain_heads[i].time_compensation = (t - chain_heads[i].time) - y;
+  	chain_heads[i].time = t;
+    
 	rand_used[i]++;
 
 	int j = found_index[i];
@@ -892,17 +901,16 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		surf2Dwrite(temp, s_b_QN, 16 * (jj + 1 + run_sum), i);
 		d_offset[ii] = offset_code(jj + run_sum, +1);
 
-		if (k==5){
-			float cr_time;
-			if (fetch_new_strent(jj + run_sum, oft)) {
-				cr_time = d_new_cr_time[i];
-			}
-			else {
-				cr_time = tex2D(t_a_tcr, make_offset(jj + run_sum, oft), i);
-			}
-			if (cr_time != 0) {
-				surf1Dwrite(log10f(d_universal_time + chain_heads[i].time - cr_time) + 10, s_ft, i * sizeof(float));
-			}
+		float cr_time; //Read creation time of destroyed entanglement
+		if (fetch_new_strent(jj + run_sum, oft)) { //destruction of entanglement created in previous timestep
+			cr_time = d_new_cr_time[i];
+		}
+		else {
+			cr_time = tex2D(t_a_tcr, make_offset(jj + run_sum, oft), i);
+		}
+		if (cr_time != 0) { //cr_time==0 means entanglement was created before simulation started, we just ignore those for calculating f_d(t)
+			surf1Dwrite(log10f(d_universal_time + chain_heads[i].time - cr_time) + 10, s_ft, i * sizeof(float)); //calulate bin index for entanglement lifetime
+            // bin = log10(lifetime) + 10; we can capture times from 10^-10 up to 10^??
 		}
 	} 
 	else if (k==3) {//  Creation by SD
@@ -975,8 +983,10 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
 		tau_CD_used_CD[i]++;
 		chain_heads[i].Z[arm]++;
 		d_new_tau_CD[i] = temp.w;
-		d_new_cr_time[i] = d_universal_time + chain_heads[i].time;
-		//d_new_cr_time[i] = 0.0f;
+        
+        //d_new_cr_time[i] = d_universal_time + chain_heads[i].time;
+        d_new_cr_time[i] = 0.0f; //do not include those entanglements in f_d(t) statistics
+
 		float newn = floorf(0.5f + add_rand[i] * (QN1.w - 2.0f)) + 1.0f;
 		temp.w = newn;
 		float sigma = __fsqrt_rn(__fdividef(newn * (QN1.w - newn), 3.0f * QN1.w));

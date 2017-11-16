@@ -117,6 +117,7 @@ void chains_malloc() {
 	for (int k=0; k<N_cha; k++){
 		chain_heads[k].stall_flag = 0;
 		chain_heads[k].time = 0.0f;
+        chain_heads[k].time_compensation = 0.0f; //For Kahan summation
 		cudaMallocManaged((void**)&(chain_heads[k].Z), sizeof(int) * narms);
 	}
 	cudaMallocManaged((void**)&(chains.QN), sizeof(float4) * N_cha * z_max);

@@ -333,7 +333,8 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 	for (int it = 0; it < enttime_bins.size(); ++it){
 		if (enttime_bins[it] != 0){
 			enttime_run_sum += enttime_bins[it];
-			lifetime_file << powf(10.0f,it/1000.0f-10.0f) << '\t' << 1.0f - (float)enttime_run_sum / (float)enttime_sum << '\n';
+			lifetime_file << powf(10.0f,it/1000.0f-10.0f) << '\t' << 1.0f - (float)enttime_run_sum / (float)enttime_sum << '\n'; //output in final format
+            //lifetime_file << it << '\t' << enttime_bins[it] << '\n'; //OR output in stackable format to combine results from distributed calculations
 		}
 	}
 	lifetime_file.close();
