@@ -43,6 +43,7 @@ vector_chains chain_index(const int bi, const int i);	//block navigation
 //i - is a chain index in the block bi  i:[0..chains_per_call-1]
 extern double universal_time;//since chain_head do not store universal time due to SP issues
 	                   //see chain.h chain_head for explanation
+extern int architecture; //Architecture of polymer: 0 - linear, 1 - star
 extern int N_cha;	// number of chains
 extern int NK;	//number of chain segments in each chain
 extern int z_max;	// max number of strand in chain (currently same as NK)

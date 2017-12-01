@@ -65,6 +65,7 @@ ensemble_block *chain_blocks;
 //host constants
 double universal_time;//since chain_head do not store universal time due to SP issues
 		      	  	  //see chain.h chain_head for explanation
+int architecture; //Architecture of polymer: 0 - linear, 1 - star
 int N_cha;
 int NK;
 int narms;

@@ -17,6 +17,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <string>
 #include "gpu_random.h"
 #include "cuda_call.h"
 #include "cudautil.h"
@@ -34,7 +35,7 @@ using namespace std;
 
 int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int device_ID, bool distr, int* progress_bar) {
 	Ran eran(1);
-	
+	string arc;
 
 	int equilibrium_type = 0;
 	double simulation_time;
@@ -54,15 +55,31 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 	ifstream in;
 	in.open("input.dat");
 	in >> Be;
-	in >> narms;
-	NK_arms = new int[narms];
-	indeces_arms = new int[narms];
-	NK = 0;
-	for (int i=0; i<narms; i++){
-		in >> NK_arms[i];
-		NK += NK_arms[i];
-		indeces_arms[i] = NK;
-	}
+    in >> arc;
+    if (arc.compare("star") == 0){
+        cout << "\nArchitecture is star";
+        architecture = 1;
+        in >> narms;
+        NK_arms = new int[narms];
+        indeces_arms = new int[narms];
+        NK = 0;
+        for (int i=0; i<narms; i++){
+            in >> NK_arms[i];
+            NK += NK_arms[i];
+            indeces_arms[i] = NK;
+        }
+    }
+    else if (arc.compare("linear") == 0){
+        architecture = 0;
+        cout << "\nArchitecture is linear";
+        narms = 1;
+        NK_arms = new int[1];
+        indeces_arms = new int[1];
+        in >> NK_arms[0];
+        NK = NK_arms[0];
+        indeces_arms[0] = NK;
+    }
+
 	in >> N_cha;
 	in >> kxx >> kxy >> kxz >> kyx >> kyy >> kyz >> kzx >> kzy >> kzz;
 	in >> CD_flag;	//Computation mode: 0-only SD / 1-SD+CD
