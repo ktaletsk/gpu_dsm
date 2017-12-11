@@ -123,11 +123,15 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 	cudaStream_t stream_calc2;
 	cudaStream_t stream_calc3;
 	cudaStream_t stream_calc4;
-	cudaStream_t stream_update;
+    cudaStream_t stream_calc5;
+    cudaStream_t stream_calc6;
+    cudaStream_t stream_update;
 	cudaStreamCreate(&stream_calc1);
 	cudaStreamCreate(&stream_calc2);
 	cudaStreamCreate(&stream_calc3);
 	cudaStreamCreate(&stream_calc4);
+    cudaStreamCreate(&stream_calc5);
+    cudaStreamCreate(&stream_calc6);
 	cudaStreamCreate(&stream_update);
 
 	cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat); //to read float4
@@ -206,27 +210,31 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 				cudaBindSurfaceToArray(s_corr, d_corr_a);
 			}
 
-			strent_kernel<type> <<<dimGrid, dimBlock, 0, stream_calc1>>> (chain_heads, d_dt, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time);
-			CUT_CHECK_ERROR("kernel execution failed");
-			boundary2_kernel<1> <<<(Narms_ensemble + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc2 >>> (chain_heads, d_offset, d_new_strent, d_new_tau_CD);
-			CUT_CHECK_ERROR("kernel execution failed");
-			boundary1_kernel <<<(Narms_ensemble + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc3 >>> (chain_heads, d_offset, d_new_strent);
-			CUT_CHECK_ERROR("kernel execution failed");
-			cudaStreamSynchronize(stream_calc2);
-			cudaStreamSynchronize(stream_calc3);
+            strent_kernel_star<type> <<<dimGrid, dimBlock, 0, stream_calc1>>> (chain_heads, d_dt, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time);
+            CUT_CHECK_ERROR("kernel execution failed");
+            boundary2_kernel<3> <<<(Narms_ensemble + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc2 >>> (chain_heads, d_offset, d_new_strent, d_new_tau_CD);
+            CUT_CHECK_ERROR("kernel execution failed");
+            boundary1_kernel <<<(Narms_ensemble + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc3 >>> (chain_heads, d_offset, d_new_strent);
+            CUT_CHECK_ERROR("kernel execution failed");
+            cudaStreamSynchronize(stream_calc2);
+            cudaStreamSynchronize(stream_calc3);
 
-			chain_control_kernel<type> <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc4 >>> (chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_write_time, correlator_type, steps_count % stressarray_count);
-			CUT_CHECK_ERROR("kernel execution failed");
+            chain_control_kernel<type> <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc4>>> (chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_write_time, correlator_type, steps_count % stressarray_count);
+            CUT_CHECK_ERROR("kernel execution failed");
 
-			scan_kernel <<<dimGridFlat, dimBlockFlat, 2 * z_max * sizeof(int), stream_calc1 >>> (chain_heads, d_rand_used, d_value_found, d_shift_found, d_add_rand);
-			CUT_CHECK_ERROR("kernel execution failed");
-			
-			cudaMemcpyAsync(rtbuffer, reach_flag, sizeof(float) * nc, cudaMemcpyDeviceToHost, stream_calc4);
-			cudaStreamSynchronize(stream_calc4);
+            scan_kernel <<<dimGridFlat, dimBlockFlat, 2 * z_max * sizeof(int), stream_calc1 >>> (chain_heads, d_rand_used, d_value_found, d_shift_found, d_add_rand);
+            CUT_CHECK_ERROR("kernel execution failed");
 
-			chain_kernel<type> <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1 >>> (chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_write_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD, d_value_found, d_shift_found, d_add_rand);
-			CUT_CHECK_ERROR("kernel execution failed");
+            cudaMemcpyAsync(rtbuffer, reach_flag, sizeof(float) * nc, cudaMemcpyDeviceToHost, stream_calc4);
+            cudaStreamSynchronize(stream_calc1);
+            cudaStreamSynchronize(stream_calc4);
 
+            chain_kernel<type> <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1>>> (chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_write_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD, d_value_found, d_shift_found, d_add_rand);
+            CUT_CHECK_ERROR("kernel execution failed");
+            
+            cudaStreamSynchronize(stream_calc1);
+            cudaStreamSynchronize(stream_calc4);
+            
 			float sumrt = 0;
 			for (int i = 0; i < nc; i++)
 				sumrt += rtbuffer[i];
