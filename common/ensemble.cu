@@ -128,27 +128,31 @@ void chains_malloc() {
 }
 
 void host_chains_init(Ran* eran) {
-	chains_malloc();
-	cout << "generating chain conformations on host..";
-	universal_time=0.0;
-	for (int i = 0; i < N_cha; i++) {
-		for (int arm=0; arm<narms; arm++){
-			chain_init(&(chain_heads[i].Z[arm]), chain_index_arm(i,arm), NK_arms[arm], NK_arms[arm], false, PD_flag, eran);
-		}
+    chains_malloc();
+    cout << "generating chain conformations on host..";
+    universal_time=0.0;
+    for (int i = 0; i < N_cha; i++) {
+        if (architecture==0){ //Linear chains
+            chain_init(&(chain_heads[i].Z[0]), chain_index_arm(i,0), NK_arms[0], NK_arms[0], true, PD_flag, eran);
+        }
+        if (architecture==1){ //Star-branched
+            for (int arm=0; arm<narms; arm++){
+                chain_init(&(chain_heads[i].Z[arm]), chain_index_arm(i,arm), NK_arms[arm], NK_arms[arm], false, PD_flag, eran);
+            }
+            float4 aver_branch_point=make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+            float aver_sum = 0.0f;
+            for (int arm = 0; arm<narms; arm++) {
+                aver_branch_point = aver_branch_point + chain_index_arm(i, arm).QN[0] / chain_index_arm(i, arm).QN[0].w;
+                aver_sum += 1 / chain_index_arm(i, arm).QN[0].w;
+            }
+            aver_branch_point = aver_branch_point / aver_sum;
 
-		float4 aver_branch_point=make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-		float aver_sum = 0.0f;
-		for (int arm = 0; arm<narms; arm++) {
-			aver_branch_point = aver_branch_point + chain_index_arm(i, arm).QN[0] / chain_index_arm(i, arm).QN[0].w;
-			aver_sum += 1 / chain_index_arm(i, arm).QN[0].w;
-		}
-		aver_branch_point = aver_branch_point / aver_sum;
-
-		for (int arm = 0; arm<narms; arm++) {
-			converttoQhat(chain_index_arm(i, arm), aver_branch_point);
-		}
-	}
-	cout << "done\n";
+            for (int arm = 0; arm<narms; arm++) {
+                converttoQhat(chain_index_arm(i, arm), aver_branch_point);
+            }
+        }
+    }
+    cout << "done\n";
 }
 
 //preparation of constants/arrays/etc
@@ -252,14 +256,6 @@ void gpu_init(int seed, p_cd* pcd, int nsteps) {
 		chain_blocks[i].init(chains_per_call, chain_index(i, 0), &(chain_heads[i * chains_per_call]), nsteps);
 	}
 	chain_blocks[chain_blocks_number - 1].init((N_cha - 1) % chains_per_call + 1, chain_index(chain_blocks_number - 1, 0), &(chain_heads[(chain_blocks_number - 1) * chains_per_call]), nsteps);
-
-	//chain_blocks - array of blocks
-//	chain_blocks = new ensemble_call_block[chain_blocks_number];
-//	for (int i = 0; i < chain_blocks_number - 1; i++) {
-//		init_call_block(&(chain_blocks[i]), chains_per_call, chain_index(i, 0), &(chain_heads[i * chains_per_call]),s);
-//		cout << "  copying chains to device block " << i + 1 << ". chains in the ensemble block " << chains_per_call << '\n';
-//	}
-//	init_call_block(&(chain_blocks[chain_blocks_number - 1]), (N_cha - 1) % chains_per_call + 1, chain_index(chain_blocks_number - 1, 0), &(chain_heads[(chain_blocks_number - 1) * chains_per_call]),s);
 
 	cout << "  copying chains to device block " << chain_blocks_number << ". chains in the ensemble block " << (N_cha - 1) % chains_per_call + 1 << '\n';
 	cout << " device chains done\n";

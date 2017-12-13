@@ -1113,6 +1113,10 @@ __device__ void apply_create_SD_star(int k, int i, int j, float4 new_strent, sca
     return;
 }
 
+__device__ void apply_create_CD_linear(int k, int i, int j, float4 new_strent, scalar_chains* chain_heads, int *d_offset, float* d_new_cr_time, int *tau_CD_used_CD, float4 *d_new_strent, float *d_new_tau_CD, float* add_rand){
+    return;
+}
+
 __device__ void apply_create_CD_star(int k, int i, int j, float4 new_strent, scalar_chains* chain_heads, int *d_offset, float* d_new_cr_time, int *tau_CD_used_CD, float4 *d_new_strent, float *d_new_tau_CD, float* add_rand){
     //setup local variables
     int arm=0;
@@ -1206,7 +1210,7 @@ __device__ void apply_create_CD_star(int k, int i, int j, float4 new_strent, sca
     return;
 }
 
-template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_kernel(scalar_chains* chain_heads, float *tdt, float *reach_flag, float next_sync_time, int *d_offset, float4 *d_new_strent,
+template<int calc_type, int arch_type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_kernel(scalar_chains* chain_heads, float *tdt, float *reach_flag, float next_sync_time, int *d_offset, float4 *d_new_strent,
         float *d_new_tau_CD, float* d_new_cr_time, int *d_write_time, int correlator_type, int *rand_used, int *tau_CD_used_CD, int *tau_CD_used_SD, int* found_index, int* found_shift, float* add_rand)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;//chain index
@@ -1223,7 +1227,7 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
     }
 
     float olddt;
-    if (type == 1) olddt = tdt[i];
+    if (calc_type == 1) olddt = tdt[i];
 
     float4 new_strent = d_new_strent[i];
 
@@ -1245,13 +1249,21 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_ker
     chain_heads[i].time = t;
 
     rand_used[i]++;
+    //printf("\nTime %f\tStrent %i\tJump %i",chain_heads[i].time, j, k);
 
     //Apply chosen process (shuffling of Kuhn step, destruction or creation of slip-link)
-    if (k==0 || k==1)       apply_shuffle_star(k, i, j, new_strent, chain_heads, d_offset); //Shuffling of Kuhn step
-    else if (k==2 || k==5)  apply_destroy_star(k, i, j, new_strent, chain_heads, d_offset, d_new_cr_time); //Destruction of entanglement at strent jj
-    else if (k==3)          apply_create_SD_star(k, i, j, new_strent, chain_heads, d_offset, d_new_cr_time, tau_CD_used_SD, d_new_strent, d_new_tau_CD, add_rand); //Creation by SD
-    else if (k==4)          apply_create_CD_star(k, i, j, new_strent, chain_heads, d_offset, d_new_cr_time, tau_CD_used_CD, d_new_strent, d_new_tau_CD, add_rand); //Creation by CD
-
+    if (arch_type==0){ //For linear
+        if (k==0 || k==1)       apply_shuffle_linear(k, i, j, new_strent, chain_heads, d_offset); //Shuffling of Kuhn step
+        else if (k==2 || k==5)  apply_destroy_linear(k, i, j, new_strent, chain_heads, d_offset, d_new_cr_time); //Destruction of entanglement at strent jj
+        else if (k==3)          apply_create_SD_linear(k, i, j, new_strent, chain_heads, d_offset, d_new_cr_time, tau_CD_used_SD, d_new_strent, d_new_tau_CD, add_rand); //Creation by SD
+        else if (k==4)          apply_create_CD_star(k, i, j, new_strent, chain_heads, d_offset, d_new_cr_time, tau_CD_used_CD, d_new_strent, d_new_tau_CD, add_rand); //Creation by CD
+    }
+    else if (arch_type==1){ //For star-branched
+        if (k==0 || k==1)       apply_shuffle_star(k, i, j, new_strent, chain_heads, d_offset); //Shuffling of Kuhn step
+        else if (k==2 || k==5)  apply_destroy_star(k, i, j, new_strent, chain_heads, d_offset, d_new_cr_time); //Destruction of entanglement at strent jj
+        else if (k==3)          apply_create_SD_star(k, i, j, new_strent, chain_heads, d_offset, d_new_cr_time, tau_CD_used_SD, d_new_strent, d_new_tau_CD, add_rand); //Creation by SD
+        else if (k==4)          apply_create_CD_star(k, i, j, new_strent, chain_heads, d_offset, d_new_cr_time, tau_CD_used_CD, d_new_strent, d_new_tau_CD, add_rand); //Creation by CD
+    }
     return;
 }
 

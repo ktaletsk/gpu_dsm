@@ -203,21 +203,28 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 				cudaBindSurfaceToArray(s_b_R1, d_a_R1);
 			}
 
-			if (texture_flag == true) {
-				cudaBindSurfaceToArray(s_corr, d_corr_b);
-			}
-			else {
-				cudaBindSurfaceToArray(s_corr, d_corr_a);
-			}
+            if (texture_flag == true) {
+                cudaBindSurfaceToArray(s_corr, d_corr_b);
+            }
+            else {
+                cudaBindSurfaceToArray(s_corr, d_corr_a);
+            }
 
-            strent_kernel_star<type> <<<dimGrid, dimBlock, 0, stream_calc1>>> (chain_heads, d_dt, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time);
-            CUT_CHECK_ERROR("kernel execution failed");
-            boundary2_kernel<3> <<<(Narms_ensemble + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc2 >>> (chain_heads, d_offset, d_new_strent, d_new_tau_CD);
-            CUT_CHECK_ERROR("kernel execution failed");
-            boundary1_kernel <<<(Narms_ensemble + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc3 >>> (chain_heads, d_offset, d_new_strent);
-            CUT_CHECK_ERROR("kernel execution failed");
-            cudaStreamSynchronize(stream_calc2);
-            cudaStreamSynchronize(stream_calc3);
+            //Calculate jump probabilities
+            if(architecture==0){ //linear chains
+                strent_kernel_star<type> <<<dimGrid, dimBlock, 0, stream_calc1>>> (chain_heads, d_dt, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time);
+                CUT_CHECK_ERROR("kernel execution failed");
+            }
+            else if (architecture==1){ //star-branched chains
+                strent_kernel_star<type> <<<dimGrid, dimBlock, 0, stream_calc1>>> (chain_heads, d_dt, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time);
+                CUT_CHECK_ERROR("kernel execution failed");
+                boundary2_kernel<3> <<<(Narms_ensemble + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc2>>> (chain_heads, d_offset, d_new_strent, d_new_tau_CD);
+                CUT_CHECK_ERROR("kernel execution failed");
+                boundary1_kernel <<<(Narms_ensemble + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc3 >>> (chain_heads, d_offset, d_new_strent);
+                CUT_CHECK_ERROR("kernel execution failed");
+                cudaStreamSynchronize(stream_calc2);
+                cudaStreamSynchronize(stream_calc3);
+            }
 
             chain_control_kernel<type> <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc4>>> (chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_write_time, correlator_type, steps_count % stressarray_count);
             CUT_CHECK_ERROR("kernel execution failed");
@@ -228,8 +235,13 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
             cudaMemcpyAsync(rtbuffer, reach_flag, sizeof(float) * nc, cudaMemcpyDeviceToHost, stream_calc4);
             cudaStreamSynchronize(stream_calc1);
             cudaStreamSynchronize(stream_calc4);
-
-            chain_kernel<type> <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1>>> (chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_write_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD, d_value_found, d_shift_found, d_add_rand);
+            
+            if(architecture==0){ //linear chains
+                chain_kernel<type, 0><<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1>>> (chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_write_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD, d_value_found, d_shift_found, d_add_rand);
+            }
+            else if (architecture==1){ //star-branched chains
+                chain_kernel<type, 1><<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1>>> (chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_write_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD, d_value_found, d_shift_found, d_add_rand);
+            }
             CUT_CHECK_ERROR("kernel execution failed");
             
             cudaStreamSynchronize(stream_calc1);

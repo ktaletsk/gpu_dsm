@@ -20,4 +20,5 @@ gpu_dsm
 
 *ipynb_checkpoints/
 *.sage-jupyter
+*.sage-jupyter2
 .clustrc
