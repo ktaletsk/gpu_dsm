@@ -112,7 +112,8 @@ vector_chains chain_index(const int bi, const int i) {    //block navigation
 }
 
 void chains_malloc() {
-	z_max = NK;
+    if (architecture==0)    z_max = NK+1;
+    else if (architecture==1) z_max = NK;
 	cudaMallocManaged((void**)&chain_heads, sizeof(scalar_chains) * N_cha);
 
 	for (int k=0; k<N_cha; k++){
