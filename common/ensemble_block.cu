@@ -214,7 +214,7 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
             if(architecture==0){ //linear chains
                 strent_kernel_linear<type> <<<dimGrid, dimBlock, 0, stream_calc1>>> (chain_heads, d_dt, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time);
                 CUT_CHECK_ERROR("kernel execution failed");
-                head_tail_kernel_linear<<<(Narms_ensemble + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc2>>> (chain_heads, d_offset, d_new_strent);
+                head_tail_kernel_linear<<<(Narms_ensemble + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc2>>> (chain_heads, d_offset, d_new_strent, d_new_tau_CD);
                 CUT_CHECK_ERROR("kernel execution failed");
                 cudaStreamSynchronize(stream_calc2);
             }

@@ -178,7 +178,7 @@ template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_ker
         QN = kappa(QN, dt);
     }
 
-    //printf("\n%i\t%f\t%f\t%f\t%f", i, QN.x, QN.y, QN.z, QN.w);
+    //printf("\n%i\t%i\t%f\t%f\t%f\t%f", i, tz, QN.x, QN.y, QN.z, QN.w);
 
     //fetch next strent
     if (i < tz - 1) {
@@ -319,7 +319,7 @@ template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_ker
 	surf2Dwrite(t_cr, s_b_tcr, 4 * i, j);
 }
 
-__global__ void head_tail_kernel_linear(scalar_chains* chain_heads, int *d_offset, float4 *d_new_strent){
+__global__ void head_tail_kernel_linear(scalar_chains* chain_heads, int *d_offset, float4 *d_new_strent, float *d_new_tau_CD){
     //calculate probabilities at the ends of chains
     int i = blockIdx.x * blockDim.x + threadIdx.x;//chain index in ensemble
 
@@ -330,6 +330,7 @@ __global__ void head_tail_kernel_linear(scalar_chains* chain_heads, int *d_offse
     float4 QNhead; //first strent
     float4 QNheadn; //next after the first strent
     float4 new_strent = d_new_strent[i];
+    float new_tau_CD = d_new_tau_CD[i];
 
     int tz = chain_heads[i].Z[0];
     surf2Dwrite(1, s_arm_index, 4 * tz, i); //probability for creation/destruction in the head of chain is written to 'tz' place and should be read in the scan_kernel
@@ -557,31 +558,31 @@ __global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* fou
     //warp scan
     for (int d = 1; d<32; d <<= 1) {
         int var2 = __shfl_up(var, d);
-		if (i % 32 >= d)
-			var += var2;
-	}
+        if (i % 32 >= d)
+            var += var2;
+    }
 
-	if (i % 32 == 31) s[i / 32] = var;
-	__syncthreads();
+    if (i % 32 == 31) s[i / 32] = var;
+    __syncthreads();
 
-	//scan of warp sums
-	if (i < 32) {
-		int var2 = 0.0f;
-		if (i < blockDim.x / 32)
-			var2 = s[i];
-		for (int d = 1; d<32; d <<= 1) {
-			float var3 = __shfl_up(var2, d);
-			if (i % 32 >= d) var2 += var3;
-		}
-		if (i < blockDim.x / 32) s[i] = var2;
-	}
-	__syncthreads();
+    //scan of warp sums
+    if (i < 32) {
+        int var2 = 0.0f;
+        if (i < blockDim.x / 32)
+            var2 = s[i];
+        for (int d = 1; d<32; d <<= 1) {
+            float var3 = __shfl_up(var2, d);
+            if (i % 32 >= d) var2 += var3;
+        }
+        if (i < blockDim.x / 32) s[i] = var2;
+    }
+    __syncthreads();
 
-	if (i >= 32) var += s[i / 32 - 1];
-	
-	__syncthreads();
-	
-	s[i] = var;
+    if (i >= 32) var += s[i / 32 - 1];
+
+    __syncthreads();
+
+    s[i] = var;
 
 	__syncthreads();
 	surf2Dwrite((float)(s[i])/PROBS_CUTOFF, s_sum_W_sorted, sizeof(float)*i, j);
@@ -930,8 +931,7 @@ __device__ void apply_destroy_linear(int k, int i, int j, float4 new_strent, sca
     float4 QN2 = read_strent(i, j+1, oft, new_strent);
 
     chain_heads[i].Z[0]--;  //decrease number of strands as entanglement is destroyed
-    //float4 temp = make_float4(QN1.x + QN2.x, QN1.y + QN2.y, QN1.z + QN2.z, QN1.w + QN2.w); //temporary variable for new strand
-    float4 temp;
+    float4 temp;//temporary variable for new strand
     if (j == 0){
         temp = make_float4(0.0f, 0.0f, 0.0f, QN1.w + QN2.w);
         surf2Dwrite(temp, s_b_QN, 16 * 1, i);
@@ -942,14 +942,11 @@ __device__ void apply_destroy_linear(int k, int i, int j, float4 new_strent, sca
         surf2Dwrite(temp, s_b_QN, 16 * (tz - 1), i);
         d_offset[i] = offset_code(tz-2, +1);
     }
-
-    //if (chain_heads[i].Z[0]==1) { //chain go unentangled as a result of entanglement destruction
-    //}
-    //else if (j == 0) { //entanglement is destroyed near the first/last strand
-    //}
-
-    //surf2Dwrite(temp, s_b_QN, 16 * (j + 1), i);
-    //d_offset[i] = offset_code(j, +1);
+    else {
+        temp = make_float4(QN1.x + QN2.x, QN1.y + QN2.y, QN1.z + QN2.z, QN1.w + QN2.w);
+        surf2Dwrite(temp, s_b_QN, 16 * (j + 1), i);
+        d_offset[i] = offset_code(j, +1);
+    }
 
     float cr_time; //Read creation time of destroyed entanglement
     if (fetch_new_strent(j, oft)) { //destruction of entanglement created in previous timestep
@@ -1183,6 +1180,54 @@ __device__ void apply_create_SD_star(int k, int i, int j, float4 new_strent, sca
 }
 
 __device__ void apply_create_CD_linear(int k, int i, int j, float4 new_strent, scalar_chains* chain_heads, int *d_offset, float* d_new_cr_time, int *tau_CD_used_CD, float4 *d_new_strent, float *d_new_tau_CD, float* add_rand){
+    int tz = chain_heads[i].Z[0];
+    uint oft = d_offset[i];
+    float4 QN1 = read_strent(i, j, oft, new_strent);
+
+    //Apply shift
+    float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used_CD[i], i);
+    tau_CD_used_CD[i]++;
+    chain_heads[i].Z[0]++;
+    d_new_tau_CD[i] = temp.w;
+    d_new_cr_time[i] = 0.0f; //do not include those entanglements in f_d(t) statistics
+
+    float newn = floorf(0.5f + add_rand[i] * (QN1.w - 2.0f)) + 1.0f;
+    temp.w = newn;
+    float sigma = __fsqrt_rn(__fdividef(newn * (QN1.w - newn), 3.0f * QN1.w));
+    if (j == tz - 1) {
+        sigma = __fsqrt_rn(__fdividef(newn, 3.0f));
+    }
+    float ration = __fdividef(newn, QN1.w);
+
+    float4 deltaQ = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+    if (j == 0) {
+        temp.w = QN1.w - newn;
+        float sigma = __fsqrt_rn(__fdividef(temp.w, 3.0f));
+        temp.x *= sigma;
+        temp.y *= sigma;
+        temp.z *= sigma;
+        surf2Dwrite(temp, s_b_QN, 16 * 0, i);
+        d_offset[i] = offset_code(0, -1);
+        d_new_strent[i] = make_float4(0.0f, 0.0f, 0.0f, newn);
+
+        return;
+    }
+
+    temp.x *= sigma;
+    temp.y *= sigma;
+    temp.z *= sigma;
+    temp.x += QN1.x * ration;
+    temp.y += QN1.y * ration;
+    temp.z += QN1.z * ration;
+
+    surf2Dwrite(make_float4(QN1.x - temp.x, QN1.y - temp.y, QN1.z - temp.z, QN1.w - newn), s_b_QN, 16 * j, i);
+    if (j == tz - 1) {
+        surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QN1.w - newn), s_b_QN, 16 * j, i);
+    }
+
+    d_offset[i] = offset_code(j, -1);
+    d_new_strent[i] = temp;
+
     return;
 }
 
@@ -1323,13 +1368,13 @@ template<int calc_type, int arch_type> __global__ __launch_bounds__(tpb_chain_ke
     //Apply chosen process (shuffling of Kuhn step, destruction or creation of slip-link)
     if (arch_type==0){ //For linear
         if (k==0 || k==1)       apply_shuffle_linear(k, i, j, new_strent, chain_heads, d_offset); //Shuffling of Kuhn step
-        else if (k==2 || k==5)  apply_destroy_linear(k, i, j, new_strent, chain_heads, d_offset, d_new_cr_time); //Destruction of entanglement at strent jj
+        else if (k==2 || k==5)  apply_destroy_linear(k, i, j, new_strent, chain_heads, d_offset, d_new_cr_time); //Destruction of entanglement at strent j
         else if (k==3 || k==6)  apply_create_SD_linear(k, i, j, new_strent, chain_heads, d_offset, d_new_cr_time, tau_CD_used_SD, d_new_strent, d_new_tau_CD, add_rand); //Creation by SD
         else if (k==4)          apply_create_CD_linear(k, i, j, new_strent, chain_heads, d_offset, d_new_cr_time, tau_CD_used_CD, d_new_strent, d_new_tau_CD, add_rand); //Creation by CD
     }
     else if (arch_type==1){ //For star-branched
         if (k==0 || k==1)       apply_shuffle_star(k, i, j, new_strent, chain_heads, d_offset); //Shuffling of Kuhn step
-        else if (k==2 || k==5)  apply_destroy_star(k, i, j, new_strent, chain_heads, d_offset, d_new_cr_time); //Destruction of entanglement at strent jj
+        else if (k==2 || k==5)  apply_destroy_star(k, i, j, new_strent, chain_heads, d_offset, d_new_cr_time); //Destruction of entanglement at strent j
         else if (k==3)          apply_create_SD_star(k, i, j, new_strent, chain_heads, d_offset, d_new_cr_time, tau_CD_used_SD, d_new_strent, d_new_tau_CD, add_rand); //Creation by SD
         else if (k==4)          apply_create_CD_star(k, i, j, new_strent, chain_heads, d_offset, d_new_cr_time, tau_CD_used_CD, d_new_strent, d_new_tau_CD, add_rand); //Creation by CD
     }
