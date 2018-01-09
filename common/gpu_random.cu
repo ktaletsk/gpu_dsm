@@ -37,7 +37,7 @@ extern bool PD_flag;
 #endif
 
 #include "cudautil.h"
-#include "cuda_call.h"      
+#include "cuda_call.h"
 #include "textures_surfaces.h"
 
 //CD constants

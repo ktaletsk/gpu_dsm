@@ -28,7 +28,6 @@
 #include "gamma.h"
 
 float a,b,mp,Mk;
-extern void make_gamma_table (float a, float b);
 
 using namespace std;
 
@@ -90,18 +89,18 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 	//     N_cha=4000;
 	//     kxy=8.16e-05;
 
-	//Determine if there is a flow
-	bool flow = (kxx != 0.0) || (kxy != 0.0) || (kxz != 0.0) || (kyx != 0.0) || (kyy != 0.0) || (kyz != 0.0) || (kzx != 0.0) || (kzy != 0.0) || (kzz != 0.0);
+    //Determine if there is a flow
+    bool flow = (kxx != 0.0) || (kxy != 0.0) || (kxz != 0.0) || (kyx != 0.0) || (kyy != 0.0) || (kyz != 0.0) || (kzx != 0.0) || (kzy != 0.0) || (kzz != 0.0);
 
-	if (PD_flag) {
-		ifstream in2;
-		in2.open("polydisp.dat");
-		//in2 >> a;
-		//in2 >> b;
-		//in2 >> mp;
-		//in2 >> Mk;
-		make_gamma_table (a, b);
-	}
+    if (PD_flag) {
+        ifstream in2;
+        in2.open("polydisp.dat");
+        in2 >> a;
+        in2 >> b;
+        in2 >> mp;
+        in2 >> Mk;
+        make_gamma_table (a, b);
+    }
 
 	//Initialize random
 	eran.seed(job_ID * N_cha);

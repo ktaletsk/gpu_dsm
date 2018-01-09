@@ -131,6 +131,7 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent
 
 //Add new value w to k-th level of correlator corr for chain i
 __device__ void corr_add(corr_device gpu_corr, float4 w, int k, int i, int type) {
+    printf("");
 	int s = *(gpu_corr.d_numcorrelators);
 	//s is the last correlator level
 	if (k == s)
