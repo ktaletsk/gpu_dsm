@@ -1,8 +1,8 @@
-nvcc -c main.cu  -gencode arch=compute_20,code=sm_20 -gencode arch=compute_30,code=sm_30 -gencode arch=compute_32,code=sm_32 -gencode arch=compute_35,code=sm_35 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=compute_50  -o main.o
-nvcc -c cudautil.cu  -gencode arch=compute_20,code=sm_20 -gencode arch=compute_30,code=sm_30 -gencode arch=compute_32,code=sm_32 -gencode arch=compute_35,code=sm_35 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=compute_50  -o cudautil.o
-nvcc -c gpu_random.cu  -gencode arch=compute_20,code=sm_20 -gencode arch=compute_30,code=sm_30 -gencode arch=compute_32,code=sm_32 -gencode arch=compute_35,code=sm_35 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=compute_50  -o gpu_random.o
-nvcc -c stress.cpp  -gencode arch=compute_20,code=sm_20 -gencode arch=compute_30,code=sm_30 -gencode arch=compute_32,code=sm_32 -gencode arch=compute_35,code=sm_35 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=compute_50  -o stress.o
-nvcc -c chain.cu  -gencode arch=compute_20,code=sm_20 -gencode arch=compute_30,code=sm_30 -gencode arch=compute_32,code=sm_32 -gencode arch=compute_35,code=sm_35 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=compute_50  -o chain.o
-nvcc -c ensemble.cu  -gencode arch=compute_20,code=sm_20 -gencode arch=compute_30,code=sm_30 -gencode arch=compute_32,code=sm_32 -gencode arch=compute_35,code=sm_35 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=compute_50  -o ensemble.o
-nvcc -c correlator.cu  -gencode arch=compute_20,code=sm_20 -gencode arch=compute_30,code=sm_30 -gencode arch=compute_32,code=sm_32 -gencode arch=compute_35,code=sm_35 -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=compute_50  -o correlator.o
-nvcc -o gpu_DSM  main.o cudautil.o gpu_random.o stress.o chain.o ensemble.o correlator.o  
+nvcc -c main.cu -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -o main.obj
+nvcc -c ../common/cudautil.cu -gencode arch=compute_50,code=sm_50 -o cudautil.obj
+nvcc -c ../common/gpu_random.cu -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -o gpu_random.obj
+nvcc -c ../common/stress.cpp -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -o stress.obj
+nvcc -c ../common/chain.cu -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -o chain.obj
+nvcc -c ../common/ensemble.cu -gencode arch=compute_50,code=sm_50 -gencode arch=compute_50,code=sm_50 -o ensemble.obj
+nvcc -c ../common/correlator.cu -gencode arch=compute_50,code=sm_50 -o correlator.obj
+nvcc -o gpu_DSM  main.obj cudautil.obj gpu_random.obj stress.obj chain.obj ensemble.obj correlator.obj
