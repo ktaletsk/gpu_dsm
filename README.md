@@ -50,7 +50,7 @@ Requirements:
 
 2. Move to `<path_to_repository>/gpu_dsm/CLI`.
 
-3. Compile code using `make.bat` command.
+3. Compile code using `make.bat` command. Make sure to change `-gencode arch=compute_50,code=sm_50` to reflect appropriate compute capability of your Nvidia GPU. To find compute capability of your GPU check [this page](https://developer.nvidia.com/cuda-gpus). For example, NVIDIA TITAN X has compute capability 6.1 and you will need to change the command flag to `-gencode arch=compute_61,code=sm_61`.
 
 4. You can test it by running `gpu_DSM.exe`.
 
