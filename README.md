@@ -1,18 +1,18 @@
-###**The Discrete Slip-Link Model (DSM)** is a mathematical model that describes the dynamics of flexible entangled polymer melts.
+### **The Discrete Slip-Link Model (DSM)** is a mathematical model that describes the dynamics of flexible entangled polymer melts.
 
 **GPU DSM** is a computational implementation of that model on CUDA/C++. GPU DSM is developed in [The Center for molecular study of condensed soft matter (μCoSM)](http://www.chbe.iit.edu/~schieber/index.html). GPU DSM is free open-source software under the GNU GPL v3.0 license.
 
 **[Download latest Linux GUI version](https://github.com/ktaletsk/gpu_dsm/releases)**
 
-####Compilation instructions:
+### Compilation instructions:
 
-####Linux (tested on Ubuntu/Kubuntu 14.04)
+#### Linux (tested on Ubuntu/Kubuntu 14.04)
 
 Requirements:
 
 g++
 
-**[Cuda Toolkit](https://developer.nvidia.com/cuda-toolkit)** (6.0, 6.5, 7.0, 7.5)
+**[Cuda Toolkit](https://developer.nvidia.com/cuda-toolkit)** (6.0, 6.5, 7.0, 7.5, 8.0, 9.0, 9.1)
 
 **[Qt](http://www.qt.io/download-open-source/)** (for GUI)
 
@@ -36,7 +36,25 @@ Run `make all` to compile **dsm**.
     
 4b. You can test it by running `./dsm` or clicking to the app icon in a file manager.
 
-####Running (CLI):
+#### Windows (tested on Windows 10, 64bit)
+
+Requirements:
+
+**[Microsoft Visual Studio 2017](https://www.visualstudio.com/downloads/)** (Community/Professional/Enterprise)
+
+**[CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit)**
+
+0. Install Visual Studio first, then install CUDA.
+
+1. Open x64 Native Tools Command Prompt for VS 2017.
+
+2. Move to `<path_to_repository>/gpu_dsm/CLI`.
+
+3. Compile code using `make.bat` command.
+
+4. You can test it by running `gpu_DSM.exe`.
+
+#### Running (CLI):
     
 **gpu_DSM** command line parameters:
 
