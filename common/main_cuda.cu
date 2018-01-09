@@ -25,8 +25,9 @@
 #include "timer.h"
 #include "detailed_balance.h"
 #include "job_ID.h"
+#include "gamma.h"
 
-extern float a,b,mp,Mk;
+float a,b,mp,Mk;
 extern void make_gamma_table (float a, float b);
 
 using namespace std;
@@ -95,10 +96,10 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 	if (PD_flag) {
 		ifstream in2;
 		in2.open("polydisp.dat");
-		in2 >> a;
-		in2 >> b;
-		in2 >> mp;
-		in2 >> Mk;
+		//in2 >> a;
+		//in2 >> b;
+		//in2 >> mp;
+		//in2 >> Mk;
 		make_gamma_table (a, b);
 	}
 

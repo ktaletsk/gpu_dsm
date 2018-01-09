@@ -24,16 +24,16 @@
 
 #define GAMMATABLESIZE 1000000
 
-float a, b, mp, Mk; //GEX parameters
-float step = 0.0f; //equidistant step in y-direction of W(m)
-float step_d = 0.0f;
-int table_size=0; //size of resulting table of m values
-int table_size_d=0;
-float gamma_table_cutoff; //calculated MWD cutoff value
+extern float a, b, mp, Mk; //GEX parameters
+extern float step; //equidistant step in y-direction of W(m)
+extern float step_d;
+extern int table_size; //size of resulting table of m values
+extern int table_size_d;
+extern float gamma_table_cutoff; //calculated MWD cutoff value
 void make_gamma_table (float a, float b);
 float bisection_root(float a, float b, float lb, float rb, float y, float eps);
-float* GEX_table;
-float* GEXd_table;
+extern float* GEX_table;
+extern float* GEXd_table;
 double LambertW1(const double z);
 
 #endif

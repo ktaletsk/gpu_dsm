@@ -22,12 +22,12 @@
 #include "ensemble.h"
 #include <fstream>
 
-extern float step, step_d;
+float step, step_d;
 extern float a,b,mp,Mk;
-extern int table_size, table_size_d;
-extern float* GEX_table;
-extern float* GEXd_table;
-extern float gamma_table_cutoff;
+int table_size, table_size_d;
+float* GEX_table;
+float* GEXd_table;
+float gamma_table_cutoff;
 
 extern p_cd *pcd;
 extern bool PD_flag;
