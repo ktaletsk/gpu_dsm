@@ -180,18 +180,18 @@ void gpu_init(int seed, p_cd* pcd, int nsteps) {
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_CD_flag, &CD_flag, sizeof(int)));
 
 	float cdtemp;
-	if(PD_flag){
-		//calculate probability prefactor for polydisperse simulations
-		double tem = 0.0f;
-		for (int i=0; i+1<1/step; i++){
-			p_cd* t_pcd = new p_cd(Be, GEX_table[i]*mp/Mk, NULL);
-			tem += (t_pcd->W_CD_destroy_aver());
-			delete[] t_pcd;
-		}
-		cdtemp = step * tem / Be;
-	}
-	else
-		cdtemp = pcd->W_CD_destroy_aver() / Be;
+	// if(PD_flag){
+	// 	//calculate probability prefactor for polydisperse simulations
+	// 	double tem = 0.0f;
+	// 	for (int i=0; i+1<1/step; i++){
+	// 		p_cd* t_pcd = new p_cd(Be, GEX_table[i]*mp/Mk, NULL);
+	// 		tem += (t_pcd->W_CD_destroy_aver());
+	// 		delete[] t_pcd;
+	// 	}
+	// 	cdtemp = step * tem / Be;
+	// }
+	// else
+    cdtemp = pcd->W_CD_destroy_aver() / Be;
 
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_CD_create_prefact, &cdtemp, sizeof(float)));
 	cout << " device constants done\n";

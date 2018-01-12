@@ -1,17 +1,16 @@
 // Copyright 2015 Marat Andreev, Konstantin Taletskiy, Maria Katzarova
-// 
-// This file is part of gpu_dsm.
-// 
+// // This file is part of gpu_dsm.
+//
 // gpu_dsm is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // at your option) any later version.
-// 
+//
 // gpu_dsm is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
-// 
+//
 // You should have received a copy of the GNU General Public License
 // along with gpu_dsm.  If not, see <http://www.gnu.org/licenses/>.
 
@@ -105,12 +104,12 @@ struct p_cd_linear { //Generates \tau_CD lifetimes
 	}
 };
 
-struct p_cd { //Generates \tau_CD lifetimes
+struct p_cd_star { //Generates \tau_CD lifetimes for monodisperse stars
 	float A1, B1, A2, B2, normdt, Bdt;
 	float g, alpha_1, alpha_2, tau_0, tau_1, tau_2, tau_d;
 	float Nk;
 	Ran *ran;
-	p_cd(float Be, float NK, Ran *tran) {
+	p_cd_star(float Be, float NK, Ran *tran) {
 		Nk = NK;
 		ran = tran;
 		g = 0.0603976f;
@@ -123,7 +122,7 @@ struct p_cd { //Generates \tau_CD lifetimes
 
 		init_consts();
 	}
-	p_cd(float g_, float a_1, float a_2, float t_0, float t_1, float t_2, float t_d, Ran *tran) {
+	p_cd_star(float g_, float a_1, float a_2, float t_0, float t_1, float t_2, float t_d, Ran *tran) {
 		ran = tran;
 		g = g_;
 		alpha_1 = a_1;
@@ -183,6 +182,55 @@ struct p_cd { //Generates \tau_CD lifetimes
 	inline float W_CD_destroy_aver() {
 		return (1-g)*(A2+B2)/(A1+B1)+g/tau_d;
 	}
+};
+
+struct p_cd { //Generates \tau_CD lifetimes
+    Ran *ran;
+    int nmodes;
+    float *g;
+    float *tau;
+    p_cd(float* tauArr, float* gArr, int nmods, Ran *tran) {
+        ran = tran;
+        nmodes = nmods;
+        g = gArr;
+        tau = tauArr;
+        //initialize arrays with discrete weights
+    }
+
+    float tau_CD_f_t() {//p^eq
+        float p = ran->flt();
+        float ptau_sum = 0;
+        for (int j=0; j<nmodes; j++){
+            ptau_sum += g[j]*tau[j];
+        }
+        float sum = 0;
+        int i;
+        for (i=0; i<nmodes && sum < p; i++){
+            sum += g[i]*tau[i]/ptau_sum;
+        }
+        return tau[i];
+    }
+
+    float tau_CD_f_d_t() {//p^cr
+        float p = ran->flt();
+        float sum = 0;
+        int i;
+        for (i=0; i<nmodes && sum < p; i++){
+            sum += g[i];
+        }
+        return tau[i];
+    }
+    float pcdtauint(float tau) {
+        return 0;
+    }
+    float W_CD_destroy_aver() {
+        float ptau_sum = 0;
+        for (int i=0; i<nmodes; i++){
+            ptau_sum += g[i]*tau[i];
+        }
+
+        return 1.0/ptau_sum;
+    }
 };
 
 

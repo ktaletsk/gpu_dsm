@@ -60,11 +60,11 @@ texture<float, cudaTextureType1D, cudaReadModeElementType> t_gamma_table_d;
 void gpu_ran_init (p_cd* pcd) {
 	cout << "preparing GPU random number generator parameters..\n";
 
-	if(PD_flag){
-		cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc<float>();
-		CUDA_SAFE_CALL(cudaMallocArray(&d_gamma_table, &channelDesc1, table_size));
-		CUDA_SAFE_CALL(cudaMallocArray(&d_gamma_table_d, &channelDesc1, table_size_d));
-		CUDA_SAFE_CALL(cudaMemcpyToArray(d_gamma_table, 0, 0, GEX_table, table_size * sizeof(float), cudaMemcpyHostToDevice));
+    if(PD_flag){
+        cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc<float>();
+        CUDA_SAFE_CALL(cudaMallocArray(&d_gamma_table, &channelDesc1, table_size));
+        CUDA_SAFE_CALL(cudaMallocArray(&d_gamma_table_d, &channelDesc1, table_size_d));
+        CUDA_SAFE_CALL(cudaMemcpyToArray(d_gamma_table, 0, 0, GEX_table, table_size * sizeof(float), cudaMemcpyHostToDevice));
 		CUDA_SAFE_CALL(cudaMemcpyToArray(d_gamma_table_d, 0, 0, GEXd_table, table_size_d * sizeof(float), cudaMemcpyHostToDevice));
 		CUDA_SAFE_CALL(cudaBindTextureToArray(t_gamma_table, d_gamma_table, channelDesc1));
 		CUDA_SAFE_CALL(cudaBindTextureToArray(t_gamma_table_d, d_gamma_table_d, channelDesc1));
@@ -74,41 +74,42 @@ void gpu_ran_init (p_cd* pcd) {
 		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Mk, &Mk, sizeof(float)));
 		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Be, &Be, sizeof(float)));
 		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_gamma_table_cutoff, &gamma_table_cutoff, sizeof(float)));
-	}
-	else {
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_g, &(pcd->g), sizeof(float)));
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_alpha_1, &(pcd->alpha_1), sizeof(float)));
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_alpha_2, &(pcd->alpha_2), sizeof(float)));
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_0, &(pcd->tau_0), sizeof(float)));
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_1, &(pcd->tau_1), sizeof(float)));
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_2, &(pcd->tau_2), sizeof(float)));
-		float cdtemp = 1.0f / pcd->tau_d;
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_d_inv, &(cdtemp), sizeof(float)));
+    }
+    else {
+        //CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_g, &(pcd->g), sizeof(float)));
+        //CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_alpha_1, &(pcd->alpha_1), sizeof(float)));
+        //CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_alpha_2, &(pcd->alpha_2), sizeof(float)));
+        //CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_0, &(pcd->tau_0), sizeof(float)));
+        //CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_1, &(pcd->tau_1), sizeof(float)));
+        //CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_2, &(pcd->tau_2), sizeof(float)));
+        //float cdtemp = 1.0f / pcd->tau_d;
+        //CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_tau_d_inv, &(cdtemp), sizeof(float)));
 
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_A1, &(pcd->A1), sizeof(float)));
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_B1, &(pcd->B1), sizeof(float)));
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_A2, &(pcd->A2), sizeof(float)));
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_B2, &(pcd->B2), sizeof(float)));
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Bdt, &(pcd->Bdt), sizeof(float)));
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_normdt, &(pcd->normdt), sizeof(float)));
-		//cdtemp = 1.0f * (pcd->c1) / (pcd->At);
-		//CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_At, &cdtemp, sizeof(float)));
-		//cdtemp = powf(pcd->tau_0, pcd->alpha);
-		//CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Dt, &cdtemp, sizeof(float)));
-		//cdtemp = -1.0f / pcd->alpha;
-		//CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Ct, &cdtemp, sizeof(float)));
-		//cdtemp = pcd->normdt * (pcd->c1) / (pcd->Adt);
-		//CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Adt, &cdtemp, sizeof(float)));
-		//cdtemp = pcd->Bdt;
-		
-		//cdtemp = -1.0f / (pcd->alpha - 1.0f);
-		//CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Cdt, &cdtemp, sizeof(float)));
-		//cdtemp = powf(pcd->tau_0, pcd->alpha - 1.0f);
-		//CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Ddt, &(cdtemp), sizeof(float)));
-	}
+        //CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_A1, &(pcd->A1), sizeof(float)));
+        //CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_B1, &(pcd->B1), sizeof(float)));
+        //CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_A2, &(pcd->A2), sizeof(float)));
+        //CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_B2, &(pcd->B2), sizeof(float)));
+        //CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Bdt, &(pcd->Bdt), sizeof(float)));
+        //CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_normdt, &(pcd->normdt), sizeof(float)));
 
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_PD_flag, &PD_flag, sizeof(bool)));
-	cout << "device random number generator parameters done\n";
+        ////cdtemp = 1.0f * (pcd->c1) / (pcd->At);
+        ////CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_At, &cdtemp, sizeof(float)));
+        ////cdtemp = powf(pcd->tau_0, pcd->alpha);
+        ////CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Dt, &cdtemp, sizeof(float)));
+        ////cdtemp = -1.0f / pcd->alpha;
+        ////CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Ct, &cdtemp, sizeof(float)));
+        ////cdtemp = pcd->normdt * (pcd->c1) / (pcd->Adt);
+        ////CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Adt, &cdtemp, sizeof(float)));
+        ////cdtemp = pcd->Bdt;
+
+        ////cdtemp = -1.0f / (pcd->alpha - 1.0f);
+        ////CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Cdt, &cdtemp, sizeof(float)));
+        ////cdtemp = powf(pcd->tau_0, pcd->alpha - 1.0f);
+        ////CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Ddt, &(cdtemp), sizeof(float)));
+    }
+
+    CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_PD_flag, &PD_flag, sizeof(bool)));
+    cout << "device random number generator parameters done\n";
 }
 
 //
@@ -234,7 +235,7 @@ __global__ __launch_bounds__(ran_tpd) void fill_surface_taucd_gauss_rand (gpu_Ra
 		for (int j=0; j<count;j++){
 			//Pcd generation for new entanglements
 			tmp.x=curand_uniform (&localState); //Pick a uniform distributed random number
-			
+
 			if (SDCD_toggle == true)
 				tmp.w = d_tau_CD_f_t(tmp.x, d_A1, d_B1, d_A2, d_B2, d_alpha_1, d_alpha_2, d_tau_0, d_tau_1, d_tau_d_inv, d_g);
 			else
@@ -266,13 +267,13 @@ __global__ __launch_bounds__(ran_tpd) void refill_surface_taucd_gauss_rand (gpu_
 	int i=blockIdx.x*blockDim.x+threadIdx.x;
 	float4 tmp;
 	float g=0.0f;
-	float2 g2;
-	if (i<n){
-		int cnt=count[i];
-		curandState localState = state[i];
-	    for (int j=0; j<cnt;j++){
-	    	tmp.x=curand_uniform (&localState);
-	    	
+    float2 g2;
+    if (i<n){
+        int cnt=count[i];
+        curandState localState = state[i];
+        for (int j=0; j<cnt;j++){
+        tmp.x=curand_uniform (&localState);
+
 			if (SDCD_toggle == true)
 				tmp.w = d_tau_CD_f_t(tmp.x, d_A1, d_B1, d_A2, d_B2, d_alpha_1, d_alpha_2, d_tau_0, d_tau_1, d_tau_d_inv, d_g);
 			else

@@ -234,12 +234,12 @@ void make_gamma_table (float a, float b) {
 	//Generate initial table for Wd(M)
 	float norm = 0.0f;
 	for(int k=0; k<table_size; k++){
-		p_cd* t_pcd = new p_cd(Be, GEX_table[k]*mp/Mk, NULL);
-		GEXd_table_P[k] = (t_pcd->W_CD_destroy_aver());
-		if (k>0)
-			GEXd_table_P[k] += GEXd_table_P[k-1];
-		norm += (t_pcd->W_CD_destroy_aver());
-		delete[] t_pcd;
+//		p_cd* t_pcd = new p_cd(Be, GEX_table[k]*mp/Mk, NULL);
+// 		GEXd_table_P[k] = (t_pcd->W_CD_destroy_aver());
+// 		if (k>0)
+// 			GEXd_table_P[k] += GEXd_table_P[k-1];
+// 		norm += (t_pcd->W_CD_destroy_aver());
+// 		delete[] t_pcd;
 	}
 	for(int k=0; k<table_size; k++){
 		GEXd_table_P[k] = GEXd_table_P[k]/norm;

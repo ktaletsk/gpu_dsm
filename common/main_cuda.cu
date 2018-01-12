@@ -141,8 +141,13 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 	pcd_file >> tau_d;
 	pcd_file.close();
 
-	//pcd = new p_cd(Be, NK, &eran);
-	pcd = new p_cd(g, alpha_1, alpha_2, tau_0, tau_1, tau_2, tau_d, &eran); //initialize with fitted values to do iterations (unless we obtain analytic expression)
+    int nmods = 8;
+    float *tauArr = new float[nmods];
+    float *gArr = new float[nmods];
+
+	//pcd = new p_cd(Be, NK, &eran); //constraint dynamics for linear chains
+	//pcd = new p_cd(g, alpha_1, alpha_2, tau_0, tau_1, tau_2, tau_d, &eran); //initialize with fitted values to do iterations (unless we obtain analytic expression)
+    pcd = new p_cd(tauArr, gArr, nmods, &eran);
 
 	if (loadfile != NULL) {	//load chain conformations from file
 		cout << "loading chain conformations from " << loadfile << "..";

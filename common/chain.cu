@@ -133,33 +133,33 @@ __host__ __device__ float tau_dist_linear(float p,float Be, float Nk) {
 	}
 }
 
-float tau_dist(float p, float Be, float Nk) {
-	float A1, B1;
-	float g, alpha_1, alpha_2, tau_0, tau_1, tau_2, tau_d;
-
-	g = pcd->g;
-	alpha_1 = pcd->alpha_1;
-	alpha_2 = pcd->alpha_2;
-	tau_0 = pcd->tau_0;
-	tau_1 = pcd->tau_1;
-	tau_2 = pcd->tau_2;
-	tau_d = pcd->tau_d;
-
-	A1 = (powf(tau_1, alpha_1) - powf(tau_0, alpha_1)) / alpha_1;
-	B1 = (powf(tau_2, alpha_2) - powf(tau_1, alpha_2)) / alpha_2 * powf(tau_1, alpha_1 - alpha_2);
-	
-	if (p < (1.0f - g)) {
-		if (p < (1.0f - g)*A1 / (A1 + B1)) {
-			return powf(p * alpha_1 * (A1 + B1) / (1 - g) + powf(tau_0, alpha_1), 1.0f / alpha_1);
-		}
-		else {
-			return powf(alpha_2 / powf(tau_1, alpha_1 - alpha_2) * (p * (A1 + B1) / (1 - g) - A1) + powf(tau_1, alpha_2), 1.0f / alpha_2);
-		}
-	}
-	else {
-		return tau_d;
-	}
-}
+//float tau_dist(float p, float Be, float Nk) {
+//	float A1, B1;
+//	float g, alpha_1, alpha_2, tau_0, tau_1, tau_2, tau_d;
+//
+//    g = pcd->g;
+//    alpha_1 = pcd->alpha_1;
+//    alpha_2 = pcd->alpha_2;
+//    tau_0 = pcd->tau_0;
+//    tau_1 = pcd->tau_1;
+//    tau_2 = pcd->tau_2;
+//    tau_d = pcd->tau_d;
+//
+//    A1 = (powf(tau_1, alpha_1) - powf(tau_0, alpha_1)) / alpha_1;
+//    B1 = (powf(tau_2, alpha_2) - powf(tau_1, alpha_2)) / alpha_2 * powf(tau_1, alpha_1 - alpha_2);
+//
+//	if (p < (1.0f - g)) {
+//		if (p < (1.0f - g)*A1 / (A1 + B1)) {
+//			return powf(p * alpha_1 * (A1 + B1) / (1 - g) + powf(tau_0, alpha_1), 1.0f / alpha_1);
+//		}
+//		else {
+//			return powf(alpha_2 / powf(tau_1, alpha_1 - alpha_2) * (p * (A1 + B1) / (1 - g) - A1) + powf(tau_1, alpha_2), 1.0f / alpha_2);
+//		}
+//	}
+//	else {
+//		return tau_d;
+//	}
+//}
 
 void chain_init(int* z, vector_chains data, int tnk, int z_max, bool dangling_begin, bool PD_flag, Ran* eran) {
 	//Choose z for the chain
@@ -182,7 +182,8 @@ void chain_init(int* z, vector_chains data, int tnk, int z_max, bool dangling_be
 		//	}
 		//	else{
 				//Lifetime of entanglement
-				tent_tau[k] = tau_dist(eran->flt(),Be, tnk);
+                tent_tau[k] = pcd->tau_CD_f_t();
+				//tent_tau[k] = tau_dist(eran->flt(),Be, tnk);
 		//	}
 		//}
 		//else{
