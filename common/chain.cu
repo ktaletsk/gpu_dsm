@@ -170,7 +170,7 @@ void chain_init(int* z, vector_chains data, int tnk, int z_max, bool dangling_be
 
 	//Generate characteristic entanglement lifetimes tau^CD
 	for (int k = 0; k < tz - 1; k++){
-		//if (CD_flag != 0){
+        if (CD_flag != 0){
 		//	if (PD_flag) {//For polydisperse simulations
 		//		//Random molecular weight of entangled background chain (from GEX)
 		//		float MW = eran->flt()/step;//Get MW from table
@@ -184,12 +184,11 @@ void chain_init(int* z, vector_chains data, int tnk, int z_max, bool dangling_be
 				//Lifetime of entanglement
                 tent_tau[k] = pcd->tau_CD_f_t();
 				//tent_tau[k] = tau_dist(eran->flt(),Be, tnk);
-		//	}
-		//}
-		//else{
-		//	tent_tau[k] = 0.0f;
-		//}
-	}
+        }
+        else{
+            tent_tau[k] = 0.0f;
+        }
+    }
 
 	//Create arrays for storing (Ni,Qi) for every strand
 	int *tN;
@@ -208,7 +207,7 @@ void chain_init(int* z, vector_chains data, int tnk, int z_max, bool dangling_be
 	for (int k = 0; k < tz - 1; k++) { //all except first and last strent
 		data.QN[k] = make_float4(Qxtmp[k], Qytmp[k], Qztmp[k], float(tN[k]));
 		data.tau_CD[k] = 1.0f / tent_tau[k];
-		//printf("\n%f", data.tau_CD[k]);
+        //printf("\n%f", data.tau_CD[k]);
 		data.tau_cr[k] = 0.0f;
 	}
 

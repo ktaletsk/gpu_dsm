@@ -30,7 +30,7 @@ def job_start(ssh, job_folder):
 
     #Transfer input file
     sftp=ssh.open_sftp()
-    source= 'input.dat'
+    source= '{name}/input.dat'.format(name=job_folder)
     destination ='temp_jobs/{name}/CLI/input.dat'.format(name=job_folder)
     sftp.put(source,destination)
     sftp.close()

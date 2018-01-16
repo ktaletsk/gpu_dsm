@@ -129,9 +129,13 @@ def fdt_fit():
 
     fit2 = best_fit
     li=np.split(fit2.x,2)[0]
-    gi=np.multiply(np.split(fit2.x,2)[0], np.split(fit2.x,2)[1]/np.sum(np.split(fit2.x,2)[1]))/np.dot(np.split(fit2.x,2)[0], np.split(fit2.x,2)[1]/np.sum(np.split(fit2.x,2)[1]))
-
+    gi=np.split(fit2.x,2)[1]/np.sum(np.split(fit2.x,2)[1])
     result=zip(li, gi)
+    f = open('fdt_MMM_fit.dat','w')
+    f.write(str(best_nmodes))
+    for i in result:
+        f.write('\n'+str(i[0])+'\t'+str(i[1]))
+    f.close()
+
     np.savetxt('fdt_MMM_fit.dat', result, delimiter='\t')   # X is an array
-    print(result)
     return result

@@ -189,6 +189,7 @@ struct p_cd { //Generates \tau_CD lifetimes
     int nmodes;
     float *g;
     float *tau;
+    float ptau_sum;
     p_cd(float* tauArr, float* gArr, int nmods, Ran *tran) {
         ran = tran;
         nmodes = nmods;
@@ -199,7 +200,7 @@ struct p_cd { //Generates \tau_CD lifetimes
 
     float tau_CD_f_t() {//p^eq
         float p = ran->flt();
-        float ptau_sum = 0;
+        ptau_sum = 0;
         for (int j=0; j<nmodes; j++){
             ptau_sum += g[j]*tau[j];
         }
@@ -208,7 +209,7 @@ struct p_cd { //Generates \tau_CD lifetimes
         for (i=0; i<nmodes && sum < p; i++){
             sum += g[i]*tau[i]/ptau_sum;
         }
-        return tau[i];
+        return tau[i-1];
     }
 
     float tau_CD_f_d_t() {//p^cr
@@ -218,7 +219,7 @@ struct p_cd { //Generates \tau_CD lifetimes
         for (i=0; i<nmodes && sum < p; i++){
             sum += g[i];
         }
-        return tau[i];
+        return tau[i-1];
     }
     float pcdtauint(float tau) {
         return 0;

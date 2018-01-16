@@ -129,25 +129,22 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 	//Initialize random
 	eran.seed(job_ID * N_cha);
 
-	ifstream pcd_file;
-	pcd_file.open("pcd.dat");
-	float g, alpha_1, alpha_2, tau_0, tau_1, tau_2, tau_d;
-	pcd_file >> g;
-	pcd_file >> alpha_1;
-	pcd_file >> alpha_2;
-	pcd_file >> tau_0;
-	pcd_file >> tau_1;
-	pcd_file >> tau_2;
-	pcd_file >> tau_d;
-	pcd_file.close();
-
-    int nmods = 8;
+    ifstream pcd_file;
+    pcd_file.open("fdt_MMM_fit.dat");
+    int nmods;
+    pcd_file >> nmods;
     float *tauArr = new float[nmods];
     float *gArr = new float[nmods];
-
-	//pcd = new p_cd(Be, NK, &eran); //constraint dynamics for linear chains
-	//pcd = new p_cd(g, alpha_1, alpha_2, tau_0, tau_1, tau_2, tau_d, &eran); //initialize with fitted values to do iterations (unless we obtain analytic expression)
+    for (int i=0; i<nmods; i++){
+        pcd_file >> tauArr[i];
+        pcd_file >> gArr[i];
+    }
+    pcd_file.close();
     pcd = new p_cd(tauArr, gArr, nmods, &eran);
+
+    //TODO: enable one and two mode BSW with heuristics
+    //pcd = new p_cd(Be, NK, &eran); //constraint dynamics for linear chains
+    //pcd = new p_cd(g, alpha_1, alpha_2, tau_0, tau_1, tau_2, tau_d, &eran); //initialize with fitted values to do iterations (unless we obtain analytic expression)
 
 	if (loadfile != NULL) {	//load chain conformations from file
 		cout << "loading chain conformations from " << loadfile << "..";
