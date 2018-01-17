@@ -137,5 +137,4 @@ def fdt_fit():
         f.write('\n'+str(i[0])+'\t'+str(i[1]))
     f.close()
 
-    np.savetxt('fdt_MMM_fit.dat', result, delimiter='\t')   # X is an array
     return result
