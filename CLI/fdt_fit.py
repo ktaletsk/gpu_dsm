@@ -138,3 +138,6 @@ def fdt_fit():
     f.close()
 
     return result
+
+if __name__== "__main__":
+    fdt_fit()
