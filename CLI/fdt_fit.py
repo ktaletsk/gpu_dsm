@@ -32,12 +32,11 @@ def fdt_fit():
     global x
     global y
 
-    with open('fdt.dat') as f:
+    with open('fdt_aver.dat') as f:
         lines = f.readlines()
-        xx = np.array([float(line.split()[0]) for line in lines])
+        x = np.array([float(line.split()[0]) for line in lines])
         yy = np.array([float(line.split()[1]) for line in lines])
 
-    x = 10**(xx/1000.0-10.0)
     y = 1.0-np.cumsum(yy)/np.sum(yy)
 
     mask = y>0
