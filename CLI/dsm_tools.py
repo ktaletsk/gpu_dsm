@@ -162,7 +162,7 @@ class Calculation(object):
         self.generate_input()
 
     #Plot fit results
-    def plot_fit_results():
+    def plot_fit_results(self):
         fig = plt.figure(figsize=(24, 6))
 
         ax1 = fig.add_subplot(131)
