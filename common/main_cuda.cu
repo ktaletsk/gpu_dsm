@@ -130,7 +130,7 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 	eran.seed(job_ID * N_cha);
 
     ifstream pcd_file;
-    pcd_file.open("fdt_MMM_fit.dat");
+    pcd_file.open("pcd_MMM.dat");
     int nmods;
     pcd_file >> nmods;
     float *tauArr = new float[nmods];
