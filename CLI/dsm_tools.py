@@ -32,11 +32,20 @@ def job_start(ssh, job_folder, njobs):
         print line
 
     #Transfer input file
-    sftp=ssh.open_sftp()
     source= '{name}/input.dat'.format(name=job_folder)
-    destination ='temp_jobs/{name}/CLI/input.dat'.format(name=job_folder)
-    sftp.put(source,destination)
-    sftp.close()
+    if os.path.isfile(source):
+        sftp=ssh.open_sftp()
+        destination ='temp_jobs/{name}/CLI/input.dat'.format(name=job_folder)
+        sftp.put(source,destination)
+        sftp.close()
+
+    #Transfer p^cr input table
+    source= '{name}/pcd_MMM.dat'.format(name=job_folder)
+    if os.path.isfile(source):
+        sftp=ssh.open_sftp()
+        destination ='temp_jobs/{name}/CLI/pcd_MMM.dat'.format(name=job_folder)
+        sftp.put(source,destination)
+        sftp.close()
 
     jobIds = []
     #Submit job to qsub
@@ -108,10 +117,25 @@ class Calculation(object):
     fdt_y = None
     lambdaArr = None
     gArr = None
+    pcd_cr_input_x = None
+    pcd_cr_input_y = None
 
     #Function to generate input file
     def generate_token(self):
         self.token = str(uuid.uuid4())
+        return
+
+    def set_pcd_cr_input(self, pcd_cr_input_x, pcd_cr_input_y):
+        self.pcd_cr_input_x = pcd_cr_input_x
+        self.pcd_cr_input_y = pcd_cr_input_y
+        pcd_input=zip(pcd_cr_input_x, pcd_cr_input_y)
+
+        file = open(self.token + "/pcd_MMM.dat","w")
+        file.write(str(np.size(self.pcd_cr_input_x)))
+        for i in pcd_input:
+            file.write('\n'+str(i[0])+'\t'+str(i[1]))
+        file.close()
+
         return
 
     #Function to start calculation on cluster
@@ -149,17 +173,6 @@ class Calculation(object):
                 print('Still running, check back later')
         else:
             print('Calculation is finished')
-
-    #Initialize object of class
-    def __init__(self, CDtoggle, nChains, num_gpu, simTime):
-        self.generate_token()
-        if not os.path.exists(self.token):
-            os.makedirs(self.token)
-        self.CDtoggle = CDtoggle
-        self.nChains = nChains
-        self.num_gpu = num_gpu
-        self.simTime = simTime
-        self.generate_input()
 
     #Plot fit results
     def plot_fit_results(self):
@@ -206,6 +219,17 @@ class Calculation(object):
         plt.ylim(ymin=0.5*min(np.multiply(self.lambdaArr, self.gArr)/np.dot(self.lambdaArr, self.gArr)), ymax=2*max(np.multiply(self.lambdaArr, self.gArr)/np.dot(self.lambdaArr, self.gArr)))
 
         plt.show()
+
+    #Initialize object of class
+    def __init__(self, CDtoggle, nChains, num_gpu, simTime):
+        self.generate_token()
+        if not os.path.exists(self.token):
+            os.makedirs(self.token)
+        self.CDtoggle = CDtoggle
+        self.nChains = nChains
+        self.num_gpu = num_gpu
+        self.simTime = simTime
+        self.generate_input()
 
 class CalculationStar(Calculation):
     architecture = 'star' #Type of chain
