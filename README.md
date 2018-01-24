@@ -75,3 +75,6 @@ selects GPU to use. Useful if multiple GPU are present in the system. Numberring
     
 -distr
 saves final Z,N,Q distributions in .dat files
+
+### Citation
+[![DOI](https://zenodo.org/badge/24236916.svg)](https://zenodo.org/badge/latestdoi/24236916)
