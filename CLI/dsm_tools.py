@@ -115,6 +115,8 @@ class Calculation(object):
     num_gpu = None
     fdt_x = None
     fdt_y = None
+    fdt_result_x = None
+    fdt_result_y = None
     lambdaArr = None
     gArr = None
     pcd_cr_input_x = None
@@ -157,13 +159,19 @@ class Calculation(object):
                 print('Calculation is done. Transfering results')
                 job_transfer_clean(self.ssh, self.token)
 
-                #Read f_d(t) simulation rtesults and fit
+                #Read f_d(t) simulation results and fit
                 with open(self.token + '/fdt_aver.dat') as f:
                     lines = f.readlines()
                     self.fdt_x = np.array([float(line.split()[0]) for line in lines])
                     ydata = np.array([float(line.split()[1]) for line in lines])
 
                 self.fdt_y = 1.0-np.cumsum(ydata)/np.sum(ydata)
+
+                #Read result_f_d(t)
+                with open(self.token + '/fdt_result.dat') as f:
+                    lines = f.readlines()
+                    self.fdt_result_x = np.array([float(line.split()[0]) for line in lines])
+                    self.fdt_result_y = np.array([float(line.split()[1]) for line in lines])
 
                 with open(self.token + '/fdt_MMM_fit.dat') as f:
                     lines = f.readlines()
@@ -184,8 +192,8 @@ class Calculation(object):
         ax1.set_xlabel(r'$t/\tau_c$')
         ax1.set_ylabel(r'$f_d(t)$')
 
-        ax1.scatter(self.fdt_x, self.fdt_y, c='r', label=r'$f_d(t)$')
-        ax1.plot(self.fdt_x, fdtvec(time=self.fdt_x, params=np.append(self.lambdaArr, self.gArr)), c='b', label=r'MMM fit')
+        ax1.scatter(self.fdt_result_x, self.fdt_result_y, c='r', label=r'$f_d(t)$')
+        ax1.plot(self.fdt_result_x, fdtvec(time=self.fdt_result_x, params=np.append(self.lambdaArr, self.gArr)), c='b', label=r'MMM fit')
         leg = ax1.legend()
         ax1.set_xscale('log')
         ax1.set_yscale('log')

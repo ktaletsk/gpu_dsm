@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import least_squares, minimize
 from scipy.misc import logsumexp
+import os
 
 x = []
 y = []
@@ -39,6 +40,27 @@ def fdt_fit():
 
     y = 1.0-np.cumsum(yy)/np.sum(yy)
 
+    #Read p_cr from previous iteration that was input to the code
+    source= 'pcd_MMM.dat'
+    if os.path.isfile(source):
+        with open('pcd_MMM.dat') as f:
+            lines = f.readlines()
+        lambdaArr0 = np.array([float(line.split()[0]) for line in lines[1:]])
+        gArr0 = np.array([float(line.split()[1]) for line in lines[1:]])
+        #Convert to p_eq
+        lambdaArr0eq = lambdaArr0
+        gArr0eq = np.multiply(lambdaArr0,gArr0)/np.dot(lambdaArr0,gArr0)
+        #divide fd(t) by f(t) from background chains
+        y = y/fdtvec(time=x, params=np.append(lambdaArr0eq, gArr0eq))
+
+    #Save calculated f_d(t) to file
+    fdt_result=zip(x, y)
+    file = open("fdt_result.dat","w")
+    for i in fdt_result:
+        file.write(str(i[0])+'\t'+str(i[1])+'\n')
+    file.close()
+
+    #Remove zeros
     mask = y>0
     x=x[mask]
     y=y[mask]
