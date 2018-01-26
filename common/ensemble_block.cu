@@ -21,6 +21,7 @@
 #include "ensemble_block.h"
 #include "correlator.h"
 #include <vector>
+#include <unistd.h>
 #define max_sync_interval 1E5
 
 //variable arrays, that are common for all the blocks
@@ -314,6 +315,9 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 			if (*run_flag == false)
 				return -1;
 		}
+        //Cool GPU by pausing for a moment
+        usleep(60000000);
+
 	}	//loop ends
 
 	if (type==0){
