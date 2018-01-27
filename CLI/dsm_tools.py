@@ -4,6 +4,7 @@ import os
 from fdt_fit import fdt_fit, fdt, fdtvec
 import numpy as np
 import matplotlib.pyplot as plt
+import pickle
 
 server = 'example.com'
 username = 'user'
@@ -101,26 +102,10 @@ def job_transfer_clean(ssh, job_folder):
 class Calculation(object):
     #Input parameters
     beta = 1
-    nChains = None
     velocityGradient = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-    CDtoggle = None
     PDtoggle = 0
     calcMode = 1
     timeStep = 1
-    simTime = None
-    token = None #folder name
-    ssh = None #storing Paramiko SSH object
-    jobIds = None #array of job IDs on cluster
-    jobStatus = 0
-    num_gpu = None
-    fdt_x = None
-    fdt_y = None
-    fdt_result_x = None
-    fdt_result_y = None
-    lambdaArr = None
-    gArr = None
-    pcd_cr_input_x = None
-    pcd_cr_input_y = None
 
     #Function to generate input file
     def generate_token(self):
@@ -238,6 +223,17 @@ class Calculation(object):
         self.num_gpu = num_gpu
         self.simTime = simTime
         self.generate_input()
+        self.jobStatus = 0
+        self.ssh = None #storing Paramiko SSH object
+        self.jobIds = None #array of job IDs on cluster
+        self.fdt_x = None
+        self.fdt_y = None
+        self.fdt_result_x = None
+        self.fdt_result_y = None
+        self.lambdaArr = None
+        self.gArr = None
+        self.pcd_cr_input_x = None
+        self.pcd_cr_input_y = None
 
 class CalculationStar(Calculation):
     architecture = 'star' #Type of chain
