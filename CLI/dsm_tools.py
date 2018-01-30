@@ -5,6 +5,7 @@ from fdt_fit import fdt_fit, fdt, fdtvec
 import numpy as np
 import matplotlib.pyplot as plt
 import pickle
+import cPickle
 
 server = 'example.com'
 username = 'user'
@@ -162,6 +163,11 @@ class Calculation(object):
                     lines = f.readlines()
                 self.lambdaArr = np.array([float(line.split()[0]) for line in lines[1:]])
                 self.gArr = np.array([float(line.split()[1]) for line in lines[1:]])
+
+                with open(self.token + '/gt_MMM_fit.dat') as f:
+                    lines = f.readlines()
+                self.gt_lambdaArr = np.array([float(line.split()[0]) for line in lines[1:]])
+                self.gt_gArr = np.array([float(line.split()[1]) for line in lines[1:]])
             else:
                 print('Still running, check back later')
         else:
@@ -214,7 +220,7 @@ class Calculation(object):
         plt.show()
 
     #Initialize object of class
-    def __init__(self, CDtoggle, nChains, num_gpu, simTime):
+    def __init__(self, name, CDtoggle=None, nChains=None, num_gpu=None, simTime=None):
         self.generate_token()
         if not os.path.exists(self.token):
             os.makedirs(self.token)
@@ -232,18 +238,39 @@ class Calculation(object):
         self.fdt_result_y = None
         self.lambdaArr = None
         self.gArr = None
+        self.gt_lambdaArr = None
+        self.gt_gArr = None
         self.pcd_cr_input_x = None
         self.pcd_cr_input_y = None
+
+    def save(self):
+        """save class as Calculation_<self.filename>.dat"""
+        file = open('Calculation_'+self.filename+'.dat','w')
+        file.write(cPickle.dumps(self.__dict__))
+        file.close()
+
+    def load(self):
+        """try load self.name.txt"""
+        file = open('Calculation_'+self.filename+'.dat','r')
+        dataPickle = file.read()
+        file.close()
+
+        self.__dict__ = cPickle.loads(dataPickle)
 
 class CalculationStar(Calculation):
     architecture = 'star' #Type of chain
     nArms = None #Example: nArms = 3
     nkArms = None #Example: nkArms = [6 6 6]
 
-    def __init__(self, nArms, nkArms, CDtoggle, nChains, num_gpu, simTime):
-        self.nArms = nArms
-        self.nkArms = nkArms
-        super(CalculationStar, self).__init__(CDtoggle, nChains, num_gpu, simTime)
+    def __init__(self, name, nArms=None, nkArms=None, CDtoggle=None, nChains=None, num_gpu=None, simTime=None):
+        self.filename = name
+        if nArms == None:
+            self.load()
+        else:
+            self.nArms = nArms
+            self.nkArms = nkArms
+            super(CalculationStar, self).__init__(name, CDtoggle, nChains, num_gpu, simTime)
+            self.save()
 
     def generate_input(self):
         file = open(self.token + "/input.dat","w")
@@ -266,9 +293,14 @@ class CalculationLinear(Calculation):
     architecture = 'linear' #Type of chain
     nk = None #Example: nk = 20
 
-    def __init__(self, nk, CDtoggle, nChains, num_gpu, simTime):
-        self.nk = nk
-        super(CalculationLinear, self).__init__(CDtoggle, nChains, num_gpu, simTime)
+    def __init__(self, name, nk=None, CDtoggle=None, nChains=None, num_gpu=None, simTime=None):
+        self.filename = name
+        if nk==None:
+            self.load()
+        else:
+            self.nk = nk
+            super(CalculationLinear, self).__init__(name, CDtoggle, nChains, num_gpu, simTime)
+            self.save()
 
     def generate_input(self):
         file = open(self.token + "/input.dat","w")
@@ -285,3 +317,11 @@ class CalculationLinear(Calculation):
         file.write(str(self.simTime))
 
         file.close()
+
+class IterationChain():
+    def add(self, calcs):
+        self.chain.append(calcs)
+
+    def __init__(self, w):
+        self.w = w
+        self.chain = []
