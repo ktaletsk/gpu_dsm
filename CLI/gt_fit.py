@@ -123,10 +123,11 @@ def gt_fit():
 
     fit2 = best_fit
     li=np.split(fit2.x,2)[0]
-    gi=np.split(fit2.x,2)[1]/np.sum(np.split(fit2.x,2)[1])
+    gi=GN0*np.split(fit2.x,2)[1]/np.sum(np.split(fit2.x,2)[1])
     result=zip(li, gi)
     f = open('gt_MMM_fit.dat','w')
     f.write(str(best_nmodes))
+    for i in result:
         f.write('\n'+str(i[0])+'\t'+str(i[1]))
     f.close()
 
