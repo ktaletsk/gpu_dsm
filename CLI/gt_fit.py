@@ -91,7 +91,7 @@ def gt_fit():
         #if not np.any(Gt_MMM_vec(time=x, params=np.append(lambdaArrInit, fit)) < 0):
         if not np.any(fit < 0):
             successful_fits_1.append(nmodes)
-            print nmodes, fit, MSE_MMM(np.append(lambdaArrInit, fit))
+            print(nmodes, fit, MSE_MMM(np.append(lambdaArrInit, fit)))
     print(successful_fits_1)
 
     fits_2 = [] #output of fitting function for all tested numbers of modes
@@ -127,7 +127,6 @@ def gt_fit():
     result=zip(li, gi)
     f = open('gt_MMM_fit.dat','w')
     f.write(str(best_nmodes))
-    for i in result:
         f.write('\n'+str(i[0])+'\t'+str(i[1]))
     f.close()
 

@@ -128,22 +128,22 @@ class Calculation(object):
 
     #Function to start calculation on cluster
     def calc(self):
-        self.ssh=ssh_init()
-        self.jobIds = job_start(self.ssh, self.token, self.num_gpu)
+        ssh=ssh_init()
+        self.jobIds = job_start(ssh, self.token, self.num_gpu)
         self.jobStatus = 1
+        self.save()
         return
 
     #Function to check the status of calculation
     def check_self(self):
         if self.jobStatus==0:
             print('Calculation is not started yet')
-        if self.jobStatus==1:
-            if not self.ssh:
-                self.ssh=ssh_init()
-            if job_done(self.ssh, self.jobIds):
+        elif self.jobStatus==1:
+            ssh=ssh_init()
+            if job_done(ssh, self.jobIds):
                 self.jobStatus=2
                 print('Calculation is done. Transfering results')
-                job_transfer_clean(self.ssh, self.token)
+                job_transfer_clean(ssh, self.token)
 
                 #Read f_d(t) simulation results and fit
                 with open(self.token + '/fdt_aver.dat') as f:
@@ -172,6 +172,7 @@ class Calculation(object):
                 print('Still running, check back later')
         else:
             print('Calculation is finished')
+        self.save()
 
     #Plot fit results
     def plot_fit_results(self):
@@ -230,7 +231,6 @@ class Calculation(object):
         self.simTime = simTime
         self.generate_input()
         self.jobStatus = 0
-        self.ssh = None #storing Paramiko SSH object
         self.jobIds = None #array of job IDs on cluster
         self.fdt_x = None
         self.fdt_y = None
