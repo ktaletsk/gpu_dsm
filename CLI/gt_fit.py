@@ -18,14 +18,14 @@ def Gt_MMM(time, params):
     #Fixed frequencies
     #lambdaArr=10.0**((np.array(range(nmodes), float) + 1.0)/nmodes*np.log10(tfinal))
     #gArr = params/np.sum(params)
-    return np.dot(np.exp(-time/lambdaArr), gArr)*GN0
+    return np.dot(np.exp(-time/lambdaArr), gArr)
 
 def log_Gt_MMM(time,params):
     lambdaArr = np.split(params,2)[0]
     gArr = np.split(params,2)[1]/np.sum(np.split(params,2)[1])
     #lambdaArr=10.0**((np.array(range(nmodes), float) + 1.0)/nmodes*np.log10(tfinal))
     #gArr = params/np.sum(params)
-    return logsumexp(-time/lambdaArr, b=gArr*GN0)
+    return logsumexp(-time/lambdaArr, b=gArr)
 
 #Vectorize function fdt and log_fdt
 Gt_MMM_vec=np.vectorize(Gt_MMM, excluded=['params'])
@@ -35,13 +35,13 @@ def Gp_MMM(omega, params):
     lambdaArr = np.split(params,2)[0]
     gArr = np.split(params,2)[1]/np.sum(np.split(params,2)[1])
 
-    return np.sum((gArr * lambdaArr**2 * omega**2)/(1 + lambdaArr**2 * omega**2))*GN0
+    return np.sum((gArr * lambdaArr**2 * omega**2)/(1 + lambdaArr**2 * omega**2))
 
 def Gdp_MMM(omega, params):
     lambdaArr = np.split(params,2)[0]
     gArr = np.split(params,2)[1]/np.sum(np.split(params,2)[1])
 
-    return np.sum((gArr * lambdaArr * omega)/(1 + lambdaArr**2 * omega**2))*GN0
+    return np.sum((gArr * lambdaArr * omega)/(1 + lambdaArr**2 * omega**2))
 
 #Vectorize function Gp and Gdp
 Gp_MMM_vec=np.vectorize(Gp_MMM, excluded=['params'])
@@ -50,9 +50,8 @@ Gdp_MMM_vec=np.vectorize(Gdp_MMM, excluded=['params'])
 def gt_fit():
     global x
     global y
-    global GN0
 
-    with open('G.dat') as f:
+    with open('gt_aver.dat') as f:
         lines = f.readlines()
         x = np.array([float(line.split()[0]) for line in lines])
         y = np.array([float(line.split()[1]) for line in lines])
@@ -64,16 +63,23 @@ def gt_fit():
     tfinal=x[-1]
     tstart=x[1]
 
+    #Save calculated G(t) to file
+    gt_result=zip(x, y)
+    file = open("gt_result.dat","w")
+    for i in gt_result:
+        file.write(str(i[0])+'\t'+str(i[1])+'\n')
+    file.close()
+
     #Define residuals
     def residuals_Gt_MMM(param):
-        return Gt_MMM_vec(time=x, params=param)-y
+        return Gt_MMM_vec(time=x, params=param)*GN0-y
 
     #Define log-residuals
     def residuals_log_Gt_MMM(param):
         if np.any(Gt_MMM_vec(time=x[:-1], params=param) < 0):
             return np.full(x[:-1].shape,1e8) #Penalty for negative f_d(t)
         else:
-            return log_Gt_MMM_vec(time=x, params=param)-np.log(y)
+            return log_Gt_MMM_vec(time=x, params=param)+np.log(GN0)-np.log(y)
 
     #Define Mean-Squared Error
     def MSE_MMM(param):
@@ -115,6 +121,7 @@ def gt_fit():
                 min_log_SME = log_MSE_MMM(fit2.x)
                 best_fit = fit2
                 best_nmodes = i
+                print('Good fit')
             print('Second fit log-MSE\t{0}'.format(log_MSE_MMM(fit2.x)))
             print(fit2.message)
             print('Weights\t{0}'.format(weights))

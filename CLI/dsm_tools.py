@@ -2,6 +2,7 @@ import uuid
 import paramiko
 import os
 from fdt_fit import fdt_fit, fdt, fdtvec
+from gt_fit import Gt_MMM, Gt_MMM_vec, Gp_MMM, Gdp_MMM, Gp_MMM_vec, Gdp_MMM_vec
 import numpy as np
 import matplotlib.pyplot as plt
 import pickle
@@ -164,6 +165,12 @@ class Calculation(object):
                 self.lambdaArr = np.array([float(line.split()[0]) for line in lines[1:]])
                 self.gArr = np.array([float(line.split()[1]) for line in lines[1:]])
 
+                #Read result_G(t)
+                with open(self.token + '/gt_result.dat') as f:
+                    lines = f.readlines()
+                    self.gt_result_x = np.array([float(line.split()[0]) for line in lines])
+                    self.gt_result_y = np.array([float(line.split()[1]) for line in lines])
+
                 with open(self.token + '/gt_MMM_fit.dat') as f:
                     lines = f.readlines()
                 self.gt_lambdaArr = np.array([float(line.split()[0]) for line in lines[1:]])
@@ -174,8 +181,8 @@ class Calculation(object):
             print('Calculation is finished')
         self.save()
 
-    #Plot fit results
-    def plot_fit_results(self):
+    #Plot fdt_fit results
+    def plot_fdt_results(self):
         fig = plt.figure(figsize=(24, 6))
 
         ax1 = fig.add_subplot(131)
@@ -220,6 +227,53 @@ class Calculation(object):
 
         plt.show()
 
+    #Plot gt_fit results
+    def plot_gt_results(self):
+        omegaPoints = 1000
+        omegaMin = -8
+        omegaMax = 5
+        omegaArr=10**(omegaMin+(np.array(range(omegaPoints), float) + 1.0)/omegaPoints*(omegaMax-omegaMin))
+
+        fig3 = plt.figure(figsize=(24, 6))
+
+        ax0 = fig3.add_subplot(131)
+
+        ax0.set_xlabel(r'$\lambda$')
+        ax0.set_ylabel(r'$g$')
+
+        ax0.scatter(self.gt_lambdaArr, self.gt_gArr, c='r', label=r'MMM fit')
+        leg = ax0.legend()
+        ax0.set_xscale('log')
+        ax0.set_yscale('log')
+
+        ax1 = fig3.add_subplot(132)
+
+        ax1.set_title("Relaxation modulus G(t)")
+        ax1.set_xlabel(r'$t/\tau_c$')
+        ax1.set_ylabel(r'log residuals')
+
+        ax1.scatter(self.gt_result_x, self.gt_result_y, c='r', label=r'Simulation')
+        ax1.plot(self.gt_result_x, sum(self.gt_gArr)*Gt_MMM_vec(time=self.gt_result_x, params=np.append(self.gt_lambdaArr, self.gt_gArr)), c='b', label=r'MMM fit')
+
+        leg = ax1.legend()
+        ax1.set_xscale('log')
+        ax1.set_yscale('log')
+
+        ax2 = fig3.add_subplot(133)
+
+        ax2.set_title(r'Dynamic modulus $G*(\omega)$')
+        ax2.set_xlabel(r'$\omega$')
+        ax2.set_ylabel(r'$G*$')
+
+        ax2.plot(omegaArr,Gp_MMM_vec(omega=omegaArr,params=np.append(self.gt_lambdaArr, self.gt_gArr)), c='k', label=r'$G^\prime$')
+        ax2.plot(omegaArr,Gdp_MMM_vec(omega=omegaArr,params=np.append(self.gt_lambdaArr, self.gt_gArr)), c='k', label=r'$G^{\prime\prime}$')
+
+        leg = ax2.legend()
+        ax2.set_yscale('log')
+        ax2.set_xscale('log')
+
+        plt.show()
+
     #Initialize object of class
     def __init__(self, name, CDtoggle=None, nChains=None, num_gpu=None, simTime=None):
         self.generate_token()
@@ -238,6 +292,8 @@ class Calculation(object):
         self.fdt_result_y = None
         self.lambdaArr = None
         self.gArr = None
+        self.gt_result_x = None
+        self.gt_result_y = None
         self.gt_lambdaArr = None
         self.gt_gArr = None
         self.pcd_cr_input_x = None
