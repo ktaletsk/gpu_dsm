@@ -195,15 +195,15 @@ struct p_cd { //Generates \tau_CD lifetimes
         nmodes = nmods;
         g = gArr;
         tau = tauArr;
+        ptau_sum = 0;
+        for (int j=0; j<nmodes; j++){
+            ptau_sum += g[j]*tau[j];
+        }
         //initialize arrays with discrete weights
     }
 
     float tau_CD_f_t() {//p^eq
         float p = ran->flt();
-        ptau_sum = 0;
-        for (int j=0; j<nmodes; j++){
-            ptau_sum += g[j]*tau[j];
-        }
         float sum = 0;
         int i;
         for (i=0; i<nmodes && sum < p; i++){
@@ -222,17 +222,11 @@ struct p_cd { //Generates \tau_CD lifetimes
         return tau[i-1];
     }
     float pcdtauint(float tau) {
-        return 0;
+        return 0; //What is that?
     }
     float W_CD_destroy_aver() {
-        float ptau_sum = 0;
-        for (int i=0; i<nmodes; i++){
-            ptau_sum += g[i]*tau[i];
-        }
-
         return 1.0/ptau_sum;
     }
 };
-
 
 #endif

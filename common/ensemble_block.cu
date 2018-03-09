@@ -180,7 +180,7 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 		//update universal_time on device
 		float tf = block_time + i_sync * max_sync_interval;
 		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_universal_time, &tf, sizeof(float)));
-
+        
 		while (!reach_flag_all) {
 			if (!(steps_count & 0x00000001)) { //For odd number of steps
 
@@ -210,7 +210,6 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
             else {
                 cudaBindSurfaceToArray(s_corr, d_corr_a);
             }
-
             //Calculate jump probabilities
             if(architecture==0){ //linear chains
                 strent_kernel_linear<type> <<<dimGrid, dimBlock, 0, stream_calc1>>> (chain_heads, d_dt, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time);
@@ -304,7 +303,7 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 					texture_flag = true;
 				}
 				if (type == 0 && correlator_type == 0) {
-					update_correlator << <(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_update >> >((corr)->gpu_corr, stressarray_count, correlator_type);
+					update_correlator <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_update >>>((corr)->gpu_corr, stressarray_count, correlator_type);
 				}
 				if (correlator_type == 1 || correlator_type == 2) {
 					flow_stress << <(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_update >> >((corr)->gpu_corr, stressarray_count, stress_average, nc);
@@ -316,7 +315,7 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 				return -1;
 		}
         //Cool GPU by pausing for a moment
-        usleep(60000000);
+        //usleep(60000000);
 
 	}	//loop ends
 
