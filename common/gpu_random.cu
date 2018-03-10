@@ -115,38 +115,40 @@ void gpu_ran_init (p_cd* pcd) {
         ////cdtemp = powf(pcd->tau_0, pcd->alpha - 1.0f);
         ////CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Ddt, &(cdtemp), sizeof(float)));
 
-        //Create cumulative tables for creation and equilibrium
-        float* pcd_table_cr = new float[pcd->nmodes];
-        float sum = 0;
-        for (int i=0; i < pcd->nmodes; i++){
-            sum += pcd->g[i];
-            pcd_table_cr[i] = sum;
+        if(CD_flag){
+            //Create cumulative tables for creation and equilibrium
+            float* pcd_table_cr = new float[pcd->nmodes];
+            float sum = 0;
+            for (int i=0; i < pcd->nmodes; i++){
+                sum += pcd->g[i];
+                pcd_table_cr[i] = sum;
+            }
+
+            sum = 0;
+            float* pcd_table_eq = new float[pcd->nmodes];
+            for (int i=0; i < pcd->nmodes; i++){
+                sum += pcd->g[i] * pcd->tau[i] / pcd->ptau_sum;
+                pcd_table_eq[i] = sum;
+            }
+
+            //copy p^CD tables to GPU and bind textures
+            cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc<float>();
+
+            CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_pcd_table_size_cr, &(pcd->nmodes), sizeof(int)));
+            CUDA_SAFE_CALL(cudaMallocArray(&d_pcd_table_cr, &channelDesc1, (pcd->nmodes)));
+            CUDA_SAFE_CALL(cudaMemcpyToArray(d_pcd_table_cr, 0, 0, pcd_table_cr, (pcd->nmodes) * sizeof(float), cudaMemcpyHostToDevice));
+            CUDA_SAFE_CALL(cudaBindTextureToArray(t_pcd_table_cr, d_pcd_table_cr, channelDesc1));
+
+            CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_pcd_table_size_eq, &(pcd->nmodes), sizeof(int)));
+            CUDA_SAFE_CALL(cudaMallocArray(&d_pcd_table_eq, &channelDesc1, (pcd->nmodes)));
+            CUDA_SAFE_CALL(cudaMemcpyToArray(d_pcd_table_eq, 0, 0, pcd_table_eq, (pcd->nmodes) * sizeof(float), cudaMemcpyHostToDevice));
+            CUDA_SAFE_CALL(cudaBindTextureToArray(t_pcd_table_eq, d_pcd_table_eq, channelDesc1));
+
+            CUDA_SAFE_CALL(cudaMallocArray(&d_pcd_table_tau, &channelDesc1, (pcd->nmodes)));
+            CUDA_SAFE_CALL(cudaMemcpyToArray(d_pcd_table_tau, 0, 0, pcd->tau, (pcd->nmodes) * sizeof(float), cudaMemcpyHostToDevice));
+            CUDA_SAFE_CALL(cudaBindTextureToArray(t_pcd_table_tau, d_pcd_table_tau, channelDesc1));
+
         }
-
-        sum = 0;
-        float* pcd_table_eq = new float[pcd->nmodes];
-        for (int i=0; i < pcd->nmodes; i++){
-            sum += pcd->g[i] * pcd->tau[i] / pcd->ptau_sum;
-            pcd_table_eq[i] = sum;
-        }
-
-        //copy p^CD tables to GPU and bind textures
-        cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc<float>();
-
-        CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_pcd_table_size_cr, &(pcd->nmodes), sizeof(int)));
-        CUDA_SAFE_CALL(cudaMallocArray(&d_pcd_table_cr, &channelDesc1, (pcd->nmodes)));
-        CUDA_SAFE_CALL(cudaMemcpyToArray(d_pcd_table_cr, 0, 0, pcd_table_cr, (pcd->nmodes) * sizeof(float), cudaMemcpyHostToDevice));
-        CUDA_SAFE_CALL(cudaBindTextureToArray(t_pcd_table_cr, d_pcd_table_cr, channelDesc1));
-
-        CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_pcd_table_size_eq, &(pcd->nmodes), sizeof(int)));
-        CUDA_SAFE_CALL(cudaMallocArray(&d_pcd_table_eq, &channelDesc1, (pcd->nmodes)));
-        CUDA_SAFE_CALL(cudaMemcpyToArray(d_pcd_table_eq, 0, 0, pcd_table_eq, (pcd->nmodes) * sizeof(float), cudaMemcpyHostToDevice));
-        CUDA_SAFE_CALL(cudaBindTextureToArray(t_pcd_table_eq, d_pcd_table_eq, channelDesc1));
-
-        CUDA_SAFE_CALL(cudaMallocArray(&d_pcd_table_tau, &channelDesc1, (pcd->nmodes)));
-        CUDA_SAFE_CALL(cudaMemcpyToArray(d_pcd_table_tau, 0, 0, pcd->tau, (pcd->nmodes) * sizeof(float), cudaMemcpyHostToDevice));
-        CUDA_SAFE_CALL(cudaBindTextureToArray(t_pcd_table_tau, d_pcd_table_tau, channelDesc1));
-
     }
 
     CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_PD_flag, &PD_flag, sizeof(bool)));

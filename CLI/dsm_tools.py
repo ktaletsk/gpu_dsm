@@ -29,7 +29,7 @@ def job_start(ssh, job_folder, njobs):
     ssh.connect(server, username=username, password=password)
 
     #Create temporary folder for job, clone and compile the code
-    command1 = 'cd temp_jobs; mkdir {name}; cd {name}; git clone https://github.com/ktaletsk/gpu_dsm.git .; git fetch; git checkout {branch}; cd CLI; make all clean'.format(name=job_folder, branch="star_branched")
+    command1 = 'cd temp_jobs; mkdir {name}; cd {name}; git clone -b {branch} https://github.com/ktaletsk/gpu_dsm.git .; cd CLI; make all clean'.format(name=job_folder, branch="star_branched")
     (stdin, stdout, stderr) = ssh.exec_command(command1)
     for line in stdout.readlines():
         print line
