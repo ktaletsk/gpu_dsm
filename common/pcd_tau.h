@@ -195,6 +195,17 @@ struct p_cd { //Generates \tau_CD lifetimes
         nmodes = nmods;
         g = gArr;
         tau = tauArr;
+
+        //Renormalize values in case there's is rounding error
+        float sum = 0;
+        for (int j=0; j<nmodes; j++){
+            sum += g[j];
+        }
+        cout << "\nSum: " << sum;
+        for (int j=0; j<nmodes; j++){
+            g[j] = g[j]/sum;
+        }
+
         ptau_sum = 0;
         for (int j=0; j<nmodes; j++){
             ptau_sum += g[j]*tau[j];
@@ -220,9 +231,6 @@ struct p_cd { //Generates \tau_CD lifetimes
             sum += g[i];
         }
         return tau[i-1];
-    }
-    float pcdtauint(float tau) {
-        return 0; //What is that?
     }
     float W_CD_destroy_aver() {
         return 1.0/ptau_sum;

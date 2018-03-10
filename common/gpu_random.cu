@@ -60,8 +60,10 @@ texture<float, cudaTextureType1D, cudaReadModeElementType> t_gamma_table_d;
 __constant__ int d_pcd_table_size_cr, d_pcd_table_size_eq;
 cudaArray* d_pcd_table_cr;
 cudaArray* d_pcd_table_eq;
+cudaArray* d_pcd_table_tau;
 texture<float, cudaTextureType1D, cudaReadModeElementType> t_pcd_table_cr;
 texture<float, cudaTextureType1D, cudaReadModeElementType> t_pcd_table_eq;
+texture<float, cudaTextureType1D, cudaReadModeElementType> t_pcd_table_tau;
 
 void gpu_ran_init (p_cd* pcd) {
 	cout << "preparing GPU random number generator parameters..\n";
@@ -113,57 +115,37 @@ void gpu_ran_init (p_cd* pcd) {
         ////cdtemp = powf(pcd->tau_0, pcd->alpha - 1.0f);
         ////CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_Ddt, &(cdtemp), sizeof(float)));
 
-        //Find the smallest g_i
-        float min_gi = 1;
+        //Create cumulative tables for creation and equilibrium
+        float* pcd_table_cr = new float[pcd->nmodes];
+        float sum = 0;
         for (int i=0; i < pcd->nmodes; i++){
-            float gi = pcd->g[i];
-            if (gi < min_gi)
-                min_gi = gi;
-        }
-        int pcd_table_size_cr = int(100/min_gi);
-        if (pcd_table_size_cr>10000)    pcd_table_size_cr=10000;
-        float* pcd_table_cr = new float[pcd_table_size_cr];
-        int j = 0;
-        float sum = pcd->g[j];
-        for (int i=0; i < pcd_table_size_cr; i++){
-            if (float(i)/float(pcd_table_size_cr) > sum){
-                j++;
-                sum += pcd->g[j];
-            }
-            pcd_table_cr[i] = 1.0/pcd->tau[j];
+            sum += pcd->g[i];
+            pcd_table_cr[i] = sum;
         }
 
-        min_gi = 1;
+        sum = 0;
+        float* pcd_table_eq = new float[pcd->nmodes];
         for (int i=0; i < pcd->nmodes; i++){
-            float gi = pcd->tau[i]*pcd->g[i]/pcd->ptau_sum;
-            if (gi < min_gi)
-                min_gi = gi;
+            sum += pcd->g[i] * pcd->tau[i] / pcd->ptau_sum;
+            pcd_table_eq[i] = sum;
         }
 
-        int pcd_table_size_eq = int(100/min_gi);
-        if (pcd_table_size_eq>10000)    pcd_table_size_eq=10000;
-        cout << "\nEquilibrium creation table size\t" << pcd_table_size_eq;
-        float* pcd_table_eq = new float[pcd_table_size_eq];
-        j = 0;
-        sum = pcd->tau[j]*pcd->g[j]/pcd->ptau_sum;
-        for (int i=0; i < pcd_table_size_eq; i++){
-            if (float(i)/float(pcd_table_size_eq) > sum){
-                j++;
-                sum += pcd->tau[j]*pcd->g[j]/pcd->ptau_sum;
-            }
-            pcd_table_eq[i] = 1.0/pcd->tau[j];
-        }
         //copy p^CD tables to GPU and bind textures
-        CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_pcd_table_size_cr, &pcd_table_size_cr, sizeof(int)));
         cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc<float>();
-        CUDA_SAFE_CALL(cudaMallocArray(&d_pcd_table_cr, &channelDesc1, pcd_table_size_cr));
-        CUDA_SAFE_CALL(cudaMemcpyToArray(d_pcd_table_cr, 0, 0, pcd_table_cr, pcd_table_size_cr * sizeof(float), cudaMemcpyHostToDevice));
+
+        CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_pcd_table_size_cr, &(pcd->nmodes), sizeof(int)));
+        CUDA_SAFE_CALL(cudaMallocArray(&d_pcd_table_cr, &channelDesc1, (pcd->nmodes)));
+        CUDA_SAFE_CALL(cudaMemcpyToArray(d_pcd_table_cr, 0, 0, pcd_table_cr, (pcd->nmodes) * sizeof(float), cudaMemcpyHostToDevice));
         CUDA_SAFE_CALL(cudaBindTextureToArray(t_pcd_table_cr, d_pcd_table_cr, channelDesc1));
 
-        CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_pcd_table_size_eq, &pcd_table_size_eq, sizeof(int)));
-        CUDA_SAFE_CALL(cudaMallocArray(&d_pcd_table_eq, &channelDesc1, pcd_table_size_eq));
-        CUDA_SAFE_CALL(cudaMemcpyToArray(d_pcd_table_eq, 0, 0, pcd_table_eq, pcd_table_size_eq * sizeof(float), cudaMemcpyHostToDevice));
+        CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_pcd_table_size_eq, &(pcd->nmodes), sizeof(int)));
+        CUDA_SAFE_CALL(cudaMallocArray(&d_pcd_table_eq, &channelDesc1, (pcd->nmodes)));
+        CUDA_SAFE_CALL(cudaMemcpyToArray(d_pcd_table_eq, 0, 0, pcd_table_eq, (pcd->nmodes) * sizeof(float), cudaMemcpyHostToDevice));
         CUDA_SAFE_CALL(cudaBindTextureToArray(t_pcd_table_eq, d_pcd_table_eq, channelDesc1));
+
+        CUDA_SAFE_CALL(cudaMallocArray(&d_pcd_table_tau, &channelDesc1, (pcd->nmodes)));
+        CUDA_SAFE_CALL(cudaMemcpyToArray(d_pcd_table_tau, 0, 0, pcd->tau, (pcd->nmodes) * sizeof(float), cudaMemcpyHostToDevice));
+        CUDA_SAFE_CALL(cudaBindTextureToArray(t_pcd_table_tau, d_pcd_table_tau, channelDesc1));
 
     }
 
@@ -231,6 +213,18 @@ __device__ float d_tau_CD_f_t_star(float p, float A1, float B1, float A2, float 
 	}
 }
 
+__device__ float d_tau_CD_cr(float p, int nmodes){
+    int i;
+    for (i=0; i<nmodes && tex1D(t_pcd_table_cr, i) < p; i++);
+    return 1.0/tex1D(t_pcd_table_tau, i);
+}
+
+__device__ float d_tau_CD_eq(float p, int nmodes){
+    int i;
+    for (i=0; i<nmodes && tex1D(t_pcd_table_eq, i) < p; i++);
+    return 1.0/tex1D(t_pcd_table_tau, i);
+}
+
 __global__ __launch_bounds__(ran_tpd) void fill_surface_taucd_gauss_rand (gpu_Ran *state, int n, int count, bool SDCD_toggle){
     float d_p_At, d_p_Ct, d_p_Dt, d_p_g, d_p_Adt, d_p_Bdt, d_p_Cdt, d_p_Ddt, d_p_tau_d_inv; //Dynamic fdt parameters for given Nk in polydisperse solution
     int i=blockIdx.x*blockDim.x+threadIdx.x;
@@ -244,9 +238,9 @@ __global__ __launch_bounds__(ran_tpd) void fill_surface_taucd_gauss_rand (gpu_Ra
             tmp.x=curand_uniform (&localState); //Pick a uniform distributed random number
 
             if (SDCD_toggle == true)
-                tmp.w = tex1D(t_pcd_table_eq, int(tmp.x * d_pcd_table_size_eq));
+                tmp.w = d_tau_CD_eq(tmp.x, d_pcd_table_size_eq);
             else
-                tmp.w = tex1D(t_pcd_table_cr, int(tmp.x * d_pcd_table_size_cr));
+                tmp.w = d_tau_CD_cr(tmp.x, d_pcd_table_size_cr);
 
             //Q vector generation for new entanglements
             if (h==0.0f){
@@ -283,9 +277,9 @@ __global__ __launch_bounds__(ran_tpd) void refill_surface_taucd_gauss_rand (gpu_
             tmp.x=curand_uniform (&localState);
 
             if (SDCD_toggle == true)
-                tmp.w = tex1D(t_pcd_table_eq, int(tmp.x * d_pcd_table_size_eq));
+                tmp.w = d_tau_CD_eq(tmp.x, d_pcd_table_size_eq);
             else
-                tmp.w = tex1D(t_pcd_table_cr, int(tmp.x * d_pcd_table_size_cr));
+                tmp.w = d_tau_CD_cr(tmp.x, d_pcd_table_size_cr);
 
             //Q vector generation for new entanglements
             if (g==0.0f){

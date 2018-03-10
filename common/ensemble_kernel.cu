@@ -71,7 +71,7 @@ __constant__ int d_correlator_res;
 
 #define PRINT_DEBUG false
 
-#define PROBS_CUTOFF 10000.0f
+#define PROBS_CUTOFF 1000000.0f
 // delayed dynamics --- how does it work:
 // There are entanglement parallel portion of the code and chain parallel portion.
 // The entanglement parallel part applies flow deformation and calculates jump process probabilities.
@@ -536,7 +536,7 @@ template<int narms> __global__ void head_kernel_star(scalar_chains* chain_heads,
 }
 
 __global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* found_index,  int* found_shift, float* add_rand) {
-	extern __shared__ int s[];
+	extern __shared__ long long int s[];
 	//Calculate kernel index
 	int i = blockIdx.x * blockDim.x + threadIdx.x;//strent index
 	int j = blockIdx.y * blockDim.y + threadIdx.y;//chain index
@@ -553,11 +553,11 @@ __global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* fou
 
 	//parallel scan in s
     //if (i==chain_heads[j].Z[0]) printf("\n%i\t%f\t%i\t%i",j,chain_heads[j].time,temp.x, temp.y);
-    int var = d_CD_flag ? temp.x + temp.y + temp.z + temp.w : temp.x + temp.y;
+    long long int var = d_CD_flag ? temp.x + temp.y + temp.z + temp.w : temp.x + temp.y;
 
     //warp scan
     for (int d = 1; d<32; d <<= 1) {
-        int var2 = __shfl_up(var, d);
+        long long int var2 = __shfl_up(var, d);
         if (i % 32 >= d)
             var += var2;
     }
@@ -567,11 +567,11 @@ __global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* fou
 
     //scan of warp sums
     if (i < 32) {
-        int var2 = 0.0f;
+        long long int var2 = 0.0f;
         if (i < blockDim.x / 32)
             var2 = s[i];
         for (int d = 1; d<32; d <<= 1) {
-            float var3 = __shfl_up(var2, d);
+            long long int var3 = __shfl_up(var2, d);
             if (i % 32 >= d) var2 += var3;
         }
         if (i < blockDim.x / 32) s[i] = var2;
@@ -588,9 +588,9 @@ __global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* fou
 	surf2Dwrite((float)(s[i])/PROBS_CUTOFF, s_sum_W_sorted, sizeof(float)*i, j);
 	//search
 	float ran = tex2D(t_uniformrand, rand_used[j], j);
-	int x = ceil((float)s[d_z_max-1]*ran);
-	int left = (i==0)? 0 : s[i - 1];
-	int right = s[i];
+	long long int x = ceil((float)s[d_z_max-1]*ran);
+	long long int left = (i==0)? 0 : s[i - 1];
+	long long int right = s[i];
 
 	bool xFound = (left < x) && (x <= left + temp.x);
 	bool yFound = (left + temp.x < x) && (x <= left + temp.x + temp.y);
@@ -848,7 +848,6 @@ __device__ void apply_shuffle_linear(int k, int i, int j, float4 new_strent, sca
 
     return;
 }
-
 
 __device__ void apply_shuffle_star(int k, int i, int j, float4 new_strent, scalar_chains* chain_heads, int *d_offset) {
     //setup local variables

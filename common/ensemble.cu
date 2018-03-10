@@ -191,10 +191,11 @@ void gpu_init(int seed, p_cd* pcd, int nsteps) {
 	// 	cdtemp = step * tem / Be;
 	// }
 	// else
-    cdtemp = pcd->W_CD_destroy_aver() / Be;
 
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_CD_create_prefact, &cdtemp, sizeof(float)));
-	cout << " device constants done\n";
+    cdtemp = pcd->W_CD_destroy_aver() / Be;
+    CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_CD_create_prefact, &cdtemp, sizeof(float)));
+
+    cout << " device constants done\n";
 
 	int rsz = chains_per_call;
 	if (N_cha < chains_per_call)
