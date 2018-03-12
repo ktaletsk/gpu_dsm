@@ -56,10 +56,12 @@ def gt_fit():
         x = np.array([float(line.split()[0]) for line in lines])
         y = np.array([float(line.split()[1]) for line in lines])
     GN0=y[0]
-    cutoff = min(np.argmax(y[1:]-y[:-1]>0), np.argmax(y<0), find_nearest(y,0.01*GN0))
+    cutoff_list = np.array([np.argmax(y[1:]-y[:-1]>0), np.argmax(y<0), find_nearest(y,0.01*GN0), np.size(x)])
 
+    cutoff = min(cutoff_list[cutoff_list>0])
     x=x[:cutoff]
     y=y[:cutoff]
+
     tfinal=x[-1]
     tstart=x[1]
 

@@ -232,13 +232,19 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
             chain_control_kernel<type> <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc4>>> (chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_write_time, correlator_type, steps_count % stressarray_count);
             CUT_CHECK_ERROR("kernel execution failed");
 
-            scan_kernel <<<dimGridFlat, dimBlockFlat, 2 * z_max * sizeof(int), stream_calc1 >>> (chain_heads, d_rand_used, d_value_found, d_shift_found, d_add_rand);
-            CUT_CHECK_ERROR("kernel execution failed");
+            if(architecture==0){ //linear chains
+                scan_kernel<0> <<<dimGridFlat, dimBlockFlat, 2 * z_max * sizeof(int), stream_calc1 >>> (chain_heads, d_rand_used, d_value_found, d_shift_found, d_add_rand);
+                CUT_CHECK_ERROR("kernel execution failed");
+            }
+            else if(architecture==1){ //star-branched chains
+                scan_kernel<1> <<<dimGridFlat, dimBlockFlat, 2 * z_max * sizeof(int), stream_calc1 >>> (chain_heads, d_rand_used, d_value_found, d_shift_found, d_add_rand);
+                CUT_CHECK_ERROR("kernel execution failed");
+            }
 
             cudaMemcpyAsync(rtbuffer, reach_flag, sizeof(float) * nc, cudaMemcpyDeviceToHost, stream_calc4);
             cudaStreamSynchronize(stream_calc1);
             cudaStreamSynchronize(stream_calc4);
-            
+
             if(architecture==0){ //linear chains
                 chain_kernel<type, 0><<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1>>> (chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_write_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD, d_value_found, d_shift_found, d_add_rand);
             }

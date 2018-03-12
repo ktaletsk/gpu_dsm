@@ -535,13 +535,13 @@ template<int narms> __global__ void head_kernel_star(scalar_chains* chain_heads,
 	}
 }
 
-__global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* found_index,  int* found_shift, float* add_rand) {
+template<int arch_type> __global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* found_index,  int* found_shift, float* add_rand) {
 	extern __shared__ long long int s[];
+    int ii, jj, arm;
 	//Calculate kernel index
 	int i = blockIdx.x * blockDim.x + threadIdx.x;//strent index
 	int j = blockIdx.y * blockDim.y + threadIdx.y;//chain index
 	//Check if kernel index is outside boundaries
-
 	int4 temp = make_int4(0, 0, 0, 0);
 
 	int read_flag;
@@ -597,16 +597,23 @@ __global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* fou
 	bool zFound = (left + temp.x + temp.y < x) && (x <= left + temp.x + temp.y + temp.z);
 	bool wFound = (left + temp.x + temp.y + temp.z < x) && (x <= left + temp.x + temp.y + temp.z + temp.w);
 
-    int arm=0;
-    int run_sum=0;
-    for (arm=0; i>=run_sum+d_z_max_arms[arm]; arm++){
-        run_sum+=d_z_max_arms[arm];
+    if (arch_type==0){ //For linear
+        ii = i;
+        jj = j;
+        arm = 0;
     }
-    int ii = i-run_sum;
-    int jj = j*d_narms+arm;
+    else if (arch_type==1){ //For star-branched
+        arm=0;
+        int run_sum=0;
+        for (arm=0; i>=run_sum+d_z_max_arms[arm]; arm++){
+            run_sum+=d_z_max_arms[arm];
+        }
+        ii = i-run_sum;
+        jj = j*d_narms+arm;
+    }
 
+    //printf("\nChain %i\tStrent %i\tZ %i",j,i,chain_heads[j].Z[arm]);
     if (xFound || yFound || zFound || wFound) {
-        //printf("\nFound chain %i\tStrent %i\t%i%i%i%i",j,i,xFound,yFound,zFound,wFound);
         found_index[j] = i;
         if (xFound){            found_shift[j] = 0;
             if(ii == chain_heads[j].Z[arm] - 1){//destruction by SD at the end
