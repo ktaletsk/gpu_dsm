@@ -228,7 +228,6 @@ __device__ float d_tau_CD_eq(float p, int nmodes){
 }
 
 __global__ __launch_bounds__(ran_tpd) void fill_surface_taucd_gauss_rand (gpu_Ran *state, int n, int count, bool SDCD_toggle){
-    float d_p_At, d_p_Ct, d_p_Dt, d_p_g, d_p_Adt, d_p_Bdt, d_p_Cdt, d_p_Ddt, d_p_tau_d_inv; //Dynamic fdt parameters for given Nk in polydisperse solution
     int i=blockIdx.x*blockDim.x+threadIdx.x;
     float4 tmp;
     float h=0.0f;
@@ -267,7 +266,6 @@ __global__ __launch_bounds__(ran_tpd) void fill_surface_taucd_gauss_rand (gpu_Ra
 
 //
 __global__ __launch_bounds__(ran_tpd) void refill_surface_taucd_gauss_rand (gpu_Ran *state, int n, int *count, bool SDCD_toggle){
-	float d_p_At, d_p_Ct, d_p_Dt, d_p_g, d_p_Adt, d_p_Bdt, d_p_Cdt, d_p_Ddt, d_p_tau_d_inv; //Dynamic fdt parameters for given Nk in polydisperse solution
 	int i=blockIdx.x*blockDim.x+threadIdx.x;
 	float4 tmp;
 	float g=0.0f;

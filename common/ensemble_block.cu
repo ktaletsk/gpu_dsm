@@ -22,7 +22,6 @@
 #include "correlator.h"
 #include <vector>
 #include <unistd.h>
-#define max_sync_interval 1E5
 
 //variable arrays, that are common for all the blocks
 gpu_Ran *d_random_gens; // device random number generators
@@ -117,39 +116,34 @@ void ensemble_block::init(int nc_, vector_chains chains_, scalar_chains* chain_h
 }
 
 template<int type> int  ensemble_block::time_step(double reach_time, int correlator_type, bool* run_flag, int *progress_bar) {
-	//bind textures/surfaces, perform time evolution, unbind textures/surfaces
-
-	//Declare and create streams for parallel correlator update
-	cudaStream_t stream_calc1;
-	cudaStream_t stream_calc2;
-	cudaStream_t stream_calc3;
-	cudaStream_t stream_calc4;
+    //Declare and create streams for parallel correlator update
+    cudaStream_t stream_calc1;
+    cudaStream_t stream_calc2;
+    cudaStream_t stream_calc3;
+    cudaStream_t stream_calc4;
     cudaStream_t stream_calc5;
-    cudaStream_t stream_calc6;
     cudaStream_t stream_update;
-	cudaStreamCreate(&stream_calc1);
-	cudaStreamCreate(&stream_calc2);
-	cudaStreamCreate(&stream_calc3);
-	cudaStreamCreate(&stream_calc4);
+    cudaStreamCreate(&stream_calc1);
+    cudaStreamCreate(&stream_calc2);
+    cudaStreamCreate(&stream_calc3);
+    cudaStreamCreate(&stream_calc4);
     cudaStreamCreate(&stream_calc5);
-    cudaStreamCreate(&stream_calc6);
-	cudaStreamCreate(&stream_update);
+    cudaStreamCreate(&stream_update);
 
-	cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat); //to read float4
-	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat); //to read float
+    cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat); //to read float4
+    cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat); //to read float
 
-	//loop preparing
-	dim3 dimBlock(tpb_strent_kernel/4, tpb_strent_kernel);
-	dim3 dimGrid((z_max + dimBlock.x - 1) / dimBlock.x, (nc + dimBlock.y - 1) / dimBlock.y);
+    //loop preparing
+    dim3 dimBlock(tpb_strent_kernel/4, tpb_strent_kernel);
+    dim3 dimGrid((z_max + dimBlock.x - 1) / dimBlock.x, (nc + dimBlock.y - 1) / dimBlock.y);
 
-	dim3 dimBlockFlat(z_max, 1);
-	dim3 dimGridFlat((z_max + dimBlockFlat.x - 1) / dimBlockFlat.x, nc);
+    dim3 dimBlockFlat(z_max, 1);
+    dim3 dimGridFlat((z_max + dimBlockFlat.x - 1) / dimBlockFlat.x, nc);
 
 	steps_count = 0;
 	activate_block();
 
 	float time_step_interval = reach_time - block_time;
-	int number_of_syncs = int(floor((time_step_interval - 0.5) / max_sync_interval)) + 1;
 
 	float *rtbuffer;
 	cudaMallocHost(&rtbuffer, sizeof(float)*nc);
@@ -168,227 +162,192 @@ template<int type> int  ensemble_block::time_step(double reach_time, int correla
 
 	cudaBindSurfaceToArray(s_arm_index, d_arm_index);
 
-	//Loop begins
-	for (int i_sync = 0; i_sync < number_of_syncs; i_sync++) {
-		float sync_interval = max_sync_interval;
-		if ((i_sync + 1) == number_of_syncs)
-			sync_interval = time_step_interval - i_sync * max_sync_interval;
+    float sync_interval = time_step_interval;
 
-		bool reach_flag_all = false;
-		cudaMemset(reach_flag, 0, sizeof(float) * nc);
+    bool reach_flag_all = false;
+    cudaMemset(reach_flag, 0, sizeof(float) * nc);
 
-		//update universal_time on device
-		float tf = block_time + i_sync * max_sync_interval;
-		CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_universal_time, &tf, sizeof(float)));
-        
-		while (!reach_flag_all) {
-			if (!(steps_count & 0x00000001)) { //For odd number of steps
+    //Loop begins
+    while (!reach_flag_all) {
+       if (!(steps_count & 0x00000001)) { //For odd number of steps
 
-				cudaBindTextureToArray(t_a_QN, d_a_QN, channelDesc4);
-				cudaBindSurfaceToArray(s_b_QN, d_b_QN);
-				cudaBindTextureToArray(t_a_tCD, d_a_tCD, channelDesc1);
-				cudaBindSurfaceToArray(s_b_tCD, d_b_tCD);
-				cudaBindTextureToArray(t_a_tcr, d_a_tcr, channelDesc1);
-				cudaBindSurfaceToArray(s_b_tcr, d_b_tcr);
-				cudaBindTextureToArray(t_a_R1, d_a_R1, channelDesc4);
-				cudaBindSurfaceToArray(s_b_R1, d_b_R1);
-			}
-			else { //For even number of steps
-				cudaBindTextureToArray(t_a_QN, d_b_QN, channelDesc4);
-				cudaBindSurfaceToArray(s_b_QN, d_a_QN);
-				cudaBindTextureToArray(t_a_tCD, d_b_tCD, channelDesc1);
-				cudaBindSurfaceToArray(s_b_tCD, d_a_tCD);
-				cudaBindTextureToArray(t_a_tcr, d_b_tcr, channelDesc1);
-				cudaBindSurfaceToArray(s_b_tcr, d_a_tcr);
-				cudaBindTextureToArray(t_a_R1, d_b_R1, channelDesc4);
-				cudaBindSurfaceToArray(s_b_R1, d_a_R1);
-			}
+            cudaBindTextureToArray(t_a_QN, d_a_QN, channelDesc4);
+            cudaBindSurfaceToArray(s_b_QN, d_b_QN);
+            cudaBindTextureToArray(t_a_tCD, d_a_tCD, channelDesc1);
+            cudaBindSurfaceToArray(s_b_tCD, d_b_tCD);
+            cudaBindTextureToArray(t_a_tcr, d_a_tcr, channelDesc1);
+            cudaBindSurfaceToArray(s_b_tcr, d_b_tcr);
+            cudaBindTextureToArray(t_a_R1, d_a_R1, channelDesc4);
+            cudaBindSurfaceToArray(s_b_R1, d_b_R1);
+        }
+        else { //For even number of steps
+            cudaBindTextureToArray(t_a_QN, d_b_QN, channelDesc4);
+            cudaBindSurfaceToArray(s_b_QN, d_a_QN);
+            cudaBindTextureToArray(t_a_tCD, d_b_tCD, channelDesc1);
+            cudaBindSurfaceToArray(s_b_tCD, d_a_tCD);
+            cudaBindTextureToArray(t_a_tcr, d_b_tcr, channelDesc1);
+            cudaBindSurfaceToArray(s_b_tcr, d_a_tcr);
+            cudaBindTextureToArray(t_a_R1, d_b_R1, channelDesc4);
+            cudaBindSurfaceToArray(s_b_R1, d_a_R1);
+        }
 
+        if (texture_flag == true) {
+            cudaBindSurfaceToArray(s_corr, d_corr_b);
+        }
+        else {
+            cudaBindSurfaceToArray(s_corr, d_corr_a);
+        }
+
+        //Calculate jump probabilities
+        if(architecture==0){ //linear chains
+            strent_kernel_linear<type> <<<dimGrid, dimBlock, 0, stream_calc1>>> (chain_heads, d_dt, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time);
+            CUT_CHECK_ERROR("kernel execution failed");
+            head_tail_kernel_linear<<<(Narms_ensemble + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc2>>> (chain_heads, d_offset, d_new_strent, d_new_tau_CD);
+            CUT_CHECK_ERROR("kernel execution failed");
+            cudaStreamSynchronize(stream_calc2);
+        }
+        else if (architecture==1){ //star-branched chains
+            strent_kernel_star<type> <<<dimGrid, dimBlock, 0, stream_calc1>>> (chain_heads, d_dt, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time);
+            CUT_CHECK_ERROR("kernel execution failed");
+            head_kernel_star<3> <<<(Narms_ensemble + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc2>>> (chain_heads, d_offset, d_new_strent, d_new_tau_CD); //change 3 to desired number of arms
+            CUT_CHECK_ERROR("kernel execution failed");
+            tail_kernel_star <<<(Narms_ensemble + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc3 >>> (chain_heads, d_offset, d_new_strent);
+            CUT_CHECK_ERROR("kernel execution failed");
+            cudaStreamSynchronize(stream_calc2);
+            cudaStreamSynchronize(stream_calc3);
+        }
+
+        chain_control_kernel<type> <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc4>>> (chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_write_time, correlator_type, steps_count % stressarray_count);
+        CUT_CHECK_ERROR("kernel execution failed");
+
+        //if(architecture==0){ //linear chains
+        //    scan_kernel<0> <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1 >>> (chain_heads, d_rand_used, d_value_found, d_shift_found, d_add_rand);
+        //    CUT_CHECK_ERROR("kernel execution failed");
+        //}
+        //else if(architecture==1){ //star-branched chains
+        //    scan_kernel<1> <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1 >>> (chain_heads, d_rand_used, d_value_found, d_shift_found, d_add_rand);
+        //    CUT_CHECK_ERROR("kernel execution failed");
+        //}
+
+        if(architecture==0){ //linear chains
+            choose_kernel<0> <<<dimGridFlat, dimBlockFlat, 2 * z_max * sizeof(int), stream_calc1 >>> (chain_heads, d_rand_used, d_value_found, d_shift_found, d_add_rand);
+            CUT_CHECK_ERROR("kernel execution failed");
+        }
+        else if(architecture==1){ //star-branched chains
+            choose_kernel<1> <<<dimGridFlat, dimBlockFlat, 2 * z_max * sizeof(int), stream_calc1 >>> (chain_heads, d_rand_used, d_value_found, d_shift_found, d_add_rand);
+            CUT_CHECK_ERROR("kernel execution failed");
+        }
+
+        cudaMemcpyAsync(rtbuffer, reach_flag, sizeof(float) * nc, cudaMemcpyDeviceToHost, stream_calc4);
+        cudaStreamSynchronize(stream_calc1);
+        cudaStreamSynchronize(stream_calc4);
+
+        if(architecture==0){ //linear chains
+            chain_kernel<type, 0><<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1>>> (chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_write_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD, d_value_found, d_shift_found, d_add_rand);
+        }
+        else if (architecture==1){ //star-branched chains
+            chain_kernel<type, 1><<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1>>> (chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_write_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD, d_value_found, d_shift_found, d_add_rand);
+        }
+        CUT_CHECK_ERROR("kernel execution failed");
+
+        cudaStreamSynchronize(stream_calc1);
+        cudaStreamSynchronize(stream_calc4);
+
+        float sumrt = 0;
+        for (int i = 0; i < nc; i++)
+            sumrt += rtbuffer[i];
+        reach_flag_all = (sumrt == nc);
+
+        cudaUnbindTexture(t_a_QN);
+        cudaUnbindTexture(t_a_tCD);
+
+        steps_count++;
+
+        //copy entanglement lifetimes
+        //TODO: Should be shared between blocks
+        cudaMemcpyFromArrayAsync(entbuffer, d_ft, 0, 0, sizeof(float) * nc, cudaMemcpyDeviceToHost, stream_calc1);
+        cudaStreamSynchronize(stream_calc1);
+        for (int i = 0; i < nc; i++){
+            if ((entbuffer[i]>0.0) && (entbuffer[i]<20.0)){
+                enttime_bins[floor(entbuffer[i]*1000)]++;
+            }
+        }
+
+        // check for rand refill
+        if (steps_count % uniformrandom_count == 0) {
+            random_textures_refill(nc, 0);
+            steps_count = 0;
+        }
+
+        if (steps_count % stressarray_count == 0) {
+            cudaStreamSynchronize(stream_calc1);
+            cudaUnbindTexture(t_corr);
             if (texture_flag == true) {
-                cudaBindSurfaceToArray(s_corr, d_corr_b);
+                cudaBindTextureToArray(t_corr, d_corr_b, channelDesc4);
+                texture_flag = false;
             }
             else {
-                cudaBindSurfaceToArray(s_corr, d_corr_a);
+                cudaBindTextureToArray(t_corr, d_corr_a, channelDesc4);
+                texture_flag = true;
             }
-            //Calculate jump probabilities
-            if(architecture==0){ //linear chains
-                strent_kernel_linear<type> <<<dimGrid, dimBlock, 0, stream_calc1>>> (chain_heads, d_dt, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time);
-                CUT_CHECK_ERROR("kernel execution failed");
-                head_tail_kernel_linear<<<(Narms_ensemble + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc2>>> (chain_heads, d_offset, d_new_strent, d_new_tau_CD);
-                CUT_CHECK_ERROR("kernel execution failed");
-                cudaStreamSynchronize(stream_calc2);
+            if (type == 0 && correlator_type == 0) {
+                update_correlator <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_update >>>((corr)->gpu_corr, stressarray_count, correlator_type);
             }
-            else if (architecture==1){ //star-branched chains
-                strent_kernel_star<type> <<<dimGrid, dimBlock, 0, stream_calc1>>> (chain_heads, d_dt, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time);
-                CUT_CHECK_ERROR("kernel execution failed");
-                head_kernel_star<3> <<<(Narms_ensemble + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc2>>> (chain_heads, d_offset, d_new_strent, d_new_tau_CD); //change 3 to desired number of arms
-                CUT_CHECK_ERROR("kernel execution failed");
-                tail_kernel_star <<<(Narms_ensemble + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc3 >>> (chain_heads, d_offset, d_new_strent);
-                CUT_CHECK_ERROR("kernel execution failed");
-                cudaStreamSynchronize(stream_calc2);
-                cudaStreamSynchronize(stream_calc3);
+            if (correlator_type == 1 || correlator_type == 2) {
+                flow_stress <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_update >>>((corr)->gpu_corr, stressarray_count, stress_average, nc);
             }
+        }
 
-            chain_control_kernel<type> <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc4>>> (chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_write_time, correlator_type, steps_count % stressarray_count);
-            CUT_CHECK_ERROR("kernel execution failed");
+        // stop, if run_flag is changed from outside
+        if (*run_flag == false)
+            return -1;
+    }
 
-            if(architecture==0){ //linear chains
-                scan_kernel<0> <<<dimGridFlat, dimBlockFlat, 2 * z_max * sizeof(int), stream_calc1 >>> (chain_heads, d_rand_used, d_value_found, d_shift_found, d_add_rand);
-                CUT_CHECK_ERROR("kernel execution failed");
-            }
-            else if(architecture==1){ //star-branched chains
-                scan_kernel<1> <<<dimGridFlat, dimBlockFlat, 2 * z_max * sizeof(int), stream_calc1 >>> (chain_heads, d_rand_used, d_value_found, d_shift_found, d_add_rand);
-                CUT_CHECK_ERROR("kernel execution failed");
-            }
+    //Post-simulation processing
 
-            cudaMemcpyAsync(rtbuffer, reach_flag, sizeof(float) * nc, cudaMemcpyDeviceToHost, stream_calc4);
+    if (type==0){
+        if (steps_count % stressarray_count != 0) {
             cudaStreamSynchronize(stream_calc1);
-            cudaStreamSynchronize(stream_calc4);
-
-            if(architecture==0){ //linear chains
-                chain_kernel<type, 0><<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1>>> (chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_write_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD, d_value_found, d_shift_found, d_add_rand);
+            cudaStreamSynchronize(stream_update);
+            cudaUnbindTexture(t_corr);
+            if (texture_flag==true){
+                cudaBindTextureToArray(t_corr, d_corr_b, channelDesc4);
+                texture_flag = false;
+            } else {
+                cudaBindTextureToArray(t_corr, d_corr_a, channelDesc4);
+                texture_flag = true;
             }
-            else if (architecture==1){ //star-branched chains
-                chain_kernel<type, 1><<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_calc1>>> (chain_heads, d_dt, reach_flag, sync_interval, d_offset, d_new_strent, d_new_tau_CD, d_new_cr_time, d_write_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD, d_value_found, d_shift_found, d_add_rand);
+            if (type==0 && correlator_type==0){
+                update_correlator<<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>((corr)->gpu_corr, steps_count, correlator_type);
             }
-            CUT_CHECK_ERROR("kernel execution failed");
-            
-            cudaStreamSynchronize(stream_calc1);
-            cudaStreamSynchronize(stream_calc4);
-            
-			float sumrt = 0;
-			for (int i = 0; i < nc; i++)
-				sumrt += rtbuffer[i];
-			reach_flag_all = (sumrt == nc);
+            if (correlator_type==1 || correlator_type==2){
+                flow_stress<<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>((corr)->gpu_corr, steps_count, stress_average, nc);
+            }
+        }
+    }
 
-			cudaUnbindTexture(t_a_QN);
-			cudaUnbindTexture(t_a_tCD);
+    block_time = reach_time;
+    cudaHostUnregister(rtbuffer);
+    cudaHostUnregister(tbuffer);
+    cudaHostUnregister(entbuffer);
+    cudaFreeHost(rtbuffer);
+    cudaFreeHost(tbuffer);
+    cudaFreeHost(entbuffer);
+    deactivate_block();
+    cudaStreamDestroy(stream_update);
+    cudaStreamDestroy(stream_calc1);
 
-			steps_count++;
-
-//			copy entanglement lifetimes
-			cudaMemcpyFromArrayAsync(entbuffer, d_ft, 0, 0, sizeof(float) * nc, cudaMemcpyDeviceToHost, stream_calc1);
-			cudaStreamSynchronize(stream_calc1);
-			for (int i = 0; i < nc; i++){
-				if ((entbuffer[i]>0.0) && (entbuffer[i]<20.0)){
-					enttime_bins[floor(entbuffer[i]*1000)]++;
-				}
-			}
-			//Should be shared between blocks...
-
-			// update progress bar
-//			if (steps_count % 50 == 0) {
-//				cudaStreamSynchronize(stream_calc);
-//				cudaMemcpyAsync(tbuffer, d_write_time, sizeof(int) * nc, cudaMemcpyDeviceToHost, stream_calc);
-//				cudaStreamSynchronize(stream_calc);
-//				int sumt = 0;
-//				for (int i = 0; i < nc; i++)
-//					sumt += tbuffer[i];
-//				*progress_bar = (int)(100.0f * sumt / (nc) / reach_time);
-//				//cout << "\r" << *progress_bar << "%\t ";
-//			}
-
-			// check for reached time
-//			cudaMemcpyAsync(rtbuffer, reach_flag, sizeof(float) * nc, cudaMemcpyDeviceToHost, stream_calc1);
-
-			// check for rand refill
-			if (steps_count % uniformrandom_count == 0) {
-				random_textures_refill(nc, 0);
-				steps_count = 0;
-			}
-
-			if (steps_count % stressarray_count == 0) {
-				cudaStreamSynchronize(stream_calc1);
-				cudaUnbindTexture(t_corr);
-				if (texture_flag == true) {
-					cudaBindTextureToArray(t_corr, d_corr_b, channelDesc4);
-					texture_flag = false;
-				}
-				else {
-					cudaBindTextureToArray(t_corr, d_corr_a, channelDesc4);
-					texture_flag = true;
-				}
-				if (type == 0 && correlator_type == 0) {
-					update_correlator <<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_update >>>((corr)->gpu_corr, stressarray_count, correlator_type);
-				}
-				if (correlator_type == 1 || correlator_type == 2) {
-					flow_stress << <(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel, 0, stream_update >> >((corr)->gpu_corr, stressarray_count, stress_average, nc);
-				}
-			}
-
-			// stop, if run_flag is changed from outside
-			if (*run_flag == false)
-				return -1;
-		}
-        //Cool GPU by pausing for a moment
-        //usleep(60000000);
-
-	}	//loop ends
-
-	if (type==0){
-		if (steps_count % stressarray_count != 0) {
-			cudaStreamSynchronize(stream_calc1);
-			cudaStreamSynchronize(stream_update);
-			cudaUnbindTexture(t_corr);
-			if (texture_flag==true){
-				cudaBindTextureToArray(t_corr, d_corr_b, channelDesc4);
-				texture_flag = false;
-			} else {
-				cudaBindTextureToArray(t_corr, d_corr_a, channelDesc4);
-				texture_flag = true;
-			}
-			if (type==0 && correlator_type==0){
-				update_correlator<<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>((corr)->gpu_corr, steps_count, correlator_type);
-			}
-			if (correlator_type==1 || correlator_type==2){
-				flow_stress<<<(nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>((corr)->gpu_corr, steps_count, stress_average, nc);
-			}
-		}
-	}
-
-	block_time = reach_time;
-	cudaHostUnregister(rtbuffer);
-	cudaFreeHost(rtbuffer);
-	deactivate_block();
-	cudaStreamDestroy(stream_update);
-	cudaStreamDestroy(stream_calc1);
-
-	//output entanglement lifetime distribution
-	unsigned long long enttime_sum = 0;
-	for (int it = 0; it < enttime_bins.size(); ++it) {
-		enttime_sum += enttime_bins[it];
-	}
-
-	ofstream lifetime_file;
-	lifetime_file.open(filename_ID("fdt", false));
-	unsigned long long enttime_run_sum = 0;
-	for (int it = 0; it < enttime_bins.size(); ++it){
-		if (enttime_bins[it] != 0){
-			enttime_run_sum += enttime_bins[it];
-			//lifetime_file << powf(10.0f,it/1000.0f-10.0f) << '\t' << 1.0f - (float)enttime_run_sum / (float)enttime_sum << '\n'; //output in final format
-            lifetime_file << it << '\t' << enttime_bins[it] << '\n'; //OR output in stackable format to combine results from distributed calculations
-		}
-	}
-	lifetime_file.close();
-
-//	if (correlator_type==1){
-//		cudaDeviceSynchronize();
-//		for (int i=0; i < nsteps; i++){//lag time
-//			double temp = 0.0;
-//			for (int j=0; j< nsteps - i; j++){//first time
-//				for (int k=0; k<nc; k++){
-//					temp += (double)(stress_average[(i+j)*nc+k].x - stress_average[j*nc+k].x)*(double)(stress_average[(i+j)*nc+k].x - stress_average[j*nc+k].x)+(double)(stress_average[(i+j)*nc+k].y - stress_average[j*nc+k].y)*(double)(stress_average[(i+j)*nc+k].y - stress_average[j*nc+k].y) + (double)(stress_average[(i+j)*nc+k].z - stress_average[j*nc+k].z)*(double)(stress_average[(i+j)*nc+k].z - stress_average[j*nc+k].z);
-//				}
-//			}
-//			cout << "\n" << temp / (double)(nsteps - i) / (double)nc;
-//		}
-
-
-//		for (int i=0; i < nsteps; i++){//lag time
-//			cout << "\n" << stress_average[i].x << "\t" << stress_average[i].y << "\t" << stress_average[i].z;
-//		}
-//	}
-	return 0;
+    ofstream lifetime_file;
+    lifetime_file.open(filename_ID("fdt", false));
+    unsigned long long enttime_run_sum = 0;
+    for (int it = 0; it < enttime_bins.size(); ++it){
+        if (enttime_bins[it] != 0){
+            enttime_run_sum += enttime_bins[it];
+            lifetime_file << it << '\t' << enttime_bins[it] << '\n'; //output in stackable format to combine results from distributed calculations
+        }
+    }
+    lifetime_file.close();
+    return 0;
 }
 
 int ensemble_block::equilibrium_calc(double length, int correlator_type, bool* run_flag, int *progress_bar, int np, float* t, float* x){
@@ -540,9 +499,6 @@ void ensemble_block::activate_block() {
 	cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
 	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(dn_cha_per_call, &nc, sizeof(int)));
-
-	float tf = block_time;
-	CUDA_SAFE_CALL(cudaMemcpyToSymbol(d_universal_time, &tf, sizeof(float)));
 
 	if (!(steps_count & 0x00000001)) {
 		cudaMemcpy2DToArray(d_a_QN, 0, 0, chains.QN, z_max * sizeof(float) * 4, z_max * sizeof(float) * 4, nc, cudaMemcpyDeviceToDevice);

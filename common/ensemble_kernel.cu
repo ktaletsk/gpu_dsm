@@ -53,7 +53,6 @@
 #include "chain.h"
 
 //d means device variables
-__constant__ float d_universal_time;
 __constant__ float dBe;
 __constant__ int dnk;
 __constant__ int dnk_arms[100];
@@ -270,7 +269,7 @@ template<int type> __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_ker
 		QN = kappa(QN, dt);
 	}
 
-	//printf("\ni=%i\tarm=%i\tstrent=%i\tQ=%f\t%f\t%f\tN=%f\tT=%f", i, arm, ii, QN.x, QN.y, QN.z, QN.w, d_universal_time + chain_heads[j].time);
+	//printf("\ni=%i\tarm=%i\tstrent=%i\tQ=%f\t%f\t%f\tN=%f\tT=%f", i, arm, ii, QN.x, QN.y, QN.z, QN.w, chain_heads[j].time);
 
 	//fetch next strent
 	if ((ii > 0) && (ii < tz - 1)) {
@@ -330,7 +329,6 @@ __global__ void head_tail_kernel_linear(scalar_chains* chain_heads, int *d_offse
     float4 QNhead; //first strent
     float4 QNheadn; //next after the first strent
     float4 new_strent = d_new_strent[i];
-    float new_tau_CD = d_new_tau_CD[i];
 
     int tz = chain_heads[i].Z[0];
 
@@ -536,8 +534,88 @@ template<int narms> __global__ void head_kernel_star(scalar_chains* chain_heads,
 }
 
 template<int arch_type> __global__ void scan_kernel(scalar_chains* chain_heads, int *rand_used, int* found_index,  int* found_shift, float* add_rand) {
+    long long int s;
+    int ii, arm;
+
+    //Calculate kernel index
+    int i;
+    int j = blockIdx.x * blockDim.x + threadIdx.x;//chain index
+    if (j >= dn_cha_per_call)
+        return;
+    int4 temp = make_int4(0, 0, 0, 0);
+    int sum = 0;
+    int sum2 = 0;
+    int tz = chain_heads[j].Z[0];
+
+    for (i=0; i<=tz; i++){
+        surf2Dread(&temp, s_probs, sizeof(int4)*i, j);
+        sum+=d_CD_flag ? temp.x + temp.y + temp.z + temp.w : temp.x + temp.y;
+    }
+
+    surf2Dwrite(float(sum)/PROBS_CUTOFF, s_sum_W_sorted, sizeof(float)*(d_z_max-1), j);
+
+    //search
+    float ran = tex2D(t_uniformrand, rand_used[j], j);
+    int x = ceil((double)sum*(double)ran);
+    bool xFound;
+    bool yFound;
+    bool zFound;
+    bool wFound;
+    for (i=0; i<=chain_heads[j].Z[0] && sum2<x; i++){
+        surf2Dread(&temp, s_probs, sizeof(int4)*i, j);
+
+        xFound = (sum2 < x) && (x <= sum2 + temp.x);
+        sum2 += temp.x;
+        yFound = (sum2 < x) && (x <= sum2 + temp.y);
+        sum2 += temp.y;
+        if(d_CD_flag){
+            zFound = (sum2 < x) && (x <= sum2 + temp.z);
+            sum2 += temp.z;
+            wFound = (sum2 < x) && (x <= sum2 + temp.w);
+            sum2 += temp.w;
+        }
+    }
+    i--;
+    ii=i;
+
+    if (xFound || yFound || zFound || wFound) {
+        found_index[j] = i;
+        if (xFound){
+            found_shift[j] = 0;
+            if(ii == chain_heads[j].Z[arm] - 1){//destruction by SD at the end
+                found_index[j] = i-1;
+                found_shift[j] = 5;
+            }
+            if(ii == chain_heads[j].Z[arm]){//destruction by SD in the beginning
+                found_index[j] = 0;
+                found_shift[j] = 5;
+            }
+        }
+        else if (yFound){
+            found_shift[j] = 1;
+            if(ii == chain_heads[j].Z[arm] - 1){//creation by SD at the end
+                found_shift[j] = 3;
+            }
+            if(ii == chain_heads[j].Z[arm]){//creation by SD in the beginning
+                found_index[j] = 0;
+                found_shift[j] = 6;
+            }
+        }
+        else if (zFound)	found_shift[j] = 2; //destruction by CD
+        else if (wFound) {
+            found_shift[j] = 4; //creation by CD
+            add_rand[j] = (float)(x - (sum2 - temp.w)) / (float)temp.w;
+        }
+    }
+    else{
+        printf("\nError! No jump chosen. Chain %i Strent %i\t%i\t%i\t%i\t%i\t%f\t%i", j, i, temp.x, temp.y, temp.z, temp.w, ran, x);
+    }
+    //if(j==60)    printf("\nIndex %i\tShift %i",found_index[j],found_shift[j]);
+}
+
+template<int arch_type> __global__ void choose_kernel(scalar_chains* chain_heads, int *rand_used, int* found_index,  int* found_shift, float* add_rand) {
 	extern __shared__ long long int s[];
-    int ii, jj, arm;
+    int ii, arm;
 	//Calculate kernel index
 	int i = blockIdx.x * blockDim.x + threadIdx.x;//strent index
 	int j = blockIdx.y * blockDim.y + threadIdx.y;//chain index
@@ -551,7 +629,7 @@ template<int arch_type> __global__ void scan_kernel(scalar_chains* chain_heads, 
 		surf2Dread(&temp, s_probs, sizeof(int4)*i, j);
 	}
 
-	//parallel scan in s
+    //parallel scan in s
     //if (i==chain_heads[j].Z[0]) printf("\n%i\t%f\t%i\t%i",j,chain_heads[j].time,temp.x, temp.y);
     long long int var = d_CD_flag ? temp.x + temp.y + temp.z + temp.w : temp.x + temp.y;
 
@@ -588,9 +666,8 @@ template<int arch_type> __global__ void scan_kernel(scalar_chains* chain_heads, 
 	surf2Dwrite((float)(s[i])/PROBS_CUTOFF, s_sum_W_sorted, sizeof(float)*i, j);
 	//search
 	float ran = tex2D(t_uniformrand, rand_used[j], j);
-	long long int x = ceil((float)s[d_z_max-1]*ran);
+	long long int x = ceil((double)s[d_z_max-1]*(double)ran);
 	long long int left = (i==0)? 0 : s[i - 1];
-	long long int right = s[i];
 
 	bool xFound = (left < x) && (x <= left + temp.x);
 	bool yFound = (left + temp.x < x) && (x <= left + temp.x + temp.y);
@@ -599,7 +676,6 @@ template<int arch_type> __global__ void scan_kernel(scalar_chains* chain_heads, 
 
     if (arch_type==0){ //For linear
         ii = i;
-        jj = j;
         arm = 0;
     }
     else if (arch_type==1){ //For star-branched
@@ -609,7 +685,6 @@ template<int arch_type> __global__ void scan_kernel(scalar_chains* chain_heads, 
             run_sum+=d_z_max_arms[arm];
         }
         ii = i-run_sum;
-        jj = j*d_narms+arm;
     }
 
     //printf("\nChain %i\tStrent %i\tZ %i",j,i,chain_heads[j].Z[arm]);
@@ -786,10 +861,10 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_con
         return;
     }
 
-    if (((chain_heads[i].time >= next_sync_time) && (d_universal_time + next_sync_time <= d_write_time[i] * d_correlator_res)) || (chain_heads[i].stall_flag != 0)) {
+    if (((chain_heads[i].time >= next_sync_time) && (next_sync_time <= d_write_time[i] * d_correlator_res)) || (chain_heads[i].stall_flag != 0)) {
         reach_flag[i] = 1;
 
-        //printf("\nreach_flag[i]=%f\ttime=%f", reach_flag[i], d_universal_time + chain_heads[i].time);
+        //printf("\nreach_flag[i]=%f\ttime=%f", reach_flag[i], chain_heads[i].time);
         chain_heads[i].time -= next_sync_time;
         tdt[i] = 0.0f;
         for (int u = 0; u<d_narms; u++) {
@@ -801,7 +876,7 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_con
     float4 new_strent = d_new_strent[i];
 
     //check for correlator
-    if (d_universal_time + chain_heads[i].time > d_write_time[i] * d_correlator_res) { //TODO add d_correlator_time to gpu_chain_heads
+    if (chain_heads[i].time > d_write_time[i] * d_correlator_res) { //TODO add d_correlator_time to gpu_chain_heads
         if (correlator_type == 0) {//stress calc
             int run_sum_ = 0;
             for (int arm_ = 0; arm_ < d_narms; arm_++) {
@@ -830,7 +905,6 @@ template<int type> __global__ __launch_bounds__(tpb_chain_kernel) void chain_con
 
 __device__ void apply_shuffle_linear(int k, int i, int j, float4 new_strent, scalar_chains* chain_heads, int *d_offset) {
     //setup local variables
-    int tz = chain_heads[i].Z[0];
     uint oft = d_offset[i];
 
     float4 QN1 = read_strent(i, j,   oft, new_strent);
@@ -866,7 +940,6 @@ __device__ void apply_shuffle_star(int k, int i, int j, float4 new_strent, scala
     int jj = j-run_sum;
     int ii = i*d_narms+arm;
 
-    int tz = chain_heads[i].Z[arm];
     uint oft = d_offset[ii];
 
     float4 QN1 = read_strent(i, j,   oft, new_strent);
@@ -961,7 +1034,7 @@ __device__ void apply_destroy_linear(int k, int i, int j, float4 new_strent, sca
         cr_time = tex2D(t_a_tcr, make_offset(j, oft), i);
     }
     if (cr_time != 0) { //cr_time==0 means entanglement was created before simulation started, we just ignore those for calculating f_d(t)
-        surf1Dwrite(log10f(d_universal_time + chain_heads[i].time - cr_time) + 10, s_ft, i * sizeof(float)); //calulate bin index for entanglement lifetime
+        surf1Dwrite(log10f(chain_heads[i].time - cr_time) + 10, s_ft, i * sizeof(float)); //calulate bin index for entanglement lifetime
         // bin = log10(lifetime) + 10; we can capture times from 10^-10 up to 10^??
     }
 
@@ -992,7 +1065,6 @@ __device__ void apply_destroy_star(int k, int i, int j, float4 new_strent, scala
 
     float4 deltaQ;
     if (chain_heads[i].Z[arm]==1) { //arm go unentangled as a result of entanglement destruction
-        float4 temp_;
         int run_sum_ = 0;
         bool unent = true; //if all arms are unentangled -> set temp as (0,0,0)
         float sumNinv = 0.0f;
@@ -1066,7 +1138,7 @@ __device__ void apply_destroy_star(int k, int i, int j, float4 new_strent, scala
         cr_time = tex2D(t_a_tcr, make_offset(jj + run_sum, oft), i);
     }
     if (cr_time != 0) { //cr_time==0 means entanglement was created before simulation started, we just ignore those for calculating f_d(t)
-        surf1Dwrite(log10f(d_universal_time + chain_heads[i].time - cr_time) + 10, s_ft, i * sizeof(float)); //calulate bin index for entanglement lifetime
+        surf1Dwrite(log10f(chain_heads[i].time - cr_time) + 10, s_ft, i * sizeof(float)); //calulate bin index for entanglement lifetime
         // bin = log10(lifetime) + 10; we can capture times from 10^-10 up to 10^??
     }
 
@@ -1090,7 +1162,7 @@ __device__ void apply_create_SD_linear(int k, int i, int j, float4 new_strent, s
     tau_CD_used_SD[i]++;
     chain_heads[i].Z[0]++;
     d_new_tau_CD[i] = temp.w;
-    d_new_cr_time[i] = d_universal_time + chain_heads[i].time;
+    d_new_cr_time[i] = chain_heads[i].time;
 
     temp.w = QN1.w - 1.0f;
 
@@ -1133,7 +1205,7 @@ __device__ void apply_create_SD_star(int k, int i, int j, float4 new_strent, sca
     tau_CD_used_SD[i]++;
     chain_heads[i].Z[arm]++;
     d_new_tau_CD[i] = temp.w;
-    d_new_cr_time[i] = d_universal_time + chain_heads[i].time;
+    d_new_cr_time[i] = chain_heads[i].time;
 
     temp.w = QN1.w - 1.0f;
 
