@@ -92,50 +92,32 @@ def gt_fit():
 
     fits_1 = [] #output of fitting function for all tested numbers of modes
     successful_fits_1 = [] #number of modes for successful fits
-    for nmodes in range(2, 15):
+
+    lambdaArrInit=np.e**(np.log(tstart)+(np.array(range(2), float))/(np.log(tfinal)-np.log(tstart)))
+    fit = np.linalg.lstsq(np.exp(-np.outer(x,1.0/lambdaArrInit)), y)[0]
+    fits_1.append(fit)
+    min_log_SME = log_MSE_MMM(np.append(lambdaArrInit, fit))
+    best_fit = 2
+    print(2, fit, MSE_MMM(np.append(lambdaArrInit, fit)))
+
+    for nmodes in range(3, 15):
         lambdaArrInit=np.e**(np.log(tstart)+(np.array(range(nmodes), float))/(nmodes-1)*(np.log(tfinal)-np.log(tstart)))
         fit = np.linalg.lstsq(np.exp(-np.outer(x,1.0/lambdaArrInit)), y)[0]
         fits_1.append(fit)
+        print(nmodes, fit, MSE_MMM(np.append(lambdaArrInit, fit)), log_MSE_MMM(np.append(lambdaArrInit, fit)))
+
         #if not np.any(Gt_MMM_vec(time=x, params=np.append(lambdaArrInit, fit)) < 0):
-        if not np.any(fit < 0):
-            successful_fits_1.append(nmodes)
-            print(nmodes, fit, MSE_MMM(np.append(lambdaArrInit, fit)))
-    print(successful_fits_1)
+        if not np.any(fit < 0) and log_MSE_MMM(np.append(lambdaArrInit, fit))<min_log_SME:
+            min_log_SME = log_MSE_MMM(np.append(lambdaArrInit, fit))
+            best_fit = nmodes
 
-    fits_2 = [] #output of fitting function for all tested numbers of modes
-    min_log_SME = log_MSE_MMM(fits_1[successful_fits_1[0]-2])
-    best_nmodes = successful_fits_1[0]
 
-    for i in successful_fits_1:
-        fit = fits_1[i-2]
-        nmodes = i
-        lambdaArrInit=np.e**(np.log(tstart)+(np.array(range(nmodes), float))/(nmodes-1)*(np.log(tfinal)-np.log(tstart)))
-        print('nmodes\t{0}'.format(i))
-
-        fit2 = least_squares(residuals_log_Gt_MMM, np.append(lambdaArrInit, fit), xtol=1e-14, ftol=1e-14)
-        fits_2.append(fit2)
-
-        print('First fit log-MSE\t{0}'.format(log_MSE_MMM(np.append(lambdaArrInit, fit))))
-
-        if fit2.success:
-            weights = np.split(fit2.x, 2)[1]/np.sum(np.split(fit2.x, 2)[1])
-            if log_MSE_MMM(fit2.x)<min_log_SME and not np.any(weights<0):
-                min_log_SME = log_MSE_MMM(fit2.x)
-                best_fit = fit2
-                best_nmodes = i
-                print('Good fit')
-            print('Second fit log-MSE\t{0}'.format(log_MSE_MMM(fit2.x)))
-            print(fit2.message)
-            print('Weights\t{0}'.format(weights))
-
-        print(' ')
-
-    fit2 = best_fit
-    li=np.split(fit2.x,2)[0]
-    gi=GN0*np.split(fit2.x,2)[1]/np.sum(np.split(fit2.x,2)[1])
+    fit = fits_1[nmodes-2]
+    li=np.e**(np.log(tstart)+(np.array(range(best_fit), float))/(best_fit-1)*(np.log(tfinal)-np.log(tstart)))
+    gi=fit
     result=zip(li, gi)
     f = open('gt_MMM_fit.dat','w')
-    f.write(str(best_nmodes))
+    f.write(str(best_fit))
     for i in result:
         f.write('\n'+str(i[0])+'\t'+str(i[1]))
     f.close()
