@@ -135,6 +135,40 @@ class Calculation(object):
         self.save()
         return
 
+    #Read results from file
+    def read_results(self):
+        #Read f_d(t) simulation results and fit
+        with open(self.token + '/fdt_aver.dat') as f:
+            lines = f.readlines()
+            self.fdt_x = np.array([float(line.split()[0]) for line in lines])
+            ydata = np.array([float(line.split()[1]) for line in lines])
+
+        self.fdt_y = 1.0-np.cumsum(ydata)/np.sum(ydata)
+
+        #Read result_f_d(t)
+        with open(self.token + '/fdt_result.dat') as f:
+            lines = f.readlines()
+            self.fdt_result_x = np.array([float(line.split()[0]) for line in lines])
+            self.fdt_result_y = np.array([float(line.split()[1]) for line in lines])
+
+        with open(self.token + '/fdt_MMM_fit.dat') as f:
+            lines = f.readlines()
+        self.lambdaArr = np.array([float(line.split()[0]) for line in lines[1:]])
+        self.gArr = np.array([float(line.split()[1]) for line in lines[1:]])
+
+        #Read result_G(t)
+        with open(self.token + '/gt_result.dat') as f:
+            lines = f.readlines()
+            self.gt_result_x = np.array([float(line.split()[0]) for line in lines])
+            self.gt_result_y = np.array([float(line.split()[1]) for line in lines])
+
+        with open(self.token + '/gt_MMM_fit.dat') as f:
+            lines = f.readlines()
+        self.gt_lambdaArr = np.array([float(line.split()[0]) for line in lines[1:]])
+        self.gt_gArr = np.array([float(line.split()[1]) for line in lines[1:]])
+
+        return
+
     #Function to check the status of calculation
     def check_self(self):
         if self.jobStatus==0:
@@ -145,36 +179,7 @@ class Calculation(object):
                 self.jobStatus=2
                 print('Calculation is done. Transfering results')
                 job_transfer_clean(ssh, self.token)
-
-                #Read f_d(t) simulation results and fit
-                with open(self.token + '/fdt_aver.dat') as f:
-                    lines = f.readlines()
-                    self.fdt_x = np.array([float(line.split()[0]) for line in lines])
-                    ydata = np.array([float(line.split()[1]) for line in lines])
-
-                self.fdt_y = 1.0-np.cumsum(ydata)/np.sum(ydata)
-
-                #Read result_f_d(t)
-                with open(self.token + '/fdt_result.dat') as f:
-                    lines = f.readlines()
-                    self.fdt_result_x = np.array([float(line.split()[0]) for line in lines])
-                    self.fdt_result_y = np.array([float(line.split()[1]) for line in lines])
-
-                with open(self.token + '/fdt_MMM_fit.dat') as f:
-                    lines = f.readlines()
-                self.lambdaArr = np.array([float(line.split()[0]) for line in lines[1:]])
-                self.gArr = np.array([float(line.split()[1]) for line in lines[1:]])
-
-                #Read result_G(t)
-                with open(self.token + '/gt_result.dat') as f:
-                    lines = f.readlines()
-                    self.gt_result_x = np.array([float(line.split()[0]) for line in lines])
-                    self.gt_result_y = np.array([float(line.split()[1]) for line in lines])
-
-                with open(self.token + '/gt_MMM_fit.dat') as f:
-                    lines = f.readlines()
-                self.gt_lambdaArr = np.array([float(line.split()[0]) for line in lines[1:]])
-                self.gt_gArr = np.array([float(line.split()[1]) for line in lines[1:]])
+                read_results(self)
             else:
                 print('Still running, check back later')
         else:
