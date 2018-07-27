@@ -112,7 +112,7 @@ def gt_fit():
             best_fit = nmodes
 
 
-    fit = fits_1[nmodes-2]
+    fit = fits_1[best_fit-2]
     li=np.e**(np.log(tstart)+(np.array(range(best_fit), float))/(best_fit-1)*(np.log(tfinal)-np.log(tstart)))
     gi=fit
     result=zip(li, gi)

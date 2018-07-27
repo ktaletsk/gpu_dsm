@@ -258,7 +258,7 @@ class Calculation(object):
         ax1.set_ylabel(r'log residuals')
 
         ax1.scatter(self.gt_result_x, self.gt_result_y, c='r', label=r'Simulation')
-        ax1.plot(self.gt_result_x, sum(self.gt_gArr)*Gt_MMM_vec(time=self.gt_result_x, params=np.append(self.gt_lambdaArr, self.gt_gArr)), c='b', label=r'MMM fit')
+        ax1.plot(self.gt_result_x, self.gt_result_y[0]*Gt_MMM_vec(time=self.gt_result_x, params=np.append(self.gt_lambdaArr, self.gt_gArr)), c='b', label=r'MMM fit')
 
         leg = ax1.legend()
         ax1.set_xscale('log')
@@ -270,8 +270,8 @@ class Calculation(object):
         ax2.set_xlabel(r'$\omega$')
         ax2.set_ylabel(r'$G*$')
 
-        ax2.plot(omegaArr,Gp_MMM_vec(omega=omegaArr,params=np.append(self.gt_lambdaArr, self.gt_gArr)), c='k', label=r'$G^\prime$')
-        ax2.plot(omegaArr,Gdp_MMM_vec(omega=omegaArr,params=np.append(self.gt_lambdaArr, self.gt_gArr)), c='k', label=r'$G^{\prime\prime}$')
+        ax2.plot(omegaArr,self.gt_result_y[0]*Gp_MMM_vec(omega=omegaArr,params=np.append(self.gt_lambdaArr, self.gt_gArr)), c='k', label=r'$G^\prime$')
+        ax2.plot(omegaArr,self.gt_result_y[0]*Gdp_MMM_vec(omega=omegaArr,params=np.append(self.gt_lambdaArr, self.gt_gArr)), c='k', label=r'$G^{\prime\prime}$')
 
         leg = ax2.legend()
         ax2.set_yscale('log')
