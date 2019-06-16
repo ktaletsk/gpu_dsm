@@ -158,13 +158,11 @@ void gpu_init(int seed, p_cd* pcd, int s) {
 
 	cudaMallocArray(&d_a_QN, &channelDesc4, z_max, rsz, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_a_tCD, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
-	cudaMallocArray(&d_a_R1, &channelDesc4, rsz, 1, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_corr_a, &channelDesc4, rsz, stressarray_count, cudaArraySurfaceLoadStore);
 
 
 	cudaMallocArray(&d_b_QN, &channelDesc4, z_max, rsz, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_b_tCD, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
-	cudaMallocArray(&d_b_R1, &channelDesc4, rsz, 1, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_corr_b, &channelDesc4, rsz, stressarray_count, cudaArraySurfaceLoadStore);
 
 	cudaMallocArray(&d_sum_W, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
@@ -521,8 +519,6 @@ void gpu_clean() {
 	cudaFreeArray(d_a_tCD);
 	cudaFreeArray(d_b_QN);
 	cudaFreeArray(d_b_tCD);
-	cudaFreeArray(d_a_R1);
-	cudaFreeArray(d_b_R1);
 	cudaFreeArray(d_corr_a);
 	cudaFreeArray(d_corr_b);
 	cudaFreeArray(d_sum_W);

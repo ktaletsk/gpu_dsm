@@ -243,7 +243,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 		chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
 		float next_sync_time, int *d_offset, float4 *d_new_strent,
 		float *d_new_tau_CD, int *d_correlator_time, int correlator_type,
-		int *rand_used, int *tau_CD_used_CD, int *tau_CD_used_SD, int stress_index) {
+		int *rand_used, int *tau_CD_used_CD, int *tau_CD_used_SD, int stress_index,float4 *pR1) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x; //Chain index
 	if (i >= dn_cha_per_call)
 		return;
@@ -274,8 +274,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 
 	float4 R1;
 	if (correlator_type==1){
-		R1 = tex1D(t_a_R1,i);
-		surf1Dwrite(R1,s_b_R1,i*sizeof(float4));
+        R1=pR1[i];
 	}
 
 	//check for correlator
@@ -391,7 +390,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 			W_SD_c_z = __fdividef(2.0f, dBe * (QNtail.w + 0.5f));
 		}
 	}
-
+	
 	double sumW = sum_wshpm + W_SD_c_1 + W_SD_c_z + W_SD_d_1 + W_SD_d_z + W_CD_c_z;
 	tdt[i] = fdivide(1.0f, sumW);
 	if (tdt[i] == 0.0f)
@@ -452,7 +451,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 				delta_R1.y = QN2.y;
 				delta_R1.z = QN2.z;
 				R1+=delta_R1;
-				surf1Dwrite(R1,s_b_R1,i*sizeof(float4));
+                pR1[i]=R1;
 			}
 
 			return;
@@ -536,7 +535,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 					delta_R1.y = -temp.y;
 					delta_R1.z = -temp.z;
 					R1 += delta_R1;
-					surf1Dwrite(R1,s_b_R1,i*sizeof(float4));
+                    pR1[i]=R1;                    
 				}
 				return;
 			}
@@ -611,7 +610,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 				delta_R1.y = - temp.y;
 				delta_R1.z = - temp.z;
 				R1+=delta_R1;
-				surf1Dwrite(R1,s_b_R1,i*sizeof(float4));
+                pR1[i]=R1;
 			}
 
 			d_offset[i] = offset_code(0, -1);
@@ -650,7 +649,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 					delta_R1 = new_strent;
 				R1.w=0.0f;
 				R1+=delta_R1;
-				surf1Dwrite(R1,s_b_R1,i*sizeof(float4));
+                pR1[i]=R1;
 			}
 
 		} else {
