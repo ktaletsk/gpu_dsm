@@ -239,9 +239,9 @@ void random_textures_fill(int n_cha) {
 	cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
 	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
 
-	cudaMallocArray(&(d_taucd_gauss_rand_CD), &channelDesc4, uniformrandom_count, n_cha, cudaArraySurfaceLoadStore);
-	cudaMallocArray(&(d_taucd_gauss_rand_SD), &channelDesc4, uniformrandom_count, n_cha, cudaArraySurfaceLoadStore);
-	cudaMallocArray(&(d_uniformrand), &channelDesc1, uniformrandom_count, n_cha, cudaArraySurfaceLoadStore);
+	cudaMalloc(&d_taucd_gauss_rand_CD, uniformrandom_count* n_cha*sizeof(float4));
+	cudaMalloc(&d_taucd_gauss_rand_SD, uniformrandom_count* n_cha*sizeof(float4));
+	cudaMalloc(&d_uniformrand, uniformrandom_count* n_cha*sizeof(float));
 
 	cudaMalloc((void**) &d_rand_used, sizeof(int) * n_cha);
 	cudaMemset(d_rand_used, 0, sizeof(int) * n_cha);
@@ -257,9 +257,6 @@ void random_textures_fill(int n_cha) {
 	gr_fill_surface_taucd_gauss_rand(d_random_gens2, n_cha, taucd_gauss_count, false, d_taucd_gauss_rand_CD,0); //Set array with random numbers
 	gr_fill_surface_taucd_gauss_rand(d_random_gens2, n_cha, taucd_gauss_count, true,  d_taucd_gauss_rand_SD,0);
 
-	cudaBindTextureToArray(t_uniformrand, d_uniformrand, channelDesc1);
-	cudaBindTextureToArray(t_taucd_gauss_rand_CD, d_taucd_gauss_rand_CD, channelDesc4);
-	cudaBindTextureToArray(t_taucd_gauss_rand_SD, d_taucd_gauss_rand_SD, channelDesc4);
 }
 
 void random_textures_refill(int n_cha, cudaStream_t stream_calc) {
@@ -269,19 +266,14 @@ void random_textures_refill(int n_cha, cudaStream_t stream_calc) {
 	cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
 	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
 
-	cudaUnbindTexture(t_uniformrand);
 	gr_fill_surface_uniformrand(d_random_gens, n_cha, uniformrandom_count, d_uniformrand, stream_calc);
 	cudaMemsetAsync(d_rand_used, 0, sizeof(int) * n_cha, stream_calc);
-	cudaBindTextureToArray(t_uniformrand, d_uniformrand, channelDesc);
 
 	//tau_cd gauss 3d vector
-	cudaUnbindTexture(t_taucd_gauss_rand_CD);
 	gr_refill_surface_taucd_gauss_rand(d_random_gens2, n_cha, d_tau_CD_used_CD,false, d_taucd_gauss_rand_CD,stream_calc);
 	gr_refill_surface_taucd_gauss_rand(d_random_gens2, n_cha, d_tau_CD_used_SD, true, d_taucd_gauss_rand_SD,stream_calc);
 	cudaMemsetAsync(d_tau_CD_used_CD, 0, sizeof(int) * n_cha, stream_calc);
 	cudaMemsetAsync(d_tau_CD_used_SD, 0, sizeof(int) * n_cha, stream_calc);
-	cudaBindTextureToArray(t_taucd_gauss_rand_CD, d_taucd_gauss_rand_CD, channelDesc4);
-	cudaBindTextureToArray(t_taucd_gauss_rand_SD, d_taucd_gauss_rand_SD, channelDesc4);
 //	cudaDeviceSynchronize();
 }
 
@@ -524,9 +516,9 @@ void gpu_clean() {
 	cudaFreeArray(d_sum_W);
 	cudaFreeArray(d_stress);
 
-	cudaFreeArray(d_uniformrand);
-	cudaFreeArray(d_taucd_gauss_rand_CD);
-	cudaFreeArray(d_taucd_gauss_rand_SD);
+	cudaFree(d_uniformrand);
+	cudaFree(d_taucd_gauss_rand_CD);
+	cudaFree(d_taucd_gauss_rand_SD);
 
 	cudaFree(d_tau_CD_used_SD);
 	cudaFree(d_tau_CD_used_CD);

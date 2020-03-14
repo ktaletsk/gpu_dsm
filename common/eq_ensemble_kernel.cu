@@ -243,7 +243,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 		chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
 		float next_sync_time, int *d_offset, float4 *d_new_strent,
 		float *d_new_tau_CD, int *d_correlator_time, int correlator_type,
-		int *rand_used, int *tau_CD_used_CD, int *tau_CD_used_SD, int stress_index,float4 *pR1) {
+		int *rand_used, int *tau_CD_used_CD, int *tau_CD_used_SD, float* d_uniformrand, float4* d_taucd_gauss_rand_CD, float4* d_taucd_gauss_rand_SD, int stress_index,float4 *pR1) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x; //Chain index
 	if (i >= dn_cha_per_call)
 		return;
@@ -401,7 +401,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 		gpu_chain_heads[i].stall_flag = 3;
 	gpu_chain_heads[i].time += tdt[i];
 
-	double pr = (sumW) * tex2D(t_uniformrand, rand_used[i], i);
+	double pr = (sumW) *d_uniformrand[rand_used[i]*dn_cha_per_call+i];
 	rand_used[i]++;		//TODO just use step count constant instead of rand used
 	int j = 0;
 	float tpr = 0.0f;
@@ -514,7 +514,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 		if (pr < wcdc) {
 			if (tz == d_z_max)
 				return;		// possible detail balance issue
-			float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used_CD[i], i);
+			float4 temp = d_taucd_gauss_rand_CD[tau_CD_used_CD[i]*dn_cha_per_call+i];
 			tau_CD_used_CD[i]++;
 			gpu_chain_heads[i].Z++;
 			d_new_tau_CD[i] = temp.w;		//__fdividef(1.0f,d_tau_d);
@@ -565,7 +565,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 	if (pr < W_CD_c_z) {
 		if (tz == d_z_max)
 			return;	// possible detail balance issue
-		float4 temp = tex2D(t_taucd_gauss_rand_CD, tau_CD_used_CD[i], i);
+		float4 temp = d_taucd_gauss_rand_CD[tau_CD_used_CD[i]*dn_cha_per_call+i];;
 		tau_CD_used_CD[i]++;
 		gpu_chain_heads[i].Z++;
 		d_new_tau_CD[i] = temp.w;	//__fdividef(1.0f,d_tau_d);
@@ -590,7 +590,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 	if (pr < W_SD_c_1 + W_SD_c_z) {
 		if (tz == d_z_max)
 			return;	// possible detail balance issue
-		float4 temp = tex2D(t_taucd_gauss_rand_SD, tau_CD_used_SD[i], i);
+		float4 temp = d_taucd_gauss_rand_SD[tau_CD_used_SD[i]*dn_cha_per_call+i];
 		tau_CD_used_SD[i]++;
 		gpu_chain_heads[i].Z++;
 		d_new_tau_CD[i] = temp.w;

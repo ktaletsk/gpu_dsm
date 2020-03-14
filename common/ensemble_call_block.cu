@@ -26,9 +26,9 @@
 gpu_Ran *d_random_gens; // device random number generators
 gpu_Ran *d_random_gens2; //first is used to pick jump process, second is used for creation of new entanglements
 //temporary arrays fpr random numbers sequences
-cudaArray* d_uniformrand; // uniform random number supply //used to pick jump process
-cudaArray* d_taucd_gauss_rand_CD; // 1x uniform + 3x normal distributed random number supply// used for creating entanglements by SD
-cudaArray* d_taucd_gauss_rand_SD; // used for creating entanglements by SD
+float* d_uniformrand; // uniform random number supply //used to pick jump process
+float4* d_taucd_gauss_rand_CD; // 1x uniform + 3x normal distributed random number supply// used for creating entanglements by SD
+float4* d_taucd_gauss_rand_SD; // used for creating entanglements by SD
 int steps_count = 0;    //time step count
 int *d_tau_CD_used_SD;
 int *d_tau_CD_used_CD;
@@ -157,7 +157,7 @@ int time_step_call_block(double reach_time, ensemble_call_block *cb,
 						tpb_chain_kernel>>>(cb->gpu_chain_heads, cb->d_dt,
 						cb->reach_flag, sync_interval, cb->d_offset,
 						cb->d_new_strent, cb->d_new_tau_CD, d_rand_used,
-						d_tau_CD_used_CD, d_tau_CD_used_SD);
+						d_tau_CD_used_CD, d_tau_CD_used_SD,d_uniformrand,d_taucd_gauss_rand_CD,d_taucd_gauss_rand_SD);
 				CUT_CHECK_ERROR("kernel execution failed");
 				cudaUnbindTexture(t_a_QN);
 				cudaUnbindTexture(t_a_tCD);
@@ -175,7 +175,7 @@ int time_step_call_block(double reach_time, ensemble_call_block *cb,
 						tpb_chain_kernel>>>(cb->gpu_chain_heads, cb->d_dt,
 						cb->reach_flag, sync_interval, cb->d_offset,
 						cb->d_new_strent, cb->d_new_tau_CD, d_rand_used,
-						d_tau_CD_used_CD, d_tau_CD_used_SD);
+						d_tau_CD_used_CD, d_tau_CD_used_SD,d_uniformrand,d_taucd_gauss_rand_CD,d_taucd_gauss_rand_SD);
 				CUT_CHECK_ERROR("kernel execution failed");
 				cudaUnbindTexture(t_a_QN);
 				cudaUnbindTexture(t_a_tCD);
@@ -280,7 +280,7 @@ int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, int corr
 				EQ_strent_kernel<<<dimGrid, dimBlock,0,stream_calc>>>(cb->gpu_chain_heads, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD);
 				CUT_CHECK_ERROR("kernel execution failed");
 
-				EQ_chain_kernel<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_calc>>>(cb->gpu_chain_heads, cb->d_dt, cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD, cb->d_correlator_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD, steps_count % stressarray_count,cb->d_R1);
+				EQ_chain_kernel<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_calc>>>(cb->gpu_chain_heads, cb->d_dt, cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD, cb->d_correlator_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD,d_uniformrand,d_taucd_gauss_rand_CD,d_taucd_gauss_rand_SD, steps_count % stressarray_count,cb->d_R1);
 				CUT_CHECK_ERROR("kernel execution failed");
 
 				cudaUnbindTexture(t_a_QN);
@@ -300,7 +300,7 @@ int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, int corr
 				EQ_strent_kernel<<<dimGrid, dimBlock,0,stream_calc>>>(cb->gpu_chain_heads,cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD);
 				CUT_CHECK_ERROR("kernel execution failed");
 
-				EQ_chain_kernel<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_calc>>>(cb->gpu_chain_heads, cb->d_dt, cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD, cb->d_correlator_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD, steps_count % stressarray_count,cb->d_R1);
+				EQ_chain_kernel<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_calc>>>(cb->gpu_chain_heads, cb->d_dt, cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD, cb->d_correlator_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD,d_uniformrand,d_taucd_gauss_rand_CD,d_taucd_gauss_rand_SD, steps_count % stressarray_count,cb->d_R1);
 				CUT_CHECK_ERROR("kernel execution failed");
 
 				cudaUnbindTexture(t_a_QN);
