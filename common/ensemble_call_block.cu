@@ -41,8 +41,8 @@ cudaArray* d_b_tCD;
 cudaArray* d_corr_a;
 cudaArray* d_corr_b;
 
-cudaArray* d_sum_W; // sum of probabilities for each entanglement
-cudaArray* d_stress; // stress calculation temp array
+float* d_sum_W; // sum of probabilities for each entanglement
+float4* d_stress; // stress calculation temp array
 
 // There are two arrays with the vector part of the chain conformations  on device.
 // And there is only one array with the scalar part of the chain conformations
@@ -73,10 +73,10 @@ void init_call_block(ensemble_call_block *cb, int nc, sstrentp chains,
 	cudaMallocArray(&(cb->d_QN), &channelDesc4, z_max, cb->nc, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&(cb->d_tCD), &channelDesc1, z_max, cb->nc,cudaArraySurfaceLoadStore);
 	cudaMalloc(&(cb->d_R1), sizeof(float4) * cb->nc);
-	//blank dynamics probabalities
+	//blank dynamics probabilities
 	float *buffer = new float[z_max * cb->nc];
 	memset(buffer, 0, sizeof(float) * z_max * cb->nc);
-	cudaMemcpy2DToArray(d_sum_W, 0, 0, buffer, z_max * sizeof(float), z_max * sizeof(float), cb->nc, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_sum_W, buffer, z_max * sizeof(float) * cb->nc, cudaMemcpyHostToDevice);
 	delete[] buffer;
 	//copy initial conformations to device
 	cudaMemcpy2DToArray(cb->d_QN, 0, 0, cb->chains.QN, z_max * sizeof(float) * 4, z_max * sizeof(float) * 4, cb->nc, cudaMemcpyHostToDevice);
@@ -150,14 +150,16 @@ int time_step_call_block(double reach_time, ensemble_call_block *cb,
 				cudaBindSurfaceToArray(s_b_tCD, d_b_tCD);
 
 
-				strent_kernel<<<dimGrid, dimBlock>>>(cb->gpu_chain_heads, cb->d_dt, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD);
+				strent_kernel<<<dimGrid, dimBlock>>>(cb->gpu_chain_heads, cb->d_dt, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD,d_sum_W);
 				CUT_CHECK_ERROR("kernel execution failed");
 				chain_kernel<<<
 						(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel,
 						tpb_chain_kernel>>>(cb->gpu_chain_heads, cb->d_dt,
 						cb->reach_flag, sync_interval, cb->d_offset,
 						cb->d_new_strent, cb->d_new_tau_CD, d_rand_used,
-						d_tau_CD_used_CD, d_tau_CD_used_SD,d_uniformrand,d_taucd_gauss_rand_CD,d_taucd_gauss_rand_SD);
+						d_tau_CD_used_CD, d_tau_CD_used_SD,d_uniformrand,d_taucd_gauss_rand_CD,d_taucd_gauss_rand_SD,
+                        d_sum_W
+                        );
 				CUT_CHECK_ERROR("kernel execution failed");
 				cudaUnbindTexture(t_a_QN);
 				cudaUnbindTexture(t_a_tCD);
@@ -167,7 +169,7 @@ int time_step_call_block(double reach_time, ensemble_call_block *cb,
 				cudaBindTextureToArray(t_a_tCD, d_b_tCD, channelDesc1);
 				cudaBindSurfaceToArray(s_b_tCD, d_a_tCD);
 
-				strent_kernel<<<dimGrid, dimBlock>>>(cb->gpu_chain_heads, cb->d_dt, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD);
+				strent_kernel<<<dimGrid, dimBlock>>>(cb->gpu_chain_heads, cb->d_dt, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD,d_sum_W);
 				CUT_CHECK_ERROR("kernel execution failed");
 
 				chain_kernel<<<
@@ -175,7 +177,9 @@ int time_step_call_block(double reach_time, ensemble_call_block *cb,
 						tpb_chain_kernel>>>(cb->gpu_chain_heads, cb->d_dt,
 						cb->reach_flag, sync_interval, cb->d_offset,
 						cb->d_new_strent, cb->d_new_tau_CD, d_rand_used,
-						d_tau_CD_used_CD, d_tau_CD_used_SD,d_uniformrand,d_taucd_gauss_rand_CD,d_taucd_gauss_rand_SD);
+						d_tau_CD_used_CD, d_tau_CD_used_SD,d_uniformrand,d_taucd_gauss_rand_CD,d_taucd_gauss_rand_SD,
+                        d_sum_W
+                        );
 				CUT_CHECK_ERROR("kernel execution failed");
 				cudaUnbindTexture(t_a_QN);
 				cudaUnbindTexture(t_a_tCD);
@@ -277,10 +281,10 @@ int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, int corr
 					cudaBindSurfaceToArray(s_corr, d_corr_a);
 				}
 
-				EQ_strent_kernel<<<dimGrid, dimBlock,0,stream_calc>>>(cb->gpu_chain_heads, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD);
+				EQ_strent_kernel<<<dimGrid, dimBlock,0,stream_calc>>>(cb->gpu_chain_heads, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD,d_sum_W);
 				CUT_CHECK_ERROR("kernel execution failed");
 
-				EQ_chain_kernel<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_calc>>>(cb->gpu_chain_heads, cb->d_dt, cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD, cb->d_correlator_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD,d_uniformrand,d_taucd_gauss_rand_CD,d_taucd_gauss_rand_SD, steps_count % stressarray_count,cb->d_R1);
+				EQ_chain_kernel<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_calc>>>(cb->gpu_chain_heads, cb->d_dt, cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD, cb->d_correlator_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD,d_uniformrand,d_taucd_gauss_rand_CD,d_taucd_gauss_rand_SD, steps_count % stressarray_count,cb->d_R1,d_sum_W);
 				CUT_CHECK_ERROR("kernel execution failed");
 
 				cudaUnbindTexture(t_a_QN);
@@ -297,10 +301,10 @@ int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, int corr
 					cudaBindSurfaceToArray(s_corr, d_corr_a);
 				}
 
-				EQ_strent_kernel<<<dimGrid, dimBlock,0,stream_calc>>>(cb->gpu_chain_heads,cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD);
+				EQ_strent_kernel<<<dimGrid, dimBlock,0,stream_calc>>>(cb->gpu_chain_heads,cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD,d_sum_W);
 				CUT_CHECK_ERROR("kernel execution failed");
 
-				EQ_chain_kernel<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_calc>>>(cb->gpu_chain_heads, cb->d_dt, cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD, cb->d_correlator_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD,d_uniformrand,d_taucd_gauss_rand_CD,d_taucd_gauss_rand_SD, steps_count % stressarray_count,cb->d_R1);
+				EQ_chain_kernel<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_calc>>>(cb->gpu_chain_heads, cb->d_dt, cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD, cb->d_correlator_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD,d_uniformrand,d_taucd_gauss_rand_CD,d_taucd_gauss_rand_SD, steps_count % stressarray_count,cb->d_R1,d_sum_W);
 				CUT_CHECK_ERROR("kernel execution failed");
 
 				cudaUnbindTexture(t_a_QN);
@@ -455,12 +459,12 @@ stress_plus calc_stress_call_block(ensemble_call_block *cb,
 	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
 	CUDA_SAFE_CALL(cudaMemcpyToSymbol(dn_cha_per_call, &cb->nc, sizeof(int)));
 	cudaBindTextureToArray(t_a_QN, cb->d_QN, channelDesc4);
-	stress_calc<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel>>>(cb->gpu_chain_heads, cb->d_dt, cb->d_offset, cb->d_new_strent);
+	stress_calc<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel>>>(d_stress,cb->gpu_chain_heads, cb->d_dt, cb->d_offset, cb->d_new_strent);
 	CUT_CHECK_ERROR("kernel execution failed");
 	cudaUnbindTexture(t_a_QN);
 
 	float4 *stress_buf = new float4[cb->nc * 2];
-	cudaMemcpyFromArray(stress_buf, d_stress, 0, 0, cb->nc * sizeof(float4) * 2, cudaMemcpyDeviceToHost);
+	cudaMemcpy(stress_buf, d_stress, cb->nc * sizeof(float4) * 2, cudaMemcpyDeviceToHost);
 	float4 sum_stress = make_float4(0.0f, 0.0f, 0.0f, 0.0f); //stress: xx,yy,zz,xy
 	float4 sum_stress2 = make_float4(0.0f, 0.0f, 0.0f, 0.0f); //stress: yz,xz; Lpp, Ree
 	chain_head* tchain_heads;
@@ -507,11 +511,7 @@ stress_plus calc_stress_call_block(ensemble_call_block *cb,
 void free_block(ensemble_call_block *cb) {    //free memory
 //	delete cb->nc;
 //	delete cb->block_time;
-	delete[] cb->chains.QN;
-	delete[] cb->chains.tau_CD;
-	delete[] cb->chains.R1;
 
-	delete[] cb->chain_heads;
 
 	cudaFree(cb->gpu_chain_heads);
 	cudaFreeArray(cb->d_QN);

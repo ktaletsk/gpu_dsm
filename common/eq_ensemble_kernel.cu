@@ -49,7 +49,7 @@ inline __device__ float4 operator-(float4 a, float4 b) {
 
 __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent_kernel(
 		chain_head* gpu_chain_heads, int *d_offset, float4 *d_new_strent,
-		float *d_new_tau_CD) {
+		float *d_new_tau_CD,float *d_sum_W) {
 	//Calculate kernel index
 	int i = blockIdx.x * blockDim.x + threadIdx.x;//strent index
 	int j = blockIdx.y * blockDim.y + threadIdx.y;//chain index
@@ -121,9 +121,7 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent
 			float friction = __fdividef(2.0f, f1 + f2);
 			wsh.y = friction * __powf(prefact1 * prefact2, 0.75f) * __expf(-Q * sig1 + Q2 * sig2);
 		}
-// 	    surf2Dwrite(wsh.x,s_W_SD_pm,8*i,j);//TODO funny bug i have no idea but doesn't work other way
-// 	    surf2Dwrite(wsh.y,s_W_SD_pm,8*i+4,j);//seems to work with float4 below
-		surf2Dwrite(wsh.x + wsh.y+ (float)d_CD_flag* (tcd + d_CD_create_prefact * (QN.w - 1.0f)),s_sum_W, 4 * i, j);
+		d_sum_W[i*dn_cha_per_call+j]=wsh.x + wsh.y+ (float)d_CD_flag* (tcd + d_CD_create_prefact * (QN.w - 1.0f));
 		//probability of Kuhn step shitt + probability of entanglement destruction by CD
 		// + probability of entanglement creation by CD
 	}
@@ -243,7 +241,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 		chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
 		float next_sync_time, int *d_offset, float4 *d_new_strent,
 		float *d_new_tau_CD, int *d_correlator_time, int correlator_type,
-		int *rand_used, int *tau_CD_used_CD, int *tau_CD_used_SD, float* d_uniformrand, float4* d_taucd_gauss_rand_CD, float4* d_taucd_gauss_rand_SD, int stress_index,float4 *pR1) {
+		int *rand_used, int *tau_CD_used_CD, int *tau_CD_used_SD, float* d_uniformrand, float4* d_taucd_gauss_rand_CD, float4* d_taucd_gauss_rand_SD, int stress_index,float4 *pR1,float *d_sum_W) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x; //Chain index
 	if (i >= dn_cha_per_call)
 		return;
@@ -332,10 +330,8 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 
 	// sum W_SD_shifts
 	double sum_wshpm = 0.0;
-	float tsumw;
 	for (int j = 0; j < tz - 1; j++) {
-		surf2Dread(&tsumw, s_sum_W, 4 * j, i);
-		sum_wshpm += tsumw;
+		sum_wshpm += d_sum_W[j*dn_cha_per_call+i];
 	}
 
 	// W_SD_c/d calc
@@ -406,14 +402,14 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 	int j = 0;
 	float tpr = 0.0f;
 	if (tz != 1)
-		surf2Dread(&tpr, s_sum_W, 4 * j, i);
+        tpr=d_sum_W[j*dn_cha_per_call+i];
 	// picking where(which strent) jump process will happen
 	// excluding SD creation destruction
 	// perhaps one of the most time consuming parts of the code
 	while ((pr >= tpr) && (j < tz - 2)) {
 		pr -= tpr;
 		j++;
-		surf2Dread(&tpr, s_sum_W, 4 * j, i);
+        tpr=d_sum_W[j*dn_cha_per_call+i];
 	}
 
 // 	  for (int j=0;j<tz-1;j++)

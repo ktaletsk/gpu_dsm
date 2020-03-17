@@ -165,10 +165,8 @@ void gpu_init(int seed, p_cd* pcd, int s) {
 	cudaMallocArray(&d_b_tCD, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
 	cudaMallocArray(&d_corr_b, &channelDesc4, rsz, stressarray_count, cudaArraySurfaceLoadStore);
 
-	cudaMallocArray(&d_sum_W, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
-	cudaMallocArray(&d_stress, &channelDesc4, rsz * 2, 0, cudaArraySurfaceLoadStore);
-	cudaBindSurfaceToArray(s_stress, d_stress);
-	cudaBindSurfaceToArray(s_sum_W, d_sum_W);
+	cudaMalloc(&d_sum_W, z_max* rsz * sizeof(float) );
+	cudaMalloc(&d_stress, rsz * 2*sizeof(float4));
 
 	cout << "\n";
 	cout << " GPU random generator init: \n";
@@ -513,8 +511,8 @@ void gpu_clean() {
 	cudaFreeArray(d_b_tCD);
 	cudaFreeArray(d_corr_a);
 	cudaFreeArray(d_corr_b);
-	cudaFreeArray(d_sum_W);
-	cudaFreeArray(d_stress);
+	cudaFree(d_sum_W);
+	cudaFree(d_stress);
 
 	cudaFree(d_uniformrand);
 	cudaFree(d_taucd_gauss_rand_CD);
@@ -525,7 +523,13 @@ void gpu_clean() {
 	cudaFree(d_rand_used);
 	cudaFree(d_random_gens);
 	cudaFree(d_random_gens2);
-
+    
+	delete[] chains.QN;
+	delete[] chains.tau_CD;
+	delete[] chains.R1;
+	delete[] chain_heads;
+    
+    
 	cudaDeviceReset();
 	cout << "done.\n";
 }

@@ -111,7 +111,7 @@ __device__   __forceinline__ float4 kappa(const float4 QN, const float dt) {//Qx
 
 //The entanglement parallel part of the code
 //2D kernel: i- entanglement index j - chain index
-__global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void strent_kernel(chain_head* gpu_chain_heads, float *tdt, int *d_offset, float4 *d_new_strent, float *d_new_tau_CD) {    //TODO add reach flag
+__global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void strent_kernel(chain_head* gpu_chain_heads, float *tdt, int *d_offset, float4 *d_new_strent, float *d_new_tau_CD,float *d_sum_W) {    //TODO add reach flag
 	int i = blockIdx.x * blockDim.x + threadIdx.x; //Entaglment index in chain
 	int j = blockIdx.y * blockDim.y + threadIdx.y; //Chain index in the set of chains
 	if ((j >= dn_cha_per_call) || (i >= d_z_max)) //For boundary blocks in grid index may exceed total number of chains/entaglements
@@ -178,7 +178,7 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void strent_ke
 					* __expf(-Q * sig1 + Q2 * sig2);
 		}
 		//write probabilities into temp array(surface)
-		surf2Dwrite(wsh.x + wsh.y+ d_CD_flag * (tcd + d_CD_create_prefact * (QN.w - 1.0f)), s_sum_W, 4 * i, j); //sum
+		d_sum_W[i*dn_cha_per_call+j]=wsh.x + wsh.y+ (float)d_CD_flag* (tcd + d_CD_create_prefact * (QN.w - 1.0f));
 	}
 	//write updated chain conformation
 	surf2Dwrite(QN, s_b_QN, 16 * i, j);
@@ -186,7 +186,7 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void strent_ke
 }
 
 __global__ __launch_bounds__(tpb_chain_kernel)
-void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag, float next_sync_time, int *d_offset, float4 *d_new_strent, float *d_new_tau_CD, int *rand_used, int *tau_CD_used_CD, int *tau_CD_used_SD, float* d_uniformrand, float4* d_taucd_gauss_rand_CD,float4* d_taucd_gauss_rand_SD) {
+void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag, float next_sync_time, int *d_offset, float4 *d_new_strent, float *d_new_tau_CD, int *rand_used, int *tau_CD_used_CD, int *tau_CD_used_SD, float* d_uniformrand, float4* d_taucd_gauss_rand_CD,float4* d_taucd_gauss_rand_SD,float *d_sum_W) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 
 	if (i >= dn_cha_per_call)
@@ -210,10 +210,8 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag, fl
 	float new_tCD = d_new_tau_CD[i];
 // sum W_SD_shifts
 	float sum_wshpm = 0.0f;
-	float tsumw;
 	for (int j = 0; j < tz - 1; j++) {
-		surf2Dread(&tsumw, s_sum_W, 4 * j, i);
-		sum_wshpm += tsumw;
+		sum_wshpm += d_sum_W[j*dn_cha_per_call+i];
 	}
 // W_SD_c/d calc
 	float W_SD_c_1 = 0.0f, W_SD_d_1 = 0.0f;
@@ -276,14 +274,14 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag, fl
 	int j = 0;
 	float tpr = 0.0f;
 	if (tz != 1)
-		surf2Dread(&tpr, s_sum_W, 4 * j, i);
+        tpr=d_sum_W[j*dn_cha_per_call+i];
 
 	// picking where(which strent) jump process will happen
 	// excluding SD creation destruction
 	while ((pr >= tpr) && (j < tz - 2)) {
 		pr -= tpr;
 		j++;
-		surf2Dread(&tpr, s_sum_W, 4 * j, i);
+        tpr=d_sum_W[j*dn_cha_per_call+i];
 
 	}
 
@@ -502,7 +500,7 @@ void chain_kernel(chain_head* gpu_chain_heads, float *tdt, float *reach_flag, fl
 }
 
 __global__ __launch_bounds__(tpb_chain_kernel) //stress calculation
-void stress_calc(chain_head* gpu_chain_heads, float *tdt, int *d_offset,
+void stress_calc(float4* d_stress,chain_head* gpu_chain_heads, float *tdt, int *d_offset,
 		float4 *d_new_strent) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= dn_cha_per_call)
@@ -532,8 +530,8 @@ void stress_calc(chain_head* gpu_chain_heads, float *tdt, int *d_offset,
 		ree_z += QN1.z;
 	}
 	sum_stress2.w = float(tz); //__fsqrt_rn(ree_x*ree_x+ree_y*ree_y+ree_z*ree_z);
-	surf1Dwrite(sum_stress, s_stress, 32 * i);
-	surf1Dwrite(sum_stress2, s_stress, 32 * i + 16);
+	d_stress[2 * i ]=sum_stress;
+	d_stress[2 * i + 1]=sum_stress2;
 
 }
 

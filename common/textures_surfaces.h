@@ -39,7 +39,7 @@ surface<void,2> s_b_QN;// strents (N,Qx,Qy,Qz)
 surface<void,2> s_b_tCD;//tau_CD of ent-t
 surface<void,2> s_corr;
  
-surface<void,2> s_W_SD_pm;// SD shift probablities
-surface<void,2> s_sum_W;// SD shift probablities
-surface<void,1> s_stress;//float4 xx,yy,zz,xy
+// surface<void,2> s_W_SD_pm;// SD shift probablities
+// surface<void,2> s_sum_W;// SD shift probablities
+// surface<void,1> s_stress;//float4 xx,yy,zz,xy
 #endif
