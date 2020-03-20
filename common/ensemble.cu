@@ -43,7 +43,7 @@ using namespace std;
 extern cudaArray* d_gamma_table;
 extern cudaArray* d_gamma_table_d;
 
-#define chains_per_call 5000
+#define chains_per_call 16000
 
 
 sstrentp chains; // host chain conformations

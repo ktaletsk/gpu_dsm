@@ -524,9 +524,6 @@ void activate_block(ensemble_call_block *cb) {
 		cudaMemcpy(d_b_QN, cb->d_QN,  z_max * sizeof(float4)* cb->nc, cudaMemcpyDeviceToDevice);
 		cudaMemcpy(d_b_tCD, cb->d_tCD, z_max * sizeof(float) * cb->nc, cudaMemcpyDeviceToDevice);
 	}
-
-	//correlator binding
-	cudaBindSurfaceToArray(s_correlator, cb->corr->gpu_corr.d_correlator);
 }
 
 void deactivate_block(ensemble_call_block *cb) {

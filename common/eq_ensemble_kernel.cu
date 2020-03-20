@@ -17,7 +17,7 @@
 
 //Equilibrium versions of kernels
 //flow deformation turn off
-//EQ_chain_CD_kernel fills s_correlator with of diagonal stress component
+//EQ_chain_CD_kernel fills d_corr with of off-diagonal stress component
 
 #include "cuda_runtime.h"
 #include <math.h>
@@ -233,13 +233,13 @@ __device__ void corr_add(corr_device gpu_corr, float4 w, int k, int i, int type)
 		insertindex[k] = 0;
 }
 
-__global__ __launch_bounds__(tpb_chain_kernel) void update_correlator(corr_device gpu_corr, int n, int type){
+__global__ __launch_bounds__(tpb_chain_kernel) void update_correlator(float4* d_corr,corr_device gpu_corr, int n, int type){
 	int i = blockIdx.x * blockDim.x + threadIdx.x; //Chain index
 	if (i >= dn_cha_per_call)
 		return;
 	float4 stress;
 	for (int j=0; j<n; j++){
-		stress = tex2D(t_corr, i, j);
+        stress=d_corr[j*dn_cha_per_call+i];
 		if (stress.w == 1.0f){
 			corr_add(gpu_corr, stress, 0, i, type); //add new value to the correlator
 		}
@@ -253,6 +253,7 @@ void EQ_chain_kernel(
                       float *d_a_tCD, //read array  
                       float4* d_b_QN, //write array  
                       float *d_sum_W,
+                      float4 *d_corr,
                       chain_head* gpu_chain_heads, 
                       float *tdt, 
                       float *reach_flag,
@@ -281,7 +282,7 @@ void EQ_chain_kernel(
 	d_offset[i] = offset_code(0xffff, +1);
 
 	float4 sum_stress = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-	surf2Dwrite(sum_stress, s_corr, sizeof(float4) * i, stress_index); //Write stress value to the stack
+    d_corr[stress_index*dn_cha_per_call+i]=sum_stress; //Write stress value to the stack
 
 
 	if (reach_flag[i] != 0) {
@@ -318,7 +319,7 @@ void EQ_chain_kernel(
 				sum_stress.z -= __fdividef(3.0f * QN1.x * QN1.z, QN1.w);
 			}
 			sum_stress.w = 1.0f;
-			surf2Dwrite(sum_stress, s_corr, sizeof(float4) * i, stress_index); //Write stress value to the stack
+            d_corr[stress_index*dn_cha_per_call+i]=sum_stress;//Write stress value to the stack
 		}
 
 		if (correlator_type==1){//center of mass calc
@@ -346,7 +347,7 @@ void EQ_chain_kernel(
 			}
 			center_mass+=R1;
 			center_mass.w = 1.0f;
-			surf2Dwrite(center_mass, s_corr, sizeof(float4) * i, stress_index); //Write center of mass to the stack
+            d_corr[stress_index*dn_cha_per_call+i]=center_mass; //Write center of mass to the stack
 		}
 
 		//Update counter
