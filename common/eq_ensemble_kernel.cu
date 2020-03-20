@@ -47,9 +47,18 @@ inline __device__ float4 operator-(float4 a, float4 b) {
 	return make_float4(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w);
 }
 
-__global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent_kernel(
-		chain_head* gpu_chain_heads, int *d_offset, float4 *d_new_strent,
-		float *d_new_tau_CD,float *d_sum_W) {
+__global__ 
+__launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) 
+void EQ_strent_kernel(
+                      float4* d_a_QN, //read array
+                      float *d_a_tCD, //read array
+                      float4* d_b_QN, //write array
+                      float *d_b_tCD, //write array
+                      float *d_sum_W,
+                      chain_head* gpu_chain_heads,
+                      int *d_offset, 
+                      float4 *d_new_strent,
+                      float *d_new_tau_CD) {
 	//Calculate kernel index
 	int i = blockIdx.x * blockDim.x + threadIdx.x;//strent index
 	int j = blockIdx.y * blockDim.y + threadIdx.y;//chain index
@@ -70,19 +79,19 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent
 	if (fetch_new_strent(i, oft))
 		QN = d_new_strent[j]; //second check if strent created last time step should go here
 	else
-		QN = tex2D(t_a_QN, make_offset(i, oft), j); // all access to strents is done through two operations: first texture fetch
+        QN = d_a_QN[j*d_z_max+make_offset(i, oft)]; // all access to strents is done through two operations: first array read
 	float tcd;
 	if (d_CD_flag) { //If constraint dynamics is enabled
 		if (fetch_new_strent(i, oft))
 			tcd = d_new_tau_CD[j];
 		else
-			tcd = tex2D(t_a_tCD, make_offset(i, oft), j);
+			tcd = d_a_tCD[j*d_z_max+make_offset(i, oft)];
 	} else
 		tcd = 0;
 
 	//write
-	surf2Dwrite(QN, s_b_QN, 16 * i, j);
-	surf2Dwrite(tcd, s_b_tCD, 4 * i, j);
+	d_b_QN[j*d_z_max+i]=QN;
+	d_b_tCD[j*d_z_max+i]=tcd;
 
 	//fetch next strent (if strent is not the last)
 	if (i < tz - 1) {
@@ -91,7 +100,7 @@ __global__ __launch_bounds__(tpb_strent_kernel*tpb_strent_kernel) void EQ_strent
 		if (fetch_new_strent(i + 1, oft))
 			QN2 = d_new_strent[j];
 		else
-			QN2 = tex2D(t_a_QN, make_offset(i + 1, oft), j);
+			QN2 = d_a_QN[j*d_z_max+make_offset(i+1, oft)];
 
 		//w_shift probability calc
 		float Q = QN.x * QN.x + QN.y * QN.y + QN.z * QN.z;
@@ -237,11 +246,31 @@ __global__ __launch_bounds__(tpb_chain_kernel) void update_correlator(corr_devic
 	}
 }
 
-__global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
-		chain_head* gpu_chain_heads, float *tdt, float *reach_flag,
-		float next_sync_time, int *d_offset, float4 *d_new_strent,
-		float *d_new_tau_CD, int *d_correlator_time, int correlator_type,
-		int *rand_used, int *tau_CD_used_CD, int *tau_CD_used_SD, float* d_uniformrand, float4* d_taucd_gauss_rand_CD, float4* d_taucd_gauss_rand_SD, int stress_index,float4 *pR1,float *d_sum_W) {
+__global__ 
+__launch_bounds__(tpb_chain_kernel) 
+void EQ_chain_kernel(
+                      float4* d_a_QN, //read array
+                      float *d_a_tCD, //read array  
+                      float4* d_b_QN, //write array  
+                      float *d_sum_W,
+                      chain_head* gpu_chain_heads, 
+                      float *tdt, 
+                      float *reach_flag,
+                      float next_sync_time, 
+                      int *d_offset,
+                      float4 *d_new_strent,
+                      float *d_new_tau_CD, 
+                      int *d_correlator_time, 
+                      int correlator_type,
+                      int *rand_used, 
+                      int *tau_CD_used_CD, 
+                      int *tau_CD_used_SD, 
+                      float* d_uniformrand, 
+                      float4* d_taucd_gauss_rand_CD, 
+                      float4* d_taucd_gauss_rand_SD, 
+                      int stress_index,
+                      float4 *pR1
+                      ) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x; //Chain index
 	if (i >= dn_cha_per_call)
 		return;
@@ -283,7 +312,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 				if (fetch_new_strent(j, oft))
 					QN1 = new_strent;
 				else
-					QN1 = tex2D(t_a_QN, make_offset(j, oft), i);
+					QN1 = d_a_QN[i*d_z_max+make_offset(j, oft)];
 				sum_stress.x -= __fdividef(3.0f * QN1.x * QN1.y, QN1.w);
 				sum_stress.y -= __fdividef(3.0f * QN1.y * QN1.z, QN1.w);
 				sum_stress.z -= __fdividef(3.0f * QN1.x * QN1.z, QN1.w);
@@ -301,7 +330,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 				if (fetch_new_strent(j, oft))
 					QN1 = new_strent;
 				else
-					QN1 = tex2D(t_a_QN, make_offset(j, oft), i);
+					QN1 = d_a_QN[i*d_z_max+make_offset(j, oft)];
 
 				float4 term = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 				temp_sum	+=	prev_q;
@@ -345,14 +374,14 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 	if (fetch_new_strent(0, oft))
 		QNhead = new_strent;
 	else
-		QNhead = tex2D(t_a_QN, make_offset(0, oft), i);
+		QNhead = d_a_QN[i*d_z_max+make_offset(0, oft)];
 
 	//last strent
 	float4 QNtail;
 	if (fetch_new_strent(tz - 1, oft))
 		QNtail = new_strent;
 	else
-		QNtail = tex2D(t_a_QN, make_offset(tz - 1, oft), i);
+		QNtail = d_a_QN[i*d_z_max+make_offset(tz-1, oft)];
 
 	double W_CD_c_z = (double)d_CD_flag * (double)d_CD_create_prefact * (QNtail.w - 1.0f); //Create CD on the last strand
 
@@ -365,7 +394,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 			if (fetch_new_strent(1, oft))
 				QNheadn = new_strent;
 			else
-				QNheadn = tex2D(t_a_QN, make_offset(1, oft), i);
+				QNheadn = d_a_QN[i*d_z_max+make_offset(1, oft)];
 			float f2 = (tz == 2) ? QNheadn.w + 0.25f : 0.5f * QNheadn.w;
 			W_SD_d_1 = __fdividef(1.0f, 0.75f + f2);
 		} else {
@@ -378,7 +407,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 			if (fetch_new_strent(tz - 2, oft))
 				QNtailp = new_strent;
 			else
-				QNtailp = tex2D(t_a_QN, make_offset(tz - 2, oft), i);
+				QNtailp = d_a_QN[i*d_z_max+make_offset(tz-2, oft)];
 			float f1 = (tz == 2) ? QNtailp.w + 0.25f : 0.5f * QNtailp.w;
 			W_SD_d_z = __fdividef(1.0f, 0.75f + f1);
 		} else {
@@ -418,10 +447,10 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 		// now we need to decide which(SD shift or CDd CDc) jump process will happen
 		// TODO check if order will have an effect on performance
 
-		float4 QN1 = tex2D(t_a_QN, make_offset(j, oft), i);
+		float4 QN1 = d_a_QN[i*d_z_max+make_offset(j, oft)];
 		if (fetch_new_strent(j, oft))
 			QN1 = new_strent;
-		float4 QN2 = tex2D(t_a_QN, make_offset(j + 1, oft), i);
+		float4 QN2 = d_a_QN[i*d_z_max+make_offset(j+1, oft)];
 		if (fetch_new_strent(j + 1, oft))
 			QN2 = new_strent;
 
@@ -429,7 +458,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 
 		float wcdd;
 		if (d_CD_flag) {
-			wcdd = tex2D(t_a_tCD, make_offset(j, oft), i); //Read tau_CD
+			wcdd =  d_a_tCD[i*d_z_max+make_offset(j, oft)];//Read tau_CD
 			if (fetch_new_strent(j, oft))
 				wcdd = new_tCD;
 		} else
@@ -437,7 +466,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 		if (pr < wcdd) {
 			float4 temp = make_float4(QN1.x + QN2.x, QN1.y + QN2.y, QN1.z + QN2.z, QN1.w + QN2.w);
 			if ((j == tz - 2) || (j == 0)) temp = make_float4(0.0f, 0.0f, 0.0f, QN1.w + QN2.w);
-			surf2Dwrite(temp, s_b_QN, 16 * (j + 1), i);
+            d_b_QN[i*d_z_max+j+1]=temp;
 			d_offset[i] = offset_code(j, +1);
 			gpu_chain_heads[i].Z--;
 			if (correlator_type==1 && j == 0){
@@ -498,8 +527,8 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 				QN1.w = QN1.w - 1;
 				QN2.w = QN2.w + 1;
 			}
-			surf2Dwrite(QN1, s_b_QN, 16 * j, i);
-			surf2Dwrite(QN2, s_b_QN, 16 * (j + 1), i);
+			d_b_QN[i*d_z_max+j]=QN1;
+			d_b_QN[i*d_z_max+j+1]=QN2;
 			return;
 		} else
 			pr -= twsh.x + twsh.y;
@@ -521,7 +550,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 				temp.x *= sigma;
 				temp.y *= sigma;
 				temp.z *= sigma;
-				surf2Dwrite(temp, s_b_QN, 16 * 0, i);
+                d_b_QN[i*d_z_max+0]=temp;
 				d_offset[i] = offset_code(0, -1);
 				d_new_strent[i] = make_float4(0.0f, 0.0f, 0.0f, newn);
 				if (correlator_type==1){
@@ -544,7 +573,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 			temp.x += QN1.x * ration;
 			temp.y += QN1.y * ration;
 			temp.z += QN1.z * ration;
-			surf2Dwrite(make_float4(QN1.x - temp.x, QN1.y - temp.y, QN1.z - temp.z,	QN1.w - newn), s_b_QN, 16 * j, i);
+            d_b_QN[i*d_z_max+j]=make_float4(QN1.x - temp.x, QN1.y - temp.y, QN1.z - temp.z, QN1.w - newn);
 			d_offset[i] = offset_code(j, -1);
 			d_new_strent[i] = temp;
 			return;
@@ -573,7 +602,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 		temp.x *= sigma;
 		temp.y *= sigma;
 		temp.z *= sigma;
-		surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNtail.w - newn), s_b_QN, 16 * (tz - 1), i);
+        d_b_QN[i*d_z_max+(tz - 1)]=make_float4(0.0f, 0.0f, 0.0f, QNtail.w - newn);
 		d_offset[i] = offset_code(tz - 1, -1);
 		d_new_strent[i] = temp;
 		return;
@@ -597,8 +626,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 			temp.x *= sigma;
 			temp.y *= sigma;
 			temp.z *= sigma;
-			surf2Dwrite(temp, s_b_QN, 16 * 0, i);//TODO maybe deformation should be applied here
-
+            d_b_QN[i*d_z_max+0]=temp;            
 			if (correlator_type==1){
 				//update position of the first entanglement in the fixed frame
 				float4 delta_R1 = make_float4(0.0f,0.0f,0.0f,0.0f);
@@ -617,7 +645,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 			temp.x *= sigma;
 			temp.y *= sigma;
 			temp.z *= sigma;
-			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, 1.0f), s_b_QN, 16 * (tz - 1), i);//TODO maybe deformation should be applied here
+            d_b_QN[i*d_z_max+(tz - 1)]=make_float4(0.0f, 0.0f, 0.0f, 1.0f); 
 			d_offset[i] = offset_code(tz - 1, -1);
 			d_new_strent[i] = temp;
 		}
@@ -635,12 +663,12 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 		gpu_chain_heads[i].Z--;
 
 		if (pr < W_SD_d_1) {//Destruction of the 1st entanglement
-			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNheadn.w + 1.0f), s_b_QN, 16 * 1, i);
+            d_b_QN[i*d_z_max+1]=make_float4(0.0f, 0.0f, 0.0f, QNheadn.w + 1.0f);
 			d_offset[i] = offset_code(0, +1);
 
 			if (correlator_type==1){
 				//update position of the first entanglement in the fixed frame
-				float4 delta_R1 = tex2D(t_a_QN, make_offset(1, oft), i);
+				float4 delta_R1 = d_a_QN[i*d_z_max+make_offset(1, oft)];
 				if (fetch_new_strent(1, oft))
 					delta_R1 = new_strent;
 				R1.w=0.0f;
@@ -649,7 +677,7 @@ __global__ __launch_bounds__(tpb_chain_kernel) void EQ_chain_kernel(
 			}
 
 		} else {
-			surf2Dwrite(make_float4(0.0f, 0.0f, 0.0f, QNtailp.w + 1.0f), s_b_QN, 16 * (tz - 2), i);
+            d_b_QN[i*d_z_max+(tz - 2)]=make_float4(0.0f, 0.0f, 0.0f, QNtailp.w + 1.0f);
 			d_offset[i] = offset_code(tz, +1);
 		}
 		return;

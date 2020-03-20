@@ -45,7 +45,6 @@ extern cudaArray* d_gamma_table;
 extern cudaArray* d_gamma_table_d;
 
 #define chains_per_call 5000
-//MAX surface size is 32768
 
 sstrentp chains; // host chain conformations
 
@@ -154,15 +153,14 @@ void gpu_init(int seed, p_cd* pcd, int s) {
 	if (N_cha < chains_per_call)
 		rsz = N_cha;
 	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
-	cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
 
-	cudaMallocArray(&d_a_QN, &channelDesc4, z_max, rsz, cudaArraySurfaceLoadStore);
-	cudaMallocArray(&d_a_tCD, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
+	cudaMalloc(&d_a_QN, z_max*rsz*sizeof(float4));
+	cudaMalloc(&d_a_tCD,z_max*rsz*sizeof(float));
 	cudaMallocArray(&d_corr_a, &channelDesc4, rsz, stressarray_count, cudaArraySurfaceLoadStore);
 
 
-	cudaMallocArray(&d_b_QN, &channelDesc4, z_max, rsz, cudaArraySurfaceLoadStore);
-	cudaMallocArray(&d_b_tCD, &channelDesc1, z_max, rsz, cudaArraySurfaceLoadStore);
+	cudaMalloc(&d_b_QN, z_max*rsz*sizeof(float4));
+	cudaMalloc(&d_b_tCD, z_max*rsz*sizeof(float));
 	cudaMallocArray(&d_corr_b, &channelDesc4, rsz, stressarray_count, cudaArraySurfaceLoadStore);
 
 	cudaMalloc(&d_sum_W, z_max* rsz * sizeof(float) );
@@ -234,9 +232,6 @@ void get_chains_from_device()    //Copies chains back to host memory
 }
 
 void random_textures_fill(int n_cha) {
-	cudaChannelFormatDesc channelDesc1 = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
-	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
-
 	cudaMalloc(&d_taucd_gauss_rand_CD, uniformrandom_count* n_cha*sizeof(float4));
 	cudaMalloc(&d_taucd_gauss_rand_SD, uniformrandom_count* n_cha*sizeof(float4));
 	cudaMalloc(&d_uniformrand, uniformrandom_count* n_cha*sizeof(float));
@@ -260,9 +255,6 @@ void random_textures_fill(int n_cha) {
 void random_textures_refill(int n_cha, cudaStream_t stream_calc) {
 	if (chain_blocks_number != 1)
 		n_cha = chains_per_call;
-
-	cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
-	cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
 
 	gr_fill_surface_uniformrand(d_random_gens, n_cha, uniformrandom_count, d_uniformrand, stream_calc);
 	cudaMemsetAsync(d_rand_used, 0, sizeof(int) * n_cha, stream_calc);
@@ -505,10 +497,10 @@ void gpu_clean() {
 		cudaFreeArray(d_gamma_table);
 		cudaFreeArray(d_gamma_table_d);
 	}
-	cudaFreeArray(d_a_QN);
-	cudaFreeArray(d_a_tCD);
-	cudaFreeArray(d_b_QN);
-	cudaFreeArray(d_b_tCD);
+	cudaFree(d_a_QN);
+	cudaFree(d_a_tCD);
+	cudaFree(d_b_QN);
+	cudaFree(d_b_tCD);
 	cudaFreeArray(d_corr_a);
 	cudaFreeArray(d_corr_b);
 	cudaFree(d_sum_W);

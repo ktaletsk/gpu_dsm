@@ -28,8 +28,8 @@ typedef struct ensemble_call_block {
 	chain_head* chain_heads; //scalar values
 
 	//chain conformation on device (GPU)
-	cudaArray* d_QN;  //device arrays for vector part of chain conformations
-	cudaArray* d_tCD; //these arrays used to store conformations
+	float4* d_QN;  //device arrays for vector part of chain conformations
+	float* d_tCD; //these arrays used to store conformations
 	float4* d_R1;
 
 	//regular device arrays
