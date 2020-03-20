@@ -14,7 +14,6 @@
 // 
 // You should have received a copy of the GNU General Public License
 // along with gpu_dsm.  If not, see <http://www.gnu.org/licenses/>.
-#include "textures_surfaces.h"
 #include "chain.h"
 #include "gpu_random.h"
 #include "ensemble_kernel.cu"
@@ -22,6 +21,8 @@
 #include "correlator.h"
 #include <vector>
 #define max_sync_interval 1E5
+#define uniformrandom_count 250// size of the random arrays
+
 //variable arrays, that are common for all the blocks
 gpu_Ran *d_random_gens; // device random number generators
 gpu_Ran *d_random_gens2; //first is used to pick jump process, second is used for creation of new entanglements
@@ -38,8 +39,8 @@ float4* d_a_QN; //device arrays for vector part of chain conformations
 float* d_a_tCD; // these arrays used by time evolution kernels
 float4* d_b_QN;
 float* d_b_tCD;
-cudaArray* d_corr_a;
-cudaArray* d_corr_b;
+float4* d_corr_a;
+float4* d_corr_b;
 
 float* d_sum_W; // sum of probabilities for each entanglement
 float4* d_stress; // stress calculation temp array
@@ -251,30 +252,38 @@ int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, int corr
 		while (!reach_flag_all) {
 			if (!(steps_count & 0x00000001)) {	//For odd number of steps
 
+                float4 *d_corr;
 				if (texture_flag == true){
-					cudaBindSurfaceToArray(s_corr, d_corr_b);
+// 					cudaBindSurfaceToArray(s_corr, d_corr_b);
+                    d_corr=d_corr_b;
 				} else {
-					cudaBindSurfaceToArray(s_corr, d_corr_a);
+// 					cudaBindSurfaceToArray(s_corr, d_corr_a);
+                    d_corr=d_corr_a;
 				}
 
 				EQ_strent_kernel<<<dimGrid, dimBlock,0,stream_calc>>>(d_a_QN,d_a_tCD,d_b_QN,d_b_tCD,d_sum_W,cb->gpu_chain_heads, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD);
 				CUT_CHECK_ERROR("kernel execution failed");
 
-				EQ_chain_kernel<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_calc>>>(d_a_QN,d_a_tCD,d_b_QN,d_sum_W,cb->gpu_chain_heads, cb->d_dt, cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD, cb->d_correlator_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD,d_uniformrand,d_taucd_gauss_rand_CD,d_taucd_gauss_rand_SD, steps_count % stressarray_count,cb->d_R1);
+				EQ_chain_kernel<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_calc>>>(d_a_QN,d_a_tCD,d_b_QN,d_sum_W,d_corr,cb->gpu_chain_heads, cb->d_dt, cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD, cb->d_correlator_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD,d_uniformrand,d_taucd_gauss_rand_CD,d_taucd_gauss_rand_SD, steps_count % stressarray_count,cb->d_R1);
 				CUT_CHECK_ERROR("kernel execution failed");
 
 
 			} else { //For even number of steps
+                float4 *d_corr;              
 				if (texture_flag == true){
-					cudaBindSurfaceToArray(s_corr, d_corr_b);
+// 					cudaBindSurfaceToArray(s_corr, d_corr_b);
+                    d_corr=d_corr_b;
+                    
 				} else {
-					cudaBindSurfaceToArray(s_corr, d_corr_a);
+// 					cudaBindSurfaceToArray(s_corr, d_corr_a);
+                    d_corr=d_corr_a;
+                    
 				}
 
 				EQ_strent_kernel<<<dimGrid, dimBlock,0,stream_calc>>>(d_b_QN,d_b_tCD,d_a_QN,d_a_tCD,d_sum_W,cb->gpu_chain_heads,cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD);
 				CUT_CHECK_ERROR("kernel execution failed");
 
-				EQ_chain_kernel<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_calc>>>(d_b_QN,d_b_tCD,d_a_QN,d_sum_W,cb->gpu_chain_heads, cb->d_dt, cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD, cb->d_correlator_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD,d_uniformrand,d_taucd_gauss_rand_CD,d_taucd_gauss_rand_SD, steps_count % stressarray_count,cb->d_R1);
+				EQ_chain_kernel<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_calc>>>(d_b_QN,d_b_tCD,d_a_QN,d_sum_W,d_corr,cb->gpu_chain_heads, cb->d_dt, cb->reach_flag, sync_interval, cb->d_offset, cb->d_new_strent, cb->d_new_tau_CD, cb->d_correlator_time, correlator_type, d_rand_used, d_tau_CD_used_CD, d_tau_CD_used_SD,d_uniformrand,d_taucd_gauss_rand_CD,d_taucd_gauss_rand_SD, steps_count % stressarray_count,cb->d_R1);
 				CUT_CHECK_ERROR("kernel execution failed");
 
 			}
@@ -301,15 +310,17 @@ int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, int corr
 			if (steps_count % stressarray_count == 0) {
 				cudaStreamSynchronize(stream_calc);
 				cudaStreamSynchronize(stream_update);
-				cudaUnbindTexture(t_corr);
+                float4 *d_corr;              
 				if (texture_flag==true){
-					cudaBindTextureToArray(t_corr, d_corr_b, channelDesc4);
-					texture_flag = false;
+// 					cudaBindTextureToArray(t_corr, d_corr_b, channelDesc4);
+                    d_corr=d_corr_b;
+					texture_flag = false;                   
 				} else {
-					cudaBindTextureToArray(t_corr, d_corr_a, channelDesc4);
+// 					cudaBindTextureToArray(t_corr, d_corr_a, channelDesc4);
+                    d_corr=d_corr_a;
 					texture_flag = true;
 				}
-				update_correlator<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>((cb->corr)->gpu_corr, stressarray_count, correlator_type);
+				update_correlator<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>(d_corr,(cb->corr)->gpu_corr, stressarray_count, correlator_type);
 			}
 
 			// check for reached time
@@ -330,15 +341,17 @@ int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, int corr
 	if (steps_count % stressarray_count != 0) {
 		cudaStreamSynchronize(stream_calc);
 		cudaStreamSynchronize(stream_update);
-		cudaUnbindTexture(t_corr);
+        float4 *d_corr;                      
 		if (texture_flag==true){
-			cudaBindTextureToArray(t_corr, d_corr_b, channelDesc4);
+// 			cudaBindTextureToArray(t_corr, d_corr_b, channelDesc4);
+            d_corr=d_corr_b;            
 			texture_flag = false;
 		} else {
-			cudaBindTextureToArray(t_corr, d_corr_a, channelDesc4);
+// 			cudaBindTextureToArray(t_corr, d_corr_a, channelDesc4);
+            d_corr=d_corr_b;            
 			texture_flag = true;
 		}
-		update_correlator<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>((cb->corr)->gpu_corr, steps_count, correlator_type);
+		update_correlator<<<(cb->nc + tpb_chain_kernel - 1) / tpb_chain_kernel, tpb_chain_kernel,0,stream_update>>>(d_corr,(cb->corr)->gpu_corr, steps_count, correlator_type);
 	}
 
 	cb->block_time = reach_time;

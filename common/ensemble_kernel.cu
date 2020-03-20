@@ -41,7 +41,6 @@
 #define tpb_chain_kernel 256
 #define tpb_strent_kernel 32
 
-#include "textures_surfaces.h"
 #include "chain.h"
 
 //d means device variables

@@ -24,7 +24,6 @@
 #include "ensemble.h"
 #include "cudautil.h"
 #include "cuda_call.h"
-#include "textures_surfaces.h"
 #include "math.h"
 extern char * filename_ID(string filename, bool temp);
 
@@ -45,6 +44,7 @@ extern cudaArray* d_gamma_table;
 extern cudaArray* d_gamma_table_d;
 
 #define chains_per_call 5000
+
 
 sstrentp chains; // host chain conformations
 
@@ -156,12 +156,12 @@ void gpu_init(int seed, p_cd* pcd, int s) {
 
 	cudaMalloc(&d_a_QN, z_max*rsz*sizeof(float4));
 	cudaMalloc(&d_a_tCD,z_max*rsz*sizeof(float));
-	cudaMallocArray(&d_corr_a, &channelDesc4, rsz, stressarray_count, cudaArraySurfaceLoadStore);
+	cudaMalloc(&d_corr_a, rsz*stressarray_count*sizeof(float4));
 
 
 	cudaMalloc(&d_b_QN, z_max*rsz*sizeof(float4));
 	cudaMalloc(&d_b_tCD, z_max*rsz*sizeof(float));
-	cudaMallocArray(&d_corr_b, &channelDesc4, rsz, stressarray_count, cudaArraySurfaceLoadStore);
+	cudaMalloc(&d_corr_b, rsz*stressarray_count*sizeof(float4));
 
 	cudaMalloc(&d_sum_W, z_max* rsz * sizeof(float) );
 	cudaMalloc(&d_stress, rsz * 2*sizeof(float4));
@@ -501,8 +501,8 @@ void gpu_clean() {
 	cudaFree(d_a_tCD);
 	cudaFree(d_b_QN);
 	cudaFree(d_b_tCD);
-	cudaFreeArray(d_corr_a);
-	cudaFreeArray(d_corr_b);
+	cudaFree(d_corr_a);
+	cudaFree(d_corr_b);
 	cudaFree(d_sum_W);
 	cudaFree(d_stress);
 

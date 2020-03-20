@@ -32,7 +32,7 @@ GENCODE_FLAGS += -gencode arch=compute_$(HIGHEST_SM),code=compute_$(HIGHEST_SM)
 endif
 endif
 VPATH = ../common
-DEPS = ../common/gpu_random.h ../common/cudautil.h ../common/cuda_call.h ../common/stress.h ../common/chain.h ../common/ensemble.h ../common/ensemble_kernel.cu ../common/ensemble_call_block.cu ../common/textures_surfaces.h ../common/pcd_tau.h ../common/detailed_balance.h ../common/job_ID.h ../common/correlator.h ../common/gamma.h
+DEPS = ../common/gpu_random.h ../common/cudautil.h ../common/cuda_call.h ../common/stress.h ../common/chain.h ../common/ensemble.h ../common/ensemble_kernel.cu ../common/ensemble_call_block.cu  ../common/pcd_tau.h ../common/detailed_balance.h ../common/job_ID.h ../common/correlator.h ../common/gamma.h
 
 #For debug you need to generate CPU (-g) and GPU (-G) debug information
 #For ability to watch state of variables you need to generate additional information (-keep)

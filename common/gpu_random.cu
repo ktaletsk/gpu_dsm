@@ -22,6 +22,9 @@
 #include "ensemble.h"
 #include <fstream>
 
+#define ran_tpd 256 //thread per block for random_textures_fill()/random_textures_refill()
+
+
 float step, step_d;
 extern float a,b,mp,Mk;
 int table_size, table_size_d;

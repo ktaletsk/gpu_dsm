@@ -16,7 +16,7 @@
 // along with gpu_dsm.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef CORRELATOR_H_
 #define CORRELATOR_H_
-#include "textures_surfaces.h"
+#define stressarray_count 250
 
 #define correlator_size 64 // number of points in each correlator
 #define correlator_res 8 // number of points to calculate average

@@ -19,7 +19,6 @@
 #include <stdlib.h>
 #include "cudautil.h"
 #include "cuda_call.h"
-#include "textures_surfaces.h"
 #include "correlator.h"
 
 #define tpb_corr_kernel 32
