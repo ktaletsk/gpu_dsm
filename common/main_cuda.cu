@@ -79,6 +79,8 @@ int main_cuda(bool* run_flag, int job_ID, char *savefile, char *loadfile, int de
 		cout << "G(t) calculation is on\n";
 	else if (equilibrium_type==2)
 		cout << "MSD(t) calculation is on\n";
+    if (equilibrium_type==0)
+        s=0;
 
 	cout << "simulation time, sync time" << "\n";
 	cout << simulation_time << '\t' << t_step_size << '\n';

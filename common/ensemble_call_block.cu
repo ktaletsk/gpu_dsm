@@ -21,7 +21,7 @@
 #include "correlator.h"
 #include <vector>
 #define max_sync_interval 1E5
-#define uniformrandom_count 250// size of the random arrays
+#define uniformrandom_count 20// size of the random arrays
 
 //variable arrays, that are common for all the blocks
 gpu_Ran *d_random_gens; // device random number generators
@@ -290,7 +290,7 @@ int EQ_time_step_call_block(double reach_time, ensemble_call_block *cb, int corr
 			steps_count++;
 
 			// update progress bar
-			if (steps_count % 50 == 0) {
+			if (steps_count % uniformrandom_count == 0) {
 				cudaStreamSynchronize(stream_calc);
 				cudaMemcpyAsync(tbuffer, cb->d_correlator_time, sizeof(int) * cb->nc, cudaMemcpyDeviceToHost, stream_calc);
 				cudaStreamSynchronize(stream_calc);

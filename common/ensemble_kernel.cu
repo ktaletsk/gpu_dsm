@@ -83,7 +83,9 @@ __device__ __forceinline__ int offset_code(int offset_index, int offset_dir) {
 __device__ __forceinline__ int make_offset(int i, int offset) {
 	//offset&0xffff00)>>8 offset_index
 	//offset&0xff-1; offset_dir
-	return i >= ((offset & 0xffff00) >> 8) ? i + ((offset & 0xff) - 1) : i;
+    int imod=i + ((offset & 0xff) - 1);
+	return (i >= ((offset & 0xffff00) >> 8)) and (imod>=0) ? imod  : i;
+
 }
 
 //returns components of offset

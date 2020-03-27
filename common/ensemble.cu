@@ -43,7 +43,7 @@ using namespace std;
 extern cudaArray* d_gamma_table;
 extern cudaArray* d_gamma_table_d;
 
-#define chains_per_call 16000
+#define chains_per_call 32000
 
 
 sstrentp chains; // host chain conformations
@@ -72,7 +72,7 @@ float Be;
 float kxx, kxy, kxz, kyx, kyy, kyz, kzx, kzy, kzz;
 bool PD_flag=0;
 
-bool dbug = false;	//true;
+bool dbug = false;     //true;
 
 //navigation
 sstrentp chain_index(const int i) { //absolute navigation i - is a global index of chains i:[0..N_cha-1]
